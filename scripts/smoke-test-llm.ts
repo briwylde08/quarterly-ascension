@@ -26,7 +26,7 @@ const userPrompt = `CURRENT SITUATION (Tick 5):
 
 YOUR STATUS:
 - Prestige: 120 (Rank #3 of 10)
-- Budget: $245.00 USDC
+- Budget: $245.00 DLBR
 - Status Effects: None
 - Allies: None
 

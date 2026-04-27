@@ -1,6 +1,6 @@
 import "dotenv/config";
 import { Keypair } from "@stellar/stellar-sdk";
-import { sendUsdc, getUsdcBalance } from "../src/lib/stellar.js";
+import { sendAsset, getAssetBalance } from "../src/lib/stellar.js";
 import { initDatabase, getAllAgents } from "../src/lib/db.js";
 
 const STARTING_BUDGET = parseInt(process.env.STARTING_BUDGET || "50", 10);
@@ -16,7 +16,7 @@ async function main() {
   initDatabase();
 
   const fundingPublic = Keypair.fromSecret(FUNDING_ACCOUNT_SECRET).publicKey();
-  const fundingBalance = await getUsdcBalance(fundingPublic);
+  const fundingBalance = await getAssetBalance(fundingPublic);
 
   console.log(`Funding account: ${fundingPublic.slice(0, 8)}...`);
   console.log(`Funding balance: $${fundingBalance} USDC`);
@@ -31,7 +31,7 @@ async function main() {
 
   // Compute how much we need to send (idempotent — only top up gaps)
   const balances = await Promise.all(
-    agents.map(async (a) => ({ agent: a, current: await getUsdcBalance(a.publicKey) }))
+    agents.map(async (a) => ({ agent: a, current: await getAssetBalance(a.publicKey) }))
   );
 
   const topUps = balances
@@ -70,7 +70,7 @@ async function main() {
       continue;
     }
     try {
-      await sendUsdc(FUNDING_ACCOUNT_SECRET, agent.publicKey, needed);
+      await sendAsset(FUNDING_ACCOUNT_SECRET, agent.publicKey, needed);
       console.log(`  ✓ ${agent.name}: $${current} → $${current + needed}`);
       remaining -= needed;
       funded++;
@@ -90,7 +90,7 @@ async function main() {
 
   console.log("\nDone. Final balances:");
   for (const { agent } of balances) {
-    const final = await getUsdcBalance(agent.publicKey);
+    const final = await getAssetBalance(agent.publicKey);
     console.log(`  ${agent.name}: $${final}`);
   }
 }

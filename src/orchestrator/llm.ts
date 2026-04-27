@@ -1,7 +1,7 @@
 import OpenAI from "openai";
 import { Agent, Action, StatusEffect } from "../lib/types.js";
 import { buildPersonaPrompt, getPersona } from "../agents/personas.js";
-import { getUsdcBalance } from "../lib/stellar.js";
+import { getAssetBalance } from "../lib/stellar.js";
 import { getActionPrice, isPaidAction } from "../lib/mpp-client.js";
 import { getAllAgents, getAgentActionLogs } from "../lib/db.js";
 
@@ -108,7 +108,7 @@ CURRENT SITUATION (Tick ${currentTick}):
 
 YOUR STATUS:
 - Prestige: ${agent.prestige} (Rank #${allAgents.findIndex((a) => a.id === agent.id) + 1} of ${allAgents.length})
-- Budget: $${balance.toFixed(2)} USDC
+- Budget: $${balance.toFixed(2)} DLBR
 - Status Effects: ${statusDescriptions.length > 0 ? statusDescriptions.join(", ") : "None"}
 - Allies: ${agent.allies.length > 0 ? agent.allies.map((id) => allAgents.find((a) => a.id === id)?.name).join(", ") : "None"}
 ${agent.pendingAlliance ? `- PENDING ALLIANCE: ${allAgents.find((a) => a.id === agent.pendingAlliance)?.name} wants to ally with you` : ""}
@@ -230,7 +230,7 @@ export async function getAgentDecision(
   }
 
   // Get current balance
-  const balance = await getUsdcBalance(agent.publicKey);
+  const balance = await getAssetBalance(agent.publicKey);
 
   // Get all agents for context
   const allAgents = getAllAgents();

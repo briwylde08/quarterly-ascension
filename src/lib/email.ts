@@ -1,7 +1,7 @@
 import { Resend } from "resend";
 import { Agent, HourlyReport, ActionSummary, TransactionSummary } from "./types.js";
 import { getAllAgents, getAgentActionLogs, getCurrentTick } from "./db.js";
-import { getUsdcBalance, getExplorerTxUrl, getExplorerAccountUrl } from "./stellar.js";
+import { getAssetBalance, getExplorerTxUrl, getExplorerAccountUrl } from "./stellar.js";
 
 const resend = new Resend(process.env.RESEND_API_KEY);
 const FROM_EMAIL = process.env.FROM_EMAIL || "hr-notifications@megacorp.internal";
@@ -17,7 +17,7 @@ export async function sendHourlyReports(tickStart: number, tickEnd: number): Pro
     if (!agent.claimedBy) continue; // Skip unclaimed agents
 
     const rank = allAgentsSorted.findIndex((a) => a.id === agent.id) + 1;
-    const balance = await getUsdcBalance(agent.publicKey);
+    const balance = await getAssetBalance(agent.publicKey);
     const actionLogs = getAgentActionLogs(agent.id, tickStart, tickEnd);
 
     const report: HourlyReport = {

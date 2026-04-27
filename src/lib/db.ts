@@ -270,18 +270,18 @@ export function getRecentTickerEntries(limit = 20): TickerEntry[] {
   }));
 }
 
-export function getTickerStats(): { total: number; usdcMoved: number; avgSettlement: number } {
+export function getTickerStats(): { total: number; amountMoved: number; avgSettlement: number } {
   const row = db.prepare(`
     SELECT
       COUNT(*) as total,
-      COALESCE(SUM(CASE WHEN status = 'settled' THEN amount ELSE 0 END), 0) as usdc_moved,
+      COALESCE(SUM(CASE WHEN status = 'settled' THEN amount ELSE 0 END), 0) as amount_moved,
       COALESCE(AVG(CASE WHEN status = 'settled' THEN settlement_time END), 0) as avg_settlement
     FROM ticker
   `).get() as any;
 
   return {
     total: row.total,
-    usdcMoved: row.usdc_moved,
+    amountMoved: row.amount_moved,
     avgSettlement: row.avg_settlement,
   };
 }

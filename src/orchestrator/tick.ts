@@ -1,7 +1,7 @@
 import { v4 as uuid } from "uuid";
 import { Agent, Action, GameEvent, StatusEffect } from "../lib/types.js";
 import { Keypair } from "@stellar/stellar-sdk";
-import { getUsdcBalance } from "../lib/stellar.js";
+import { getAssetBalance } from "../lib/stellar.js";
 import {
   getAllAgents,
   getAgent,

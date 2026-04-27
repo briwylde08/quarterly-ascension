@@ -144,7 +144,7 @@ export interface NpcService {
 export interface NpcEndpoint {
   path: string;
   method: "GET" | "POST";
-  price: number;  // In USDC (e.g., 8 = $8)
+  price: number;  // In DLBR (e.g., 8 = $8)
   description: string;
   effect: string;
 }

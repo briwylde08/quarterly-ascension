@@ -2,10 +2,11 @@ import "dotenv/config";
 import {
   generateKeypair,
   fundWithFriendbot,
-  addUsdcTrustline,
-  sendUsdc,
+  addAssetTrustline,
+  sendAsset,
   accountExists,
-  getUsdcBalance,
+  getAssetBalance,
+  ASSET_CODE,
 } from "./lib/stellar.js";
 import { initDatabase, saveAgent, resetDatabase } from "./lib/db.js";
 import { PERSONAS } from "./agents/personas.js";
@@ -61,9 +62,9 @@ async function setup() {
       continue;
     }
 
-    // Add USDC trustline
+    // Add asset trustline
     try {
-      await addUsdcTrustline(keypair.secretKey);
+      await addAssetTrustline(keypair.secretKey);
     } catch (error) {
       console.error(`  Failed to add trustline: ${error}`);
       continue;
@@ -106,7 +107,7 @@ async function setup() {
 
     try {
       await fundWithFriendbot(keypair.publicKey);
-      await addUsdcTrustline(keypair.secretKey);
+      await addAssetTrustline(keypair.secretKey);
     } catch (error) {
       console.error(`  Failed: ${error}`);
       continue;
@@ -124,14 +125,14 @@ async function setup() {
     await sleep(1000);
   }
 
-  // Fund agents with USDC if we have a funding account
+  // Fund agents with the game asset if we have a funding account
   if (FUNDING_ACCOUNT_SECRET) {
-    console.log("\nFunding agents with USDC...\n");
+    console.log(`\nFunding agents with ${ASSET_CODE}...\n`);
 
     for (const account of accounts.filter((a) => a.type === "agent")) {
       try {
-        await sendUsdc(FUNDING_ACCOUNT_SECRET, account.publicKey, STARTING_BUDGET);
-        console.log(`  ✓ Funded ${account.name} with $${STARTING_BUDGET} USDC`);
+        await sendAsset(FUNDING_ACCOUNT_SECRET, account.publicKey, STARTING_BUDGET);
+        console.log(`  ✓ Funded ${account.name} with $${STARTING_BUDGET} ${ASSET_CODE}`);
       } catch (error) {
         console.error(`  Failed to fund ${account.name}: ${error}`);
       }
@@ -140,8 +141,8 @@ async function setup() {
     }
   } else {
     console.log("\n⚠️  No FUNDING_ACCOUNT_SECRET set.");
-    console.log("   You need to manually fund agent accounts with testnet USDC.");
-    console.log("   Use the Circle faucet: https://faucet.circle.com/");
+    console.log("   You need to manually fund agent accounts with the game asset.");
+    console.log("   ");
   }
 
   // Print summary
@@ -150,8 +151,8 @@ async function setup() {
   console.log("=".repeat(60));
   console.log("\nAgent Accounts:");
   for (const account of accounts.filter((a) => a.type === "agent")) {
-    const balance = await getUsdcBalance(account.publicKey);
-    console.log(`  ${account.name}: ${account.publicKey} ($${balance} USDC)`);
+    const balance = await getAssetBalance(account.publicKey);
+    console.log(`  ${account.name}: ${account.publicKey} ($${balance} ${ASSET_CODE})`);
   }
 
   console.log("\nNPC Service Accounts:");

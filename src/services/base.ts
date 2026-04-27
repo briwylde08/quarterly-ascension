@@ -2,8 +2,12 @@ import express, { Express, Request, Response, NextFunction } from "express";
 import { Mppx, stellar, Store } from "@stellar/mpp/charge/server";
 import { toBaseUnits } from "@stellar/mpp";
 
-const USDC_SAC = process.env.USDC_SAC || "CBIELTK6YBZJU5UP2WWQEUCYKLPU6AUNZ2BQ4WWFEIE3USCIHMXQDAMA";
+const ASSET_SAC = process.env.ASSET_SAC || process.env.USDC_SAC || "";
 const MPP_SECRET = process.env.MPP_SECRET || "default-mpp-secret";
+
+if (!ASSET_SAC) {
+  throw new Error("ASSET_SAC is not set in .env. Run scripts/deploy-sac.ts to deploy the Soroban Asset Contract for the game asset.");
+}
 
 export interface ServiceConfig {
   name: string;
@@ -13,7 +17,7 @@ export interface ServiceConfig {
 
 export interface EndpointConfig {
   path: string;
-  price: number;  // In USDC
+  price: number;  // In the game asset (DLBR)
   handler: (req: Request, res: Response) => void | Promise<void>;
 }
 
@@ -43,7 +47,7 @@ export function createNpcService(config: ServiceConfig, endpoints: EndpointConfi
     methods: [
       stellar.charge({
         recipient: config.recipientAddress,
-        currency: USDC_SAC,
+        currency: ASSET_SAC,
         network: "stellar:testnet",
         store: Store.memory(), // Use memory store for dev
       }),
@@ -68,7 +72,7 @@ export function createNpcService(config: ServiceConfig, endpoints: EndpointConfi
   for (const endpoint of endpoints) {
     app.post(endpoint.path, async (req: Request, res: Response) => {
       try {
-        // Convert price to base units (7 decimals for USDC on Stellar)
+        // Convert price to base units (7 decimals for Stellar assets)
         const amountBaseUnits = toBaseUnits(endpoint.price.toString(), 7);
 
         // Check payment via MPP

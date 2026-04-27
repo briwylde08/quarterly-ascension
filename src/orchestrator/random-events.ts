@@ -1,7 +1,7 @@
 import { v4 as uuid } from "uuid";
 import { GameEvent } from "../lib/types.js";
 import { getAllAgents, updateAgentPrestige, updateAgentStatusEffects, getAgent } from "../lib/db.js";
-import { getUsdcBalance } from "../lib/stellar.js";
+import { getAssetBalance } from "../lib/stellar.js";
 
 interface RandomEventDef {
   id: string;
@@ -40,7 +40,7 @@ const RANDOM_EVENTS: RandomEventDef[] = [
     execute: async (tick) => {
       const agents = getAllAgents();
       const victim = agents[Math.floor(Math.random() * agents.length)];
-      // In a real implementation, we'd reduce their USDC balance
+      // In a real implementation, we'd reduce their DLBR balance
       // For now, just announce it
       return [{
         id: uuid(),
@@ -119,7 +119,7 @@ const RANDOM_EVENTS: RandomEventDef[] = [
       let biggestSpender = agents[0];
 
       for (const agent of agents) {
-        const balance = await getUsdcBalance(agent.publicKey);
+        const balance = await getAssetBalance(agent.publicKey);
         if (balance < lowestBalance) {
           lowestBalance = balance;
           biggestSpender = agent;

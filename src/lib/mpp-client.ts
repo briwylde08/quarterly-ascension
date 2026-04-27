@@ -254,7 +254,7 @@ export function isPaidAction(actionType: string): boolean {
 }
 
 /**
- * Get the price of an action in USDC
+ * Get the price of an action in DLBR
  */
 export function getActionPrice(actionType: string): number {
   return SERVICE_URLS[actionType]?.price || 0;

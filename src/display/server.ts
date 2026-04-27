@@ -3,7 +3,7 @@ import { WebSocketServer, WebSocket } from "ws";
 import http from "http";
 import { GameEvent, TickerEntry } from "../lib/types.js";
 import { getAllAgents, getRecentEvents, getRecentTickerEntries, getTickerStats, getCurrentTick, getGameStatus } from "../lib/db.js";
-import { getUsdcBalance, getExplorerTxUrl, getExplorerAccountUrl } from "../lib/stellar.js";
+import { getAssetBalance, getExplorerTxUrl, getExplorerAccountUrl } from "../lib/stellar.js";
 import { onGameEvent } from "../orchestrator/tick.js";
 import { onTickerUpdate } from "../lib/mpp-client.js";
 
@@ -43,7 +43,7 @@ async function sendFullState(ws: WebSocket): Promise<void> {
   const agentsWithBalances = await Promise.all(
     agents.map(async (agent) => ({
       ...agent,
-      balance: await getUsdcBalance(agent.publicKey),
+      balance: await getAssetBalance(agent.publicKey),
       explorerUrl: getExplorerAccountUrl(agent.publicKey),
     }))
   );
@@ -69,7 +69,7 @@ async function sendFullState(ws: WebSocket): Promise<void> {
       ticker: getRecentTickerEntries(15),
       stats: {
         totalTransactions: tickerStats.total,
-        totalUsdcMoved: tickerStats.usdcMoved,
+        totalAmountMoved: tickerStats.amountMoved,
         avgSettlementTime: tickerStats.avgSettlement,
       },
     },
@@ -109,7 +109,7 @@ app.get("/api/state", async (req, res) => {
       name: agent.name,
       title: agent.title,
       prestige: agent.prestige,
-      balance: await getUsdcBalance(agent.publicKey),
+      balance: await getAssetBalance(agent.publicKey),
       statusEffects: agent.statusEffects,
       allies: agent.allies,
     }))
@@ -345,7 +345,7 @@ const DISPLAY_HTML = `<!DOCTYPE html>
 
     <div class="stats-footer">
       <div>TOTAL SETTLED: <span class="stat-value" id="total-tx">0</span> transactions</div>
-      <div>USDC MOVED: <span class="stat-value" id="total-usdc">$0.00</span></div>
+      <div>DLBR MOVED: <span class="stat-value" id="total-amount">$0.00</span></div>
       <div>AVG SETTLEMENT: <span class="stat-value" id="avg-time">0.0s</span></div>
     </div>
   </div>
@@ -404,7 +404,7 @@ const DISPLAY_HTML = `<!DOCTYPE html>
 
       // Stats
       document.getElementById('total-tx').textContent = data.stats.totalTransactions;
-      document.getElementById('total-usdc').textContent = '$' + data.stats.totalUsdcMoved.toFixed(2);
+      document.getElementById('total-amount').textContent = '$' + data.stats.totalAmountMoved.toFixed(2);
       document.getElementById('avg-time').textContent = data.stats.avgSettlementTime.toFixed(1) + 's';
     }
 
@@ -439,7 +439,7 @@ const DISPLAY_HTML = `<!DOCTYPE html>
         .then(r => r.json())
         .then(data => {
           document.getElementById('total-tx').textContent = data.stats.total;
-          document.getElementById('total-usdc').textContent = '$' + data.stats.usdcMoved.toFixed(2);
+          document.getElementById('total-amount').textContent = '$' + data.stats.amountMoved.toFixed(2);
           document.getElementById('avg-time').textContent = data.stats.avgSettlement.toFixed(1) + 's';
         });
     }
@@ -472,7 +472,7 @@ const DISPLAY_HTML = `<!DOCTYPE html>
         <div class="ticker-entry \${statusClass}" data-ticker-id="\${t.id}">
           <div class="ticker-from">\${t.fromAgentName}</div>
           <div class="ticker-to">→ \${t.toService}</div>
-          <div class="ticker-amount">\$\${t.amount.toFixed(2)} USDC</div>
+          <div class="ticker-amount">\$\${t.amount.toFixed(2)} DLBR</div>
           \${t.txHash ? \`<div class="ticker-tx">tx: \${txLink}</div>\` : ''}
           <div class="ticker-time">
             \${t.settlementTime ? '⏱ ' + t.settlementTime.toFixed(1) + 's' : ''}

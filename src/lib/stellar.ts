@@ -6,9 +6,10 @@ const NETWORK = process.env.STELLAR_NETWORK || "testnet";
 const HORIZON_URL = process.env.STELLAR_HORIZON_URL || "https://horizon-testnet.stellar.org";
 const NETWORK_PASSPHRASE = NETWORK === "testnet" ? Networks.TESTNET : Networks.PUBLIC;
 
-// USDC configuration
-const USDC_ISSUER = process.env.USDC_ISSUER || "GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5";
-const USDC_ASSET = new Asset("USDC", USDC_ISSUER);
+// Asset configuration (game currency — defaults to Deliverabills / DLBR)
+const ASSET_CODE = process.env.ASSET_CODE || "DLBR";
+const ASSET_ISSUER = process.env.ASSET_ISSUER || "";
+const ASSET = ASSET_ISSUER ? new Asset(ASSET_CODE, ASSET_ISSUER) : null;
 
 // Horizon server
 const horizon = new Horizon.Server(HORIZON_URL);
@@ -16,8 +17,17 @@ const horizon = new Horizon.Server(HORIZON_URL);
 export interface AccountInfo {
   publicKey: string;
   secretKey: string;
-  usdcBalance: number;
+  assetBalance: number;
   xlmBalance: number;
+}
+
+function requireAsset(): Asset {
+  if (!ASSET) {
+    throw new Error(
+      "ASSET_ISSUER is not set in .env. Run scripts/create-issuer.ts to create the game asset issuer first."
+    );
+  }
+  return ASSET;
 }
 
 /**
@@ -43,9 +53,10 @@ export async function fundWithFriendbot(publicKey: string): Promise<void> {
 }
 
 /**
- * Add USDC trustline to an account
+ * Add a trustline for the game asset to an account.
  */
-export async function addUsdcTrustline(secretKey: string): Promise<string> {
+export async function addAssetTrustline(secretKey: string): Promise<string> {
+  const asset = requireAsset();
   const keypair = Keypair.fromSecret(secretKey);
   const account = await horizon.loadAccount(keypair.publicKey());
 
@@ -55,7 +66,7 @@ export async function addUsdcTrustline(secretKey: string): Promise<string> {
   })
     .addOperation(
       Operation.changeTrust({
-        asset: USDC_ASSET,
+        asset,
       })
     )
     .setTimeout(30)
@@ -63,23 +74,24 @@ export async function addUsdcTrustline(secretKey: string): Promise<string> {
 
   tx.sign(keypair);
   const result = await horizon.submitTransaction(tx);
-  console.log(`Added USDC trustline for ${keypair.publicKey().slice(0, 8)}...`);
+  console.log(`Added ${ASSET_CODE} trustline for ${keypair.publicKey().slice(0, 8)}...`);
   return result.hash;
 }
 
 /**
- * Get USDC balance for an account
+ * Get balance of the game asset for an account.
  */
-export async function getUsdcBalance(publicKey: string): Promise<number> {
+export async function getAssetBalance(publicKey: string): Promise<number> {
+  if (!ASSET) return 0;
   try {
     const account = await horizon.loadAccount(publicKey);
-    const usdcBalance = account.balances.find(
+    const balance = account.balances.find(
       (b): b is Horizon.HorizonApi.BalanceLineAsset =>
-        b.asset_type === "credit_alphanum4" &&
-        b.asset_code === "USDC" &&
-        b.asset_issuer === USDC_ISSUER
+        (b.asset_type === "credit_alphanum4" || b.asset_type === "credit_alphanum12") &&
+        b.asset_code === ASSET_CODE &&
+        b.asset_issuer === ASSET_ISSUER
     );
-    return usdcBalance ? parseFloat(usdcBalance.balance) : 0;
+    return balance ? parseFloat(balance.balance) : 0;
   } catch (error) {
     console.error(`Failed to get balance for ${publicKey}:`, error);
     return 0;
@@ -106,28 +118,29 @@ export async function getXlmBalance(publicKey: string): Promise<number> {
  * Get full account info
  */
 export async function getAccountInfo(publicKey: string, secretKey: string): Promise<AccountInfo> {
-  const [usdcBalance, xlmBalance] = await Promise.all([
-    getUsdcBalance(publicKey),
+  const [assetBalance, xlmBalance] = await Promise.all([
+    getAssetBalance(publicKey),
     getXlmBalance(publicKey),
   ]);
 
   return {
     publicKey,
     secretKey,
-    usdcBalance,
+    assetBalance,
     xlmBalance,
   };
 }
 
 /**
- * Send USDC from one account to another (direct transfer, not MPP)
- * Used for initial funding of agent accounts
+ * Send the game asset from one account to another (direct transfer, not MPP).
+ * Used for initial funding of agent accounts.
  */
-export async function sendUsdc(
+export async function sendAsset(
   fromSecret: string,
   toPublicKey: string,
   amount: number
 ): Promise<string> {
+  const asset = requireAsset();
   const fromKeypair = Keypair.fromSecret(fromSecret);
   const account = await horizon.loadAccount(fromKeypair.publicKey());
 
@@ -138,7 +151,7 @@ export async function sendUsdc(
     .addOperation(
       Operation.payment({
         destination: toPublicKey,
-        asset: USDC_ASSET,
+        asset,
         amount: amount.toFixed(7),
       })
     )
@@ -147,7 +160,7 @@ export async function sendUsdc(
 
   tx.sign(fromKeypair);
   const result = await horizon.submitTransaction(tx);
-  console.log(`Sent ${amount} USDC to ${toPublicKey.slice(0, 8)}... (tx: ${result.hash.slice(0, 8)}...)`);
+  console.log(`Sent ${amount} ${ASSET_CODE} to ${toPublicKey.slice(0, 8)}... (tx: ${result.hash.slice(0, 8)}...)`);
   return result.hash;
 }
 
@@ -183,7 +196,8 @@ export {
   horizon,
   NETWORK,
   NETWORK_PASSPHRASE,
-  USDC_ASSET,
-  USDC_ISSUER,
+  ASSET,
+  ASSET_CODE,
+  ASSET_ISSUER,
   Keypair,
 };
