@@ -1,11 +1,11 @@
-import Anthropic from "@anthropic-ai/sdk";
+import OpenAI from "openai";
 import { Agent, Action, StatusEffect } from "../lib/types.js";
 import { buildPersonaPrompt, getPersona } from "../agents/personas.js";
 import { getUsdcBalance } from "../lib/stellar.js";
 import { getActionPrice, isPaidAction } from "../lib/mpp-client.js";
 import { getAllAgents, getAgentActionLogs } from "../lib/db.js";
 
-const anthropic = new Anthropic();
+const openai = new OpenAI();
 
 // All possible actions
 const ALL_ACTIONS = [
@@ -245,19 +245,21 @@ export async function getAgentDecision(
   const userPrompt = buildContextPrompt(context);
 
   try {
-    const response = await anthropic.messages.create({
-      model: "claude-haiku-4-5-20251001",
-      max_tokens: 500,
-      system: systemPrompt,
-      messages: [{ role: "user", content: userPrompt }],
+    const response = await openai.chat.completions.create({
+      model: "gpt-5.5",
+      max_completion_tokens: 500,
+      messages: [
+        { role: "system", content: systemPrompt },
+        { role: "user", content: userPrompt },
+      ],
     });
 
-    const content = response.content[0];
-    if (content.type !== "text") {
-      return { action: { type: "work" }, reasoning: "Non-text response" };
+    const content = response.choices[0]?.message?.content;
+    if (!content) {
+      return { action: { type: "work" }, reasoning: "Empty response" };
     }
 
-    const { action, reasoning } = parseAction(content.text, agent);
+    const { action, reasoning } = parseAction(content, agent);
 
     // Validate the action
     const validation = validateAction(action, agent, balance, allAgents);
