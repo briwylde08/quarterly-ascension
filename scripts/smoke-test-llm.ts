@@ -1,7 +1,12 @@
 import "dotenv/config";
 import OpenAI from "openai";
 
-const openai = new OpenAI();
+const openai = new OpenAI({
+  baseURL: process.env.OPENAI_BASE_URL,
+  defaultHeaders: process.env.CF_AIG_TOKEN
+    ? { "cf-aig-authorization": `Bearer ${process.env.CF_AIG_TOKEN}` }
+    : undefined,
+});
 
 const systemPrompt = `You are Chad Synergize, Director of Alignment at MegaCorp Inc.
 
@@ -60,7 +65,7 @@ async function main() {
 
   const start = Date.now();
   const response = await openai.chat.completions.create({
-    model: "gpt-5.5",
+    model: "openai/gpt-5.5",
     max_completion_tokens: 500,
     messages: [
       { role: "system", content: systemPrompt },

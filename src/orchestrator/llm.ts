@@ -5,7 +5,12 @@ import { getUsdcBalance } from "../lib/stellar.js";
 import { getActionPrice, isPaidAction } from "../lib/mpp-client.js";
 import { getAllAgents, getAgentActionLogs } from "../lib/db.js";
 
-const openai = new OpenAI();
+const openai = new OpenAI({
+  baseURL: process.env.OPENAI_BASE_URL,
+  defaultHeaders: process.env.CF_AIG_TOKEN
+    ? { "cf-aig-authorization": `Bearer ${process.env.CF_AIG_TOKEN}` }
+    : undefined,
+});
 
 // All possible actions
 const ALL_ACTIONS = [
@@ -246,7 +251,7 @@ export async function getAgentDecision(
 
   try {
     const response = await openai.chat.completions.create({
-      model: "gpt-5.5",
+      model: "openai/gpt-5.5",
       max_completion_tokens: 500,
       messages: [
         { role: "system", content: systemPrompt },
