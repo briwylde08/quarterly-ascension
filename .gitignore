@@ -4,3 +4,4 @@ dist/
 *.db
 *.sqlite
 .DS_Store
+.session-*.md
