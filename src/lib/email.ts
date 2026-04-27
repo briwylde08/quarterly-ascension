@@ -3,7 +3,15 @@ import { Agent, HourlyReport, ActionSummary, TransactionSummary } from "./types.
 import { getAllAgents, getAgentActionLogs, getCurrentTick } from "./db.js";
 import { getAssetBalance, getExplorerTxUrl, getExplorerAccountUrl } from "./stellar.js";
 
-const resend = new Resend(process.env.RESEND_API_KEY);
+// Lazy-init: the Resend SDK throws at construction time if no API key is
+// present. We want the orchestrator to boot without email config, so only
+// instantiate when we actually need to send.
+let resendClient: Resend | null = null;
+function getResend(): Resend | null {
+  if (!process.env.RESEND_API_KEY) return null;
+  if (!resendClient) resendClient = new Resend(process.env.RESEND_API_KEY);
+  return resendClient;
+}
 const FROM_EMAIL = process.env.FROM_EMAIL || "hr-notifications@megacorp.internal";
 
 /**
@@ -61,6 +69,12 @@ export async function sendHourlyReports(tickStart: number, tickEnd: number): Pro
  */
 async function sendReport(report: HourlyReport): Promise<void> {
   const emailHtml = generateReportHtml(report);
+
+  const resend = getResend();
+  if (!resend) {
+    console.log(`[email skipped] no RESEND_API_KEY — would have sent to ${report.playerEmail}`);
+    return;
+  }
 
   try {
     await resend.emails.send({

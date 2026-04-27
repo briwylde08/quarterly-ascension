@@ -1,4 +1,5 @@
-import express, { Express, Request, Response, NextFunction } from "express";
+import express from "express";
+import type { Express, Request, Response, NextFunction } from "express";
 import { Mppx, stellar, Store } from "@stellar/mpp/charge/server";
 import { toBaseUnits } from "@stellar/mpp";
 
