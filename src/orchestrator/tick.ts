@@ -208,7 +208,7 @@ async function executeAction(
       // Paid actions
       default:
         if (isPaidAction(action.type)) {
-          const result = await executePaidAction(agent, action, tick);
+          const result = await executePaidAction(agent, action, tick, reasoning);
           outcome = result.outcome;
           prestigeChange = result.prestigeChange;
           txHash = result.txHash;
@@ -243,7 +243,8 @@ async function executeAction(
 async function executePaidAction(
   agent: Agent,
   action: Action,
-  tick: number
+  tick: number,
+  reasoning?: string
 ): Promise<{ outcome: string; prestigeChange: number; txHash?: string }> {
   const serviceInfo = SERVICE_URLS[action.type];
   if (!serviceInfo) {
@@ -260,7 +261,8 @@ async function executePaidAction(
     serviceInfo.url,
     serviceInfo.name,
     serviceInfo.price,
-    body
+    body,
+    reasoning
   );
 
   if (!result.success) {

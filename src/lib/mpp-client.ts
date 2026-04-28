@@ -28,6 +28,7 @@ interface PaymentContext {
   serviceName: string;
   amount: number;
   submittedAt?: number;
+  reasoning?: string;  // In-character LLM reasoning, surfaced on every ticker emit
 }
 
 const paymentContexts = new Map<string, PaymentContext>();
@@ -41,7 +42,8 @@ export function createAgentMppClient(
   agentName: string,
   keypair: Keypair,
   serviceName: string,
-  priceUsdc: number
+  priceUsdc: number,
+  reasoning?: string
 ): { mppx: { fetch: typeof fetch }; entryId: string } {
   const entryId = `${agentId}-${Date.now()}`;
 
@@ -52,6 +54,7 @@ export function createAgentMppClient(
     agentName,
     serviceName,
     amount: priceUsdc,
+    reasoning,
   });
 
   const mppx = Mppx.create({
@@ -64,14 +67,18 @@ export function createAgentMppClient(
           if (!ctx) return;
 
           if (event.type === "challenge") {
-            // Received 402, about to sign
+            // Received 402, about to sign. The server now sends the human
+            // amount (post 79cdc73), so use it directly — don't divide by
+            // 10^7. Fall back to ctx.amount if the event field is missing.
+            const challengeAmount = parseFloat(event.amount);
             emitTickerUpdate({
               id: entryId,
               fromAgent: ctx.agentId,
               fromAgentName: ctx.agentName,
               toService: ctx.serviceName,
-              amount: parseFloat(event.amount) / 10_000_000,
+              amount: Number.isFinite(challengeAmount) ? challengeAmount : ctx.amount,
               status: "pending",
+              reasoning: ctx.reasoning,
             });
           }
 
@@ -86,6 +93,7 @@ export function createAgentMppClient(
               amount: ctx.amount,
               status: "submitted",
               submittedAt: ctx.submittedAt,
+              reasoning: ctx.reasoning,
             });
           }
 
@@ -105,6 +113,7 @@ export function createAgentMppClient(
               settlementTime: ctx.submittedAt
                 ? (settledAt - ctx.submittedAt) / 1000
                 : undefined,
+              reasoning: ctx.reasoning,
             });
             // Clean up context
             paymentContexts.delete(entryId);
@@ -138,14 +147,16 @@ export async function callPaidService(
   serviceUrl: string,
   serviceName: string,
   priceUsdc: number,
-  body?: object
+  body?: object,
+  reasoning?: string
 ): Promise<PaymentResult> {
   const { mppx: client, entryId } = createAgentMppClient(
     agentId,
     agentName,
     keypair,
     serviceName,
-    priceUsdc
+    priceUsdc,
+    reasoning
   );
   const submittedAt = Date.now();
 
@@ -172,6 +183,7 @@ export async function callPaidService(
           status: "failed",
           submittedAt,
           error: "insufficient funds",
+          reasoning,
         });
 
         return {
@@ -217,6 +229,7 @@ export async function callPaidService(
       submittedAt,
       settledAt,
       settlementTime,
+      reasoning,
     });
 
     return {
@@ -239,6 +252,7 @@ export async function callPaidService(
         status: "failed",
         submittedAt,
         error: "op_underfunded",
+        reasoning,
       });
     }
 

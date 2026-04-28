@@ -118,6 +118,7 @@ export interface TickerEntry {
   settledAt?: number;
   settlementTime?: number;
   error?: string;
+  reasoning?: string;  // In-character LLM reasoning for the action that triggered this payment
 }
 
 export interface GameState {

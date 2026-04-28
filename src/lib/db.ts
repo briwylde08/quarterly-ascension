@@ -52,7 +52,8 @@ export function initDatabase(): void {
       submitted_at INTEGER,
       settled_at INTEGER,
       settlement_time REAL,
-      error TEXT
+      error TEXT,
+      reasoning TEXT
     );
 
     CREATE TABLE IF NOT EXISTS action_logs (
@@ -73,6 +74,14 @@ export function initDatabase(): void {
     CREATE INDEX IF NOT EXISTS idx_action_logs_tick ON action_logs(tick);
     CREATE INDEX IF NOT EXISTS idx_action_logs_agent ON action_logs(agent_id);
   `);
+
+  // Add reasoning column to existing ticker tables created before the column existed.
+  // SQLite has no IF NOT EXISTS on ALTER TABLE; swallow the dup-column error.
+  try {
+    db.exec("ALTER TABLE ticker ADD COLUMN reasoning TEXT");
+  } catch {
+    // Column already present.
+  }
 }
 
 // Game state
@@ -230,9 +239,18 @@ function rowToEvent(row: any): GameEvent {
 // Ticker
 export function saveTickerEntry(entry: TickerEntry): void {
   db.prepare(`
-    INSERT OR REPLACE INTO ticker
-    (id, from_agent, from_agent_name, to_service, amount, status, tx_hash, submitted_at, settled_at, settlement_time, error)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    INSERT INTO ticker
+      (id, from_agent, from_agent_name, to_service, amount, status, tx_hash, submitted_at, settled_at, settlement_time, error, reasoning)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    ON CONFLICT(id) DO UPDATE SET
+      amount          = excluded.amount,
+      status          = excluded.status,
+      tx_hash         = COALESCE(excluded.tx_hash, ticker.tx_hash),
+      submitted_at    = COALESCE(excluded.submitted_at, ticker.submitted_at),
+      settled_at      = COALESCE(excluded.settled_at, ticker.settled_at),
+      settlement_time = COALESCE(excluded.settlement_time, ticker.settlement_time),
+      error           = COALESCE(excluded.error, ticker.error),
+      reasoning       = COALESCE(excluded.reasoning, ticker.reasoning)
   `).run(
     entry.id,
     entry.fromAgent,
@@ -244,7 +262,8 @@ export function saveTickerEntry(entry: TickerEntry): void {
     entry.submittedAt,
     entry.settledAt,
     entry.settlementTime,
-    entry.error
+    entry.error,
+    entry.reasoning
   );
 }
 
@@ -267,6 +286,7 @@ export function getRecentTickerEntries(limit = 20): TickerEntry[] {
     settledAt: row.settled_at,
     settlementTime: row.settlement_time,
     error: row.error,
+    reasoning: row.reasoning,
   }));
 }
 

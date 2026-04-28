@@ -273,6 +273,17 @@ const DISPLAY_HTML = `<!DOCTYPE html>
     .ticker-status.submitted { background: #003d3d; color: #00ccff; }
     .ticker-status.settled { background: #003d00; color: #00ff00; }
     .ticker-status.failed { background: #3d0000; color: #ff4444; }
+    .ticker-quote {
+      margin-top: 8px;
+      padding: 8px 10px;
+      background: #0d0d0d;
+      border-left: 2px solid #444;
+      font-size: 12px;
+      font-style: italic;
+      color: #bbb;
+      line-height: 1.4;
+      white-space: pre-wrap;
+    }
 
     /* Stats footer */
     .stats-footer {
@@ -468,6 +479,14 @@ const DISPLAY_HTML = `<!DOCTYPE html>
           : shortHash;
       }
 
+      const escapeHtml = (s) => String(s)
+        .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+
+      const quoteHtml = t.reasoning
+        ? \`<div class="ticker-quote">"\${escapeHtml(t.reasoning)}"</div>\`
+        : '';
+
       return \`
         <div class="ticker-entry \${statusClass}" data-ticker-id="\${t.id}">
           <div class="ticker-from">\${t.fromAgentName}</div>
@@ -479,6 +498,7 @@ const DISPLAY_HTML = `<!DOCTYPE html>
             <span class="ticker-status \${statusClass}">\${statusText}</span>
           </div>
           \${t.error ? \`<div class="ticker-tx" style="color: #ff4444">reason: \${t.error}</div>\` : ''}
+          \${quoteHtml}
         </div>
       \`;
     }
