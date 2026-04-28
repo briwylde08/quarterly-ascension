@@ -61,10 +61,15 @@ interface DecisionContext {
 function buildContextPrompt(ctx: DecisionContext): string {
   const { agent, balance, currentTick, allAgents, recentActions } = ctx;
 
-  // Get other agents info (limited view)
+  // Get other agents info (limited view). Surface the agent.id explicitly so
+  // the LLM uses it verbatim as `target` in action JSON — without this, the
+  // model tends to guess between full names, first names, capitalized vs.
+  // lowercase, and a meaningful slice of hostile actions silently fail
+  // validation with "Invalid target".
   const otherAgents = allAgents
     .filter((a) => a.id !== agent.id)
     .map((a) => ({
+      id: a.id,
       name: a.name,
       title: a.title,
       prestige: a.prestige,
@@ -113,8 +118,8 @@ YOUR STATUS:
 - Allies: ${agent.allies.length > 0 ? agent.allies.map((id) => allAgents.find((a) => a.id === id)?.name).join(", ") : "None"}
 ${agent.pendingAlliance ? `- PENDING ALLIANCE: ${allAgents.find((a) => a.id === agent.pendingAlliance)?.name} wants to ally with you` : ""}
 
-OTHER MANAGERS:
-${otherAgents.map((a) => `- ${a.name} (${a.title}): ${a.prestige} prestige${a.isAlly ? " [ALLY]" : ""}`).join("\n")}
+OTHER MANAGERS (use the id in lowercase as "target" in action JSON):
+${otherAgents.map((a) => `- id: ${a.id} — ${a.name} (${a.title}): ${a.prestige} prestige${a.isAlly ? " [ALLY]" : ""}`).join("\n")}
 
 YOUR RECENT ACTIONS:
 ${recentActions.slice(-5).map((a) => `- Tick ${a.tick}: ${a.action_type} → ${a.outcome}`).join("\n") || "None yet"}
@@ -190,13 +195,13 @@ function corporateExcuse(action: Action, reason: string): string {
 
   switch (reason) {
     case "Invalid target":
-      return `Was going to ${verb} ${target}, but couldn't find them on the org chart. Pretty sure they were quietly let go in the last reorg. RIP.`;
+      return invalidTargetExcuse(action, target);
 
     case "Insufficient funds":
       return `Tried to ${verb}, but the corporate card came back declined. I'll need to circle back next quarter, finance is being awful.`;
 
     case "Cannot target an ally with hostile action":
-      return `Was about to ${verb} ${target}, then remembered we're in a strategic synergy partnership. Awkward. Let's table it.`;
+      return allyHostileExcuse(action, target);
 
     case "Action requires a target":
       return `Wanted to ${verb}, but apparently I forgot to loop in a stakeholder. Lesson learned, will sync offline.`;
@@ -215,6 +220,70 @@ function corporateExcuse(action: Action, reason: string): string {
 
     default:
       return `Wanted to ${verb}${target !== "someone" ? " " + target : ""}, but ${reason.toLowerCase()}. Suboptimal.`;
+  }
+}
+
+/**
+ * Action-type-specific corporate excuses for the most common failure: the
+ * LLM picked a target that doesn't exist (probably an old reorg victim, or
+ * the LLM just made up a name).
+ */
+function invalidTargetExcuse(action: Action, target: string): string {
+  switch (action.type) {
+    case "take_credit":
+      return `Was going to take credit for ${target}'s work, but couldn't find them on the org chart. Pretty sure they were quietly let go in the last reorg. RIP.`;
+    case "schmooze":
+      return `Tried to grab coffee with ${target} to subtly probe their alignment, but their Slack handle 404s. Probably riffed in the last reorg — saves me the small talk.`;
+    case "file_complaint":
+      return `Was going to file an HR complaint against ${target}, but apparently they don't exist on payroll anymore. Saved myself a meeting.`;
+    case "sensitivity_training":
+      return `Wanted to send ${target} to mandatory sensitivity training, but their email bounces. Reorg got there first.`;
+    case "fix_laptop":
+      return `Was going to have IT "fix" ${target}'s laptop, but they're not in the directory anymore. Honestly, probably for the best.`;
+    case "calendar_conflict":
+      return `Tried to book a calendar conflict for ${target}, but Outlook says no such employee. Suspiciously convenient.`;
+    case "schedule_conflict":
+      return `Was going to torpedo ${target}'s CEO meeting, but their calendar's been deleted. Either they're gone or they're hiding.`;
+    case "poison_meeting":
+      return `Was going to ask the Caterer to "season" ${target}'s meeting, but turns out their meetings have all been canceled. Strange.`;
+    case "send_motivation":
+      return `Wanted to send ${target} to a mandatory four-hour motivational seminar, but they're missing from the team page. Possibly let go. Possibly hiding.`;
+    case "sabotage_plan":
+      return `Was going to commission a sabotage plan against ${target}, but the Consultant said they couldn't find anyone by that name in the directory. Awkward call.`;
+    case "recover_emails":
+      return `Asked IT to recover ${target}'s emails, but their account was deactivated three reorgs ago. Should have asked sooner.`;
+    case "accept_alliance":
+    case "reject_alliance":
+    case "break_alliance":
+      return `Tried to formalize the alliance situation with ${target}, but apparently they're no longer with the company. Saves me the awkward 1:1.`;
+    default:
+      return `Was going to ${humanizeActionType(action.type)} ${target}, but couldn't find them on the org chart. RIP.`;
+  }
+}
+
+/**
+ * Action-type-specific excuses for "you tried to attack your own ally."
+ */
+function allyHostileExcuse(action: Action, target: string): string {
+  switch (action.type) {
+    case "file_complaint":
+      return `Was about to file a complaint against ${target}, then remembered we have a strategic synergy partnership. Awkward. Tabled.`;
+    case "sensitivity_training":
+      return `Was going to send ${target} to sensitivity training, then realized we're allied. Now I might have to go to sensitivity training myself.`;
+    case "fix_laptop":
+      return `Was about to have IT mysteriously brick ${target}'s laptop, but we're allies. Let's call this a deferred opportunity.`;
+    case "sabotage_plan":
+      return `Was going to commission opposition research on ${target}, then remembered they're an ally. Filed the dossier in the desk drawer.`;
+    case "calendar_conflict":
+      return `Was going to triple-book ${target}'s morning, but we're aligned. Sent them a coffee invite instead.`;
+    case "schedule_conflict":
+      return `Was about to torpedo ${target}'s CEO meeting, but we're allies. Saved the move for someone less strategic.`;
+    case "poison_meeting":
+      return `Was about to compromise the Caterer for ${target}'s next meeting, but they're an ally. Reset to peaceful posture.`;
+    case "send_motivation":
+      return `Was going to send ${target} to a four-hour motivational seminar, but we're allies. Saving that one for later.`;
+    default:
+      return `Was about to ${humanizeActionType(action.type)} ${target}, then remembered we're in a strategic synergy partnership. Awkward.`;
   }
 }
 
