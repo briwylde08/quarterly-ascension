@@ -371,10 +371,56 @@ const DISPLAY_HTML = `<!DOCTYPE html>
         updateFullState(msg.data);
       } else if (msg.type === 'game_event') {
         addEvent(msg.data);
+        scheduleLeaderboardRefresh();
       } else if (msg.type === 'ticker_update') {
         updateTicker(msg.data);
+        scheduleLeaderboardRefresh();
       }
     };
+
+    // Coalesce rapid-fire updates: only re-fetch state at most every 1s.
+    let leaderboardRefreshTimer = null;
+    function scheduleLeaderboardRefresh() {
+      if (leaderboardRefreshTimer) return;
+      leaderboardRefreshTimer = setTimeout(() => {
+        leaderboardRefreshTimer = null;
+        refreshLeaderboardAndStats();
+      }, 1000);
+    }
+
+    async function refreshLeaderboardAndStats() {
+      try {
+        const r = await fetch('/api/state');
+        const data = await r.json();
+        renderLeaderboard(data.agents);
+        document.getElementById('tick').textContent = data.tick;
+        document.getElementById('status').textContent = data.status;
+        document.getElementById('agent-count').textContent = data.agents.length;
+        document.getElementById('total-tx').textContent = data.stats.total;
+        document.getElementById('total-amount').textContent = '$' + data.stats.amountMoved.toFixed(2);
+        document.getElementById('avg-time').textContent = data.stats.avgSettlement.toFixed(1) + 's';
+      } catch (e) {
+        // Network blip; next event will retry.
+      }
+    }
+
+    function renderLeaderboard(agents) {
+      const leaderboard = document.getElementById('leaderboard');
+      leaderboard.innerHTML = agents
+        .slice()
+        .sort((a, b) => b.prestige - a.prestige)
+        .map((agent, i) => \`
+          <div class="agent-row">
+            <div class="rank">#\${i + 1}</div>
+            <div>
+              <div class="agent-name">\${agent.name}</div>
+              <div class="agent-title">\${agent.title}</div>
+            </div>
+            <div class="prestige">\${agent.prestige}</div>
+            <div class="budget \${agent.balance < 50 ? 'low' : ''}">\$\${agent.balance.toFixed(0)}</div>
+          </div>
+        \`).join('');
+    }
 
     function updateFullState(data) {
       document.getElementById('tick').textContent = data.tick;
@@ -390,20 +436,7 @@ const DISPLAY_HTML = `<!DOCTYPE html>
       }
 
       // Leaderboard
-      const leaderboard = document.getElementById('leaderboard');
-      leaderboard.innerHTML = data.agents
-        .sort((a, b) => b.prestige - a.prestige)
-        .map((agent, i) => \`
-          <div class="agent-row">
-            <div class="rank">#\${i + 1}</div>
-            <div>
-              <div class="agent-name">\${agent.name}</div>
-              <div class="agent-title">\${agent.title}</div>
-            </div>
-            <div class="prestige">\${agent.prestige}</div>
-            <div class="budget \${agent.balance < 50 ? 'low' : ''}">\$\${agent.balance.toFixed(0)}</div>
-          </div>
-        \`).join('');
+      renderLeaderboard(data.agents);
 
       // Events
       const events = document.getElementById('events');

@@ -90,8 +90,27 @@ export async function processTick(): Promise<void> {
   }
 
   // Phase 4: Execute decisions
+  // Some actions are tick-singletons — only one agent can do them per tick.
+  // (E.g. there is one Caterer in the office; you can't both host the team
+  // lunch.) Subsequent attempts get rerouted to work with explanatory flavor.
+  const SINGLETON_ACTIONS = new Set(["team_lunch"]);
+  const consumedSingletons = new Set<string>();
+
   for (const { agent, action, reasoning } of decisions) {
-    await executeAction(agent, action, reasoning, tick);
+    let effectiveAction = action;
+    let effectiveReasoning = reasoning;
+
+    if (SINGLETON_ACTIONS.has(action.type)) {
+      if (consumedSingletons.has(action.type)) {
+        effectiveAction = { type: "work" };
+        effectiveReasoning =
+          `(Wanted to ${action.type} but the Caterer was already booked by another manager this tick — fell back to work.) ${reasoning}`;
+      } else {
+        consumedSingletons.add(action.type);
+      }
+    }
+
+    await executeAction(agent, effectiveAction, effectiveReasoning, tick);
   }
 
   // Phase 5: Update inspired agents (+5 prestige)
