@@ -1,4 +1,5 @@
 import { Mppx, stellar } from "@stellar/mpp/charge/client";
+import { Receipt } from "mppx";
 import { Keypair } from "@stellar/stellar-sdk";
 import { TickerEntry } from "./types.js";
 import { saveTickerEntry } from "./db.js";
@@ -187,15 +188,42 @@ export async function callPaidService(
 
     const data = await response.json();
 
-    // Extract payment info from response headers if available
-    const txHash = response.headers.get("x-mpp-tx-hash") || undefined;
+    // Pull the tx hash out of the MPP Payment-Receipt header (base64url JSON,
+    // with `reference` holding the Stellar tx hash for the charge method).
+    let txHash: string | undefined;
+    const receiptHeader = response.headers.get("Payment-Receipt");
+    if (receiptHeader) {
+      try {
+        const receipt = Receipt.deserialize(receiptHeader);
+        txHash = receipt.reference;
+      } catch (err) {
+        console.error(`[mpp] failed to parse Payment-Receipt for ${agentName}:`, err);
+      }
+    }
+
     const settledAt = Date.now();
+    const settlementTime = (settledAt - submittedAt) / 1000;
+
+    // Promote the ticker entry from "submitted" to "settled" with the hash
+    // we just learned about.
+    emitTickerUpdate({
+      id: entryId,
+      fromAgent: agentId,
+      fromAgentName: agentName,
+      toService: serviceName,
+      amount: priceUsdc,
+      status: "settled",
+      txHash,
+      submittedAt,
+      settledAt,
+      settlementTime,
+    });
 
     return {
       success: true,
       data,
       txHash,
-      settlementTime: txHash ? (settledAt - submittedAt) / 1000 : undefined,
+      settlementTime,
     };
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : "Unknown error";

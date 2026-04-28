@@ -252,7 +252,11 @@ export async function getAgentDecision(
   try {
     const response = await openai.chat.completions.create({
       model: "openai/gpt-5.5",
-      max_completion_tokens: 500,
+      // GPT-5.5 is a reasoning model — it consumes tokens internally before
+      // producing visible output. 500 was leaving zero headroom and truncating
+      // mid-response. 2000 fits well under the per-request output cap and
+      // costs ~$0.06 max per call worst-case.
+      max_completion_tokens: 2000,
       messages: [
         { role: "system", content: systemPrompt },
         { role: "user", content: userPrompt },
