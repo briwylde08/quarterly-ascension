@@ -1,7 +1,6 @@
 import express from "express";
 import type { Express, Request, Response, NextFunction } from "express";
 import { Mppx, stellar, Store } from "@stellar/mpp/charge/server";
-import { toBaseUnits } from "@stellar/mpp";
 
 const ASSET_SAC = process.env.ASSET_SAC || process.env.USDC_SAC || "";
 const MPP_SECRET = process.env.MPP_SECRET || "default-mpp-secret";
@@ -73,12 +72,12 @@ export function createNpcService(config: ServiceConfig, endpoints: EndpointConfi
   for (const endpoint of endpoints) {
     app.post(endpoint.path, async (req: Request, res: Response) => {
       try {
-        // Convert price to base units (7 decimals for Stellar assets)
-        const amountBaseUnits = toBaseUnits(endpoint.price.toString(), 7);
-
-        // Check payment via MPP
+        // The MPP server method calls toBaseUnits() internally — pass the
+        // human-readable price as a string and let the lib do the scaling.
+        // (The schema's "base units" docstring is misleading; the impl
+        // expects the human amount.)
         const result = await mppx.stellar.charge({
-          amount: amountBaseUnits.toString(),
+          amount: endpoint.price.toString(),
         })(req as unknown as globalThis.Request);
 
         if (result.status === 402) {
