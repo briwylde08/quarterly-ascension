@@ -82,6 +82,7 @@ export interface GameEvent {
   prestigeChange?: number;
   txHash?: string;
   settlementTime?: number;
+  reasoning?: string;  // In-character LLM justification, surfaced in the event feed
 }
 
 export type GameEventType =

@@ -233,6 +233,26 @@ const DISPLAY_HTML = `<!DOCTYPE html>
     .event.random_event { border-left-color: #ffcc00; }
     .event-time { color: #666; font-size: 11px; }
     .event-desc { margin-top: 5px; }
+    .event-quote {
+      margin-top: 6px;
+      padding: 6px 8px;
+      background: #0d0d0d;
+      border-left: 2px solid #444;
+      font-size: 12px;
+      font-style: italic;
+      color: #bbb;
+      line-height: 1.4;
+      white-space: pre-wrap;
+    }
+
+    /* Hover-link: when you hover on either an event or a ticker entry that
+       has a tx hash, both halves of the pair pulse so the eye can connect
+       the in-character action to its on-chain settlement. */
+    .event[data-tx-hash], .ticker-entry[data-tx-hash] { cursor: pointer; transition: background 0.15s; }
+    .event.linked-hover, .ticker-entry.linked-hover {
+      background: #1f2a1f !important;
+      box-shadow: 0 0 0 1px #00ff00 inset;
+    }
 
     /* Payment Ticker */
     .ticker {
@@ -362,6 +382,21 @@ const DISPLAY_HTML = `<!DOCTYPE html>
   </div>
 
   <script>
+    // Hover-link: highlight matching pairs of (event, ticker entry) by tx hash.
+    // Both halves of the pair pulse so the eye can connect the in-character
+    // action description to its on-chain settlement.
+    document.addEventListener('mouseover', (e) => {
+      const el = e.target.closest('[data-tx-hash]');
+      if (!el) return;
+      const hash = el.dataset.txHash;
+      document.querySelectorAll('[data-tx-hash="' + hash + '"]').forEach(n => n.classList.add('linked-hover'));
+    });
+    document.addEventListener('mouseout', (e) => {
+      const el = e.target.closest('[data-tx-hash]');
+      if (!el) return;
+      document.querySelectorAll('.linked-hover').forEach(n => n.classList.remove('linked-hover'));
+    });
+
     const ws = new WebSocket('ws://' + window.location.host);
 
     ws.onmessage = (event) => {
@@ -490,10 +525,18 @@ const DISPLAY_HTML = `<!DOCTYPE html>
 
     function renderEvent(e) {
       const time = new Date(e.timestamp).toLocaleTimeString();
+      const escapeHtml = (s) => String(s)
+        .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+      const txAttr = e.txHash ? \` data-tx-hash="\${e.txHash}"\` : '';
+      const quoteHtml = e.reasoning
+        ? \`<div class="event-quote">"\${escapeHtml(e.reasoning)}"</div>\`
+        : '';
       return \`
-        <div class="event \${e.type}">
+        <div class="event \${e.type}"\${txAttr}>
           <div class="event-time">\${time} · Tick \${e.tick}</div>
           <div class="event-desc">\${e.description}</div>
+          \${quoteHtml}
         </div>
       \`;
     }
@@ -520,8 +563,10 @@ const DISPLAY_HTML = `<!DOCTYPE html>
         ? \`<div class="ticker-quote">"\${escapeHtml(t.reasoning)}"</div>\`
         : '';
 
+      const txAttr = t.txHash ? \` data-tx-hash="\${t.txHash}"\` : '';
+
       return \`
-        <div class="ticker-entry \${statusClass}" data-ticker-id="\${t.id}">
+        <div class="ticker-entry \${statusClass}" data-ticker-id="\${t.id}"\${txAttr}>
           <div class="ticker-from">\${t.fromAgentName}</div>
           <div class="ticker-to">→ \${t.toService}</div>
           <div class="ticker-amount">\$\${t.amount.toFixed(2)} DLBR</div>

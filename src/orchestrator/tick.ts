@@ -253,6 +253,7 @@ async function executeAction(
     description: `${agent.name}: ${outcome}`,
     prestigeChange,
     txHash,
+    reasoning,
   });
 }
 

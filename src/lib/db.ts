@@ -38,7 +38,8 @@ export function initDatabase(): void {
       description TEXT NOT NULL,
       prestige_change INTEGER,
       tx_hash TEXT,
-      settlement_time REAL
+      settlement_time REAL,
+      reasoning TEXT
     );
 
     CREATE TABLE IF NOT EXISTS ticker (
@@ -75,12 +76,17 @@ export function initDatabase(): void {
     CREATE INDEX IF NOT EXISTS idx_action_logs_agent ON action_logs(agent_id);
   `);
 
-  // Add reasoning column to existing ticker tables created before the column existed.
+  // Add reasoning columns to existing tables created before the columns existed.
   // SQLite has no IF NOT EXISTS on ALTER TABLE; swallow the dup-column error.
-  try {
-    db.exec("ALTER TABLE ticker ADD COLUMN reasoning TEXT");
-  } catch {
-    // Column already present.
+  for (const stmt of [
+    "ALTER TABLE ticker ADD COLUMN reasoning TEXT",
+    "ALTER TABLE events ADD COLUMN reasoning TEXT",
+  ]) {
+    try {
+      db.exec(stmt);
+    } catch {
+      // Column already present.
+    }
   }
 }
 
@@ -190,8 +196,8 @@ export function claimAgent(agentId: string, email: string, name: string): boolea
 // Events
 export function saveEvent(event: GameEvent): void {
   db.prepare(`
-    INSERT INTO events (id, tick, timestamp, type, agent_id, target_id, description, prestige_change, tx_hash, settlement_time)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    INSERT INTO events (id, tick, timestamp, type, agent_id, target_id, description, prestige_change, tx_hash, settlement_time, reasoning)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `).run(
     event.id,
     event.tick,
@@ -202,7 +208,8 @@ export function saveEvent(event: GameEvent): void {
     event.description,
     event.prestigeChange,
     event.txHash,
-    event.settlementTime
+    event.settlementTime,
+    event.reasoning
   );
 }
 
@@ -233,6 +240,7 @@ function rowToEvent(row: any): GameEvent {
     prestigeChange: row.prestige_change,
     txHash: row.tx_hash,
     settlementTime: row.settlement_time,
+    reasoning: row.reasoning,
   };
 }
 
