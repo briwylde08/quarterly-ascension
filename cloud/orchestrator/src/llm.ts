@@ -1,50 +1,55 @@
+// LLM decision engine. Same logic as src/orchestrator/llm.ts on the laptop;
+// the differences are: OpenAI client config comes from env-bound secrets, and
+// the db / stellar accessors are injected so the DO can supply them.
+
 import OpenAI from "openai";
-import { Agent, Action, StatusEffect } from "../lib/types.js";
-import { buildPersonaPrompt, getPersona } from "../agents/personas.js";
-import { getAssetBalance } from "../lib/stellar.js";
-import { getActionPrice, isPaidAction } from "../lib/mpp-client.js";
-import { getAllAgents, getAgentActionLogs } from "../lib/db.js";
+import type { Agent, Action } from "./types.js";
+import { buildPersonaPrompt, getPersona } from "./personas.js";
+import type { Db } from "./db.js";
+import type { Stellar } from "./stellar.js";
 
-const openai = new OpenAI({
-  baseURL: process.env.OPENAI_BASE_URL,
-  defaultHeaders: process.env.CF_AIG_TOKEN
-    ? { "cf-aig-authorization": `Bearer ${process.env.CF_AIG_TOKEN}` }
-    : undefined,
-});
+export interface LlmDeps {
+  db: Db;
+  stellar: Stellar;
+  openaiBaseUrl: string;
+  openaiApiKey: string;
+  cfAigToken?: string;
+}
 
-// All possible actions
 const ALL_ACTIONS = [
-  // Free actions
   { type: "work", description: "Do actual work (+5 prestige, free)", cost: 0 },
   { type: "rest", description: "Rest and recover (removes Tired debuff, free)", cost: 0 },
   { type: "schmooze", description: "Build relationship with another manager (may form alliance)", cost: 0, requiresTarget: true },
   { type: "take_credit", description: "Attempt to claim credit for someone's work (40% success: +30 prestige, 60% fail: -20 prestige)", cost: 0, requiresTarget: true },
 
-  // Alliance actions
-  { type: "accept_alliance", description: "Accept a pending alliance proposal", cost: 0, requiresTarget: true },
+  { type: "accept_alliance", description: "Accept a pending alliance proposal (+5 prestige to both)", cost: 0, requiresTarget: true },
   { type: "reject_alliance", description: "Reject a pending alliance proposal (proposer loses 10 prestige)", cost: 0, requiresTarget: true },
   { type: "break_alliance", description: "Betray an ally (-30 prestige for you, +15 for them)", cost: 0, requiresTarget: true },
 
-  // Paid actions
-  { type: "buy_coffee", description: "Buy coffee (+1 productivity, removes Tired)", cost: 8 },
-  { type: "buy_fancy_coffee", description: "Buy fancy coffee (Caffeinated for 2 ticks)", cost: 15 },
-  { type: "file_complaint", description: "File HR complaint (target skips 1 action)", cost: 22, requiresTarget: true },
-  { type: "sensitivity_training", description: "Send rival to sensitivity training (-20 prestige, Problematic status)", cost: 30, requiresTarget: true },
-  { type: "check_hr_status", description: "Check if anyone filed against you", cost: 5 },
-  { type: "strategy_report", description: "Get consultant report (+25 prestige, gives Deliverable)", cost: 35 },
-  { type: "competitive_intel", description: "Learn top 3 agents' recent actions", cost: 25 },
-  { type: "sabotage_plan", description: "Get dirt on a specific target", cost: 40, requiresTarget: true },
-  { type: "fix_laptop", description: "Sabotage target's laptop (they skip 1 action)", cost: 18, requiresTarget: true },
-  { type: "recover_emails", description: "See target's last 3 actions", cost: 20, requiresTarget: true },
-  { type: "calendar_conflict", description: "Target's next meeting fails", cost: 15, requiresTarget: true },
-  { type: "book_ceo_time", description: "Meet with CEO (+40 prestige if you have Deliverable, -20 if not)", cost: 50 },
-  { type: "leak_org_chart", description: "Get insider info about upcoming changes", cost: 25 },
-  { type: "schedule_conflict", description: "Cancel target's CEO meeting", cost: 30, requiresTarget: true },
-  { type: "team_lunch", description: "Host team lunch (+15 prestige, may form alliance)", cost: 25 },
-  { type: "poison_meeting", description: "Ruin target's meeting (-10 prestige for them)", cost: 35, requiresTarget: true },
-  { type: "birthday_cake", description: "Bring cake (+5 prestige, removes Problematic)", cost: 12 },
-  { type: "book_motivation", description: "Attend motivation session (+20 prestige, Inspired for 2 ticks)", cost: 30 },
-  { type: "send_motivation", description: "Send rival to mandatory motivation (wastes their next 2 actions)", cost: 35, requiresTarget: true },
+  { type: "buy_coffee", description: "Buy coffee (removes Tired)", cost: 8 },
+  { type: "buy_fancy_coffee", description: "Buy fancy coffee (Caffeinated for 2 ticks; immune to Tired)", cost: 15 },
+  { type: "file_complaint", description: "File HR complaint (target gets Under Investigation; can't retaliate against you for 1 tick)", cost: 22, requiresTarget: true },
+  { type: "sensitivity_training", description: "Send rival to sensitivity training (target -20 prestige + Problematic for 4 ticks: -3 prestige/tick decay)", cost: 30, requiresTarget: true },
+  { type: "check_hr_status", description: "See who has filed complaints against you", cost: 5 },
+  { type: "strategy_report", description: "Get consultant report (+25 prestige, gives Deliverable; halved after a New Initiative pivot)", cost: 35 },
+  { type: "competitive_intel", description: "Learn top 3 agents' last action", cost: 25 },
+  { type: "sabotage_plan", description: "Get dirt on a target (reveals their last 3 actions; -3 prestige to target)", cost: 40, requiresTarget: true },
+  { type: "fix_laptop", description: "Sabotage target's laptop (they're forced to rest next tick)", cost: 18, requiresTarget: true },
+  { type: "recover_emails", description: "See target's last 3 actions (no other effect)", cost: 20, requiresTarget: true },
+  { type: "calendar_conflict", description: "Triple-book target's calendar (clears their Deliverable + pending alliance offer)", cost: 15, requiresTarget: true },
+  { type: "book_ceo_time", description: "Meet with CEO (+40 prestige with Deliverable, -20 without; -10 if Meeting-Blocked)", cost: 50 },
+  { type: "leak_org_chart", description: "Insider intel — top 3 wealth ranking + active alliance graph", cost: 25 },
+  { type: "schedule_conflict", description: "Cancel target's CEO meeting (clears their Deliverable + Meeting-Blocked for 2 ticks)", cost: 30, requiresTarget: true },
+  { type: "team_lunch", description: "Host team lunch (+15 prestige; only one host per cycle)", cost: 25 },
+  { type: "poison_meeting", description: "Sabotage target's catered meeting (target -10 prestige)", cost: 35, requiresTarget: true },
+  { type: "birthday_cake", description: "Bring cake (+5 prestige, removes own Problematic)", cost: 12 },
+  { type: "book_motivation", description: "Attend motivation session (+20 prestige, Inspired for 2 ticks: +5/tick)", cost: 30 },
+  { type: "send_motivation", description: "Send rival to mandatory motivation (target forced to rest for 2 ticks)", cost: 35, requiresTarget: true },
+
+  // Earning paths (Phase 5)
+  { type: "whistleblower_bounty", description: "Report target to HR ($10 cost). If target had hostile actions in last 3 ticks → +30 prestige + $25 bounty. If false → -10 prestige; target +5 sympathy.", cost: 10, requiresTarget: true },
+  { type: "mentorship", description: "Mentor target ($15 cost; non-self target). Self +5 prestige + $30 stipend; target +10 prestige. Wholesome alternative to take_credit.", cost: 15, requiresTarget: true },
+  { type: "coffee_chat", description: "Casual coffee with target ($5; non-self). Both gain +3 prestige. No alliance proposed. Low-stakes networking.", cost: 5, requiresTarget: true },
 ];
 
 interface DecisionContext {
@@ -53,19 +58,12 @@ interface DecisionContext {
   currentTick: number;
   allAgents: Agent[];
   recentActions: any[];
+  leakedEmails: Array<{ fromAgent: string; toAgent: string; subject: string; body: string }>;
 }
 
-/**
- * Build the context prompt for an agent's decision
- */
 function buildContextPrompt(ctx: DecisionContext): string {
-  const { agent, balance, currentTick, allAgents, recentActions } = ctx;
+  const { agent, balance, currentTick, allAgents, recentActions, leakedEmails } = ctx;
 
-  // Get other agents info (limited view). Surface the agent.id explicitly so
-  // the LLM uses it verbatim as `target` in action JSON — without this, the
-  // model tends to guess between full names, first names, capitalized vs.
-  // lowercase, and a meaningful slice of hostile actions silently fail
-  // validation with "Invalid target".
   const otherAgents = allAgents
     .filter((a) => a.id !== agent.id)
     .map((a) => ({
@@ -74,39 +72,40 @@ function buildContextPrompt(ctx: DecisionContext): string {
       title: a.title,
       prestige: a.prestige,
       isAlly: agent.allies.includes(a.id),
-      isRival: false, // Could track this
+      isRival: false,
     }));
 
-  // Get available actions based on current state
   const availableActions = ALL_ACTIONS.filter((action) => {
-    // Can't afford paid actions
     if (action.cost > balance) return false;
-
-    // Alliance-specific actions
     if (action.type === "accept_alliance" && !agent.pendingAlliance) return false;
     if (action.type === "reject_alliance" && !agent.pendingAlliance) return false;
     if (action.type === "break_alliance" && agent.allies.length === 0) return false;
-
-    // Can't target allies with hostile actions if we have any
-    // (We'll validate specific targets later)
-
     return true;
   });
 
-  // Status effect descriptions
   const statusDescriptions = agent.statusEffects.map((s) => {
     switch (s.type) {
-      case "tired": return "Tired (actions cost +$5, removed by coffee or rest)";
-      case "caffeinated": return `Caffeinated (immune to Tired, expires tick ${s.expiresAtTick})`;
-      case "inspired": return `Inspired (+5 prestige/tick, expires tick ${s.expiresAtTick})`;
-      case "under_investigation": return `Under Investigation (can't attack ${s.source}, expires tick ${s.expiresAtTick})`;
-      case "problematic": return "Problematic (-10% prestige gains, removed by birthday cake)";
-      case "under_review": return `Under Review (can't book CEO time, expires tick ${s.expiresAtTick})`;
-      case "technical_difficulties": return "Technical Difficulties (skip this action!)";
-      case "has_deliverable": return "Has Deliverable (CEO meeting will succeed)";
+      case "tired": return "Tired (-2 prestige/tick decay; removed by coffee or rest)";
+      case "caffeinated": return `Caffeinated (immune to Tired; expires tick ${s.expiresAtTick})`;
+      case "inspired": return `Inspired (+5 prestige/tick; expires tick ${s.expiresAtTick})`;
+      case "under_investigation": return `Under Investigation (can't take hostile action against ${s.source}; expires tick ${s.expiresAtTick})`;
+      case "problematic": return `Problematic (-3 prestige/tick decay; expires tick ${s.expiresAtTick} — or removed by bringing birthday cake)`;
+      case "under_review": return `Under Review (can't book CEO time; expires tick ${s.expiresAtTick})`;
+      case "technical_difficulties": return "Technical Difficulties (forced to rest this cycle)";
+      case "has_deliverable": return "Has Deliverable (CEO meeting will succeed and award +40)";
+      case "mandatory_motivation": return "Stuck in Mandatory Motivation (forced to rest)";
+      case "meeting_blocked": return `Meeting-Blocked (can't book CEO time; expires tick ${s.expiresAtTick})`;
       default: return s.type;
     }
   });
+
+  const leakSection = leakedEmails.length > 0
+    ? `\nPUBLIC KNOWLEDGE (recently leaked internal emails — everyone has seen these):\n${leakedEmails.map((e) => {
+        const from = allAgents.find((a) => a.id === e.fromAgent)?.name ?? e.fromAgent;
+        const to = allAgents.find((a) => a.id === e.toAgent)?.name ?? e.toAgent;
+        return `- ${from} → ${to} (Subject: "${e.subject}"): "${e.body}"`;
+      }).join("\n")}\n`
+    : "";
 
   return `
 CURRENT SITUATION (Tick ${currentTick}):
@@ -123,7 +122,7 @@ ${otherAgents.map((a) => `- id: ${a.id} — ${a.name} (${a.title}): ${a.prestige
 
 YOUR RECENT ACTIONS:
 ${recentActions.slice(-5).map((a) => `- Tick ${a.tick}: ${a.action_type} → ${a.outcome}`).join("\n") || "None yet"}
-
+${leakSection}
 AVAILABLE ACTIONS:
 ${availableActions.map((a) => `- ${a.type}${a.cost > 0 ? ` ($${a.cost})` : " (free)"}${a.requiresTarget ? " [requires target]" : ""}: ${a.description}`).join("\n")}
 
@@ -153,16 +152,11 @@ ACTION: {"type": "file_complaint", "target": "kevin"}
 `;
 }
 
-/**
- * Parse the LLM response into an Action
- */
 function parseAction(response: string, agent: Agent): { action: Action; reasoning: string } {
-  // Extract reasoning (everything before ACTION:)
   const actionMatch = response.match(/ACTION:\s*(\{[^}]+\})/i);
   const reasoning = response.split(/ACTION:/i)[0].trim();
 
   if (!actionMatch) {
-    // Default to work if we can't parse
     console.warn(`Could not parse action for ${agent.name}, defaulting to work`);
     return { action: { type: "work" }, reasoning: reasoning || "I'll just do my job." };
   }
@@ -170,25 +164,16 @@ function parseAction(response: string, agent: Agent): { action: Action; reasonin
   try {
     const parsed = JSON.parse(actionMatch[1]);
     return { action: parsed as Action, reasoning };
-  } catch (e) {
+  } catch {
     console.warn(`Invalid JSON for ${agent.name}, defaulting to work`);
     return { action: { type: "work" }, reasoning: reasoning || "I'll just do my job." };
   }
 }
 
-/**
- * Turn an action.type like "take_credit" into a human phrase like "take credit".
- */
 function humanizeActionType(type: string): string {
   return type.replace(/_/g, " ");
 }
 
-/**
- * When validation rejects the LLM's pick, we replace the agent's reasoning
- * with an in-character corporate excuse instead of a dry "Wanted to X but: Y".
- * Keeps the comedy beat in the action feed even when the LLM picks something
- * the rules don't allow.
- */
 function corporateExcuse(action: Action, reason: string): string {
   const verb = humanizeActionType(action.type);
   const target = ("target" in action && action.target) ? action.target : "someone";
@@ -196,38 +181,25 @@ function corporateExcuse(action: Action, reason: string): string {
   switch (reason) {
     case "Invalid target":
       return invalidTargetExcuse(action, target);
-
     case "Insufficient funds":
       return `Tried to ${verb}, but the corporate card came back declined. I'll need to circle back next quarter, finance is being awful.`;
-
     case "Cannot target an ally with hostile action":
       return allyHostileExcuse(action, target);
-
     case "Action requires a target":
       return `Wanted to ${verb}, but apparently I forgot to loop in a stakeholder. Lesson learned, will sync offline.`;
-
     case "Technical difficulties - must rest":
       return `My laptop is, regrettably, bricked. IT says 8-12 weeks. I'll be working from notebook today.`;
-
     case "Under review - cannot book CEO time":
       return `Audit's still sniffing around my Q3 numbers. Best to keep my head down this cycle.`;
-
     case "Unknown action type":
       return `Had a transformational idea, but it was honestly a bit too disruptive for our risk profile. Maybe next quarter.`;
-
     case "Already acted this tick":
       return `Already filed three deliverables this morning, my bandwidth is genuinely Stretched. Need to recharge.`;
-
     default:
       return `Wanted to ${verb}${target !== "someone" ? " " + target : ""}, but ${reason.toLowerCase()}. Suboptimal.`;
   }
 }
 
-/**
- * Action-type-specific corporate excuses for the most common failure: the
- * LLM picked a target that doesn't exist (probably an old reorg victim, or
- * the LLM just made up a name).
- */
 function invalidTargetExcuse(action: Action, target: string): string {
   switch (action.type) {
     case "take_credit":
@@ -261,9 +233,6 @@ function invalidTargetExcuse(action: Action, target: string): string {
   }
 }
 
-/**
- * Action-type-specific excuses for "you tried to attack your own ally."
- */
 function allyHostileExcuse(action: Action, target: string): string {
   switch (action.type) {
     case "file_complaint":
@@ -287,45 +256,37 @@ function allyHostileExcuse(action: Action, target: string): string {
   }
 }
 
-/**
- * Validate an action is legal for this agent
- */
 function validateAction(action: Action, agent: Agent, balance: number, allAgents: Agent[]): { valid: boolean; reason?: string } {
   const actionDef = ALL_ACTIONS.find((a) => a.type === action.type);
-  if (!actionDef) {
-    return { valid: false, reason: "Unknown action type" };
-  }
+  if (!actionDef) return { valid: false, reason: "Unknown action type" };
+  if (actionDef.cost > balance) return { valid: false, reason: "Insufficient funds" };
+  if (actionDef.requiresTarget && !("target" in action)) return { valid: false, reason: "Action requires a target" };
 
-  // Check cost
-  if (actionDef.cost > balance) {
-    return { valid: false, reason: "Insufficient funds" };
-  }
-
-  // Check if action requires target
-  if (actionDef.requiresTarget && !("target" in action)) {
-    return { valid: false, reason: "Action requires a target" };
-  }
-
-  // Validate target exists
   if ("target" in action) {
     const target = allAgents.find((a) => a.id === action.target);
-    if (!target) {
-      return { valid: false, reason: "Invalid target" };
-    }
+    if (!target) return { valid: false, reason: "Invalid target" };
+    if (action.target === agent.id) return { valid: false, reason: "Cannot target yourself" };
 
-    // Can't target allies with hostile actions
-    const hostileActions = ["file_complaint", "sensitivity_training", "sabotage_plan", "fix_laptop", "calendar_conflict", "schedule_conflict", "poison_meeting", "send_motivation"];
+    const hostileActions = ["file_complaint", "sensitivity_training", "sabotage_plan", "fix_laptop", "calendar_conflict", "schedule_conflict", "poison_meeting", "send_motivation", "take_credit", "whistleblower_bounty"];
     if (hostileActions.includes(action.type) && agent.allies.includes(action.target)) {
       return { valid: false, reason: "Cannot target an ally with hostile action" };
     }
+
+    // Under investigation: can't take a hostile action against the source.
+    if (hostileActions.includes(action.type)) {
+      const blockedSources = agent.statusEffects
+        .filter((e) => e.type === "under_investigation" && e.source)
+        .map((e) => e.source as string);
+      if (blockedSources.includes(action.target)) {
+        return { valid: false, reason: "Cannot retaliate against complainant while Under Investigation" };
+      }
+    }
   }
 
-  // Check technical difficulties
   if (agent.statusEffects.some((s) => s.type === "technical_difficulties") && action.type !== "rest") {
     return { valid: false, reason: "Technical difficulties - must rest" };
   }
 
-  // Check under review for CEO time
   if (action.type === "book_ceo_time" && agent.statusEffects.some((s) => s.type === "under_review")) {
     return { valid: false, reason: "Under review - cannot book CEO time" };
   }
@@ -333,10 +294,8 @@ function validateAction(action: Action, agent: Agent, balance: number, allAgents
   return { valid: true };
 }
 
-/**
- * Get a decision from the LLM for an agent
- */
 export async function getAgentDecision(
+  deps: LlmDeps,
   agent: Agent,
   currentTick: number
 ): Promise<{ action: Action; reasoning: string }> {
@@ -345,22 +304,20 @@ export async function getAgentDecision(
     return { action: { type: "work" }, reasoning: "No persona found" };
   }
 
-  // Get current balance
-  const balance = await getAssetBalance(agent.publicKey);
+  const balance = await deps.stellar.getAssetBalance(agent.publicKey);
+  const allAgents = await deps.db.getAllAgents();
+  const recentActions = await deps.db.getAgentActionLogs(agent.id, Math.max(0, currentTick - 10), currentTick);
+  const leakedEmails = await deps.db.getRecentLeakedEmails(5);
 
-  // Get all agents for context
-  const allAgents = getAllAgents();
+  const context: DecisionContext = { agent, balance, currentTick, allAgents, recentActions, leakedEmails };
 
-  // Get recent actions
-  const recentActions = getAgentActionLogs(agent.id, Math.max(0, currentTick - 10), currentTick);
-
-  const context: DecisionContext = {
-    agent,
-    balance,
-    currentTick,
-    allAgents,
-    recentActions,
-  };
+  const openai = new OpenAI({
+    apiKey: deps.openaiApiKey,
+    baseURL: deps.openaiBaseUrl,
+    defaultHeaders: deps.cfAigToken
+      ? { "cf-aig-authorization": `Bearer ${deps.cfAigToken}` }
+      : undefined,
+  });
 
   const systemPrompt = buildPersonaPrompt(persona);
   const userPrompt = buildContextPrompt(context);
@@ -368,10 +325,6 @@ export async function getAgentDecision(
   try {
     const response = await openai.chat.completions.create({
       model: "openai/gpt-5.5",
-      // GPT-5.5 is a reasoning model — it consumes tokens internally before
-      // producing visible output. 500 was leaving zero headroom and truncating
-      // mid-response. 2000 fits well under the per-request output cap and
-      // costs ~$0.06 max per call worst-case.
       max_completion_tokens: 2000,
       messages: [
         { role: "system", content: systemPrompt },
@@ -386,7 +339,6 @@ export async function getAgentDecision(
 
     const { action, reasoning } = parseAction(content, agent);
 
-    // Validate the action
     const validation = validateAction(action, agent, balance, allAgents);
     if (!validation.valid) {
       console.log(`${agent.name}'s action invalid (${validation.reason}), defaulting to work`);

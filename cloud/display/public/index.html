@@ -1,142 +1,4 @@
-import express from "express";
-import { WebSocketServer, WebSocket } from "ws";
-import http from "http";
-import { GameEvent, TickerEntry } from "../lib/types.js";
-import { getAllAgents, getRecentEvents, getRecentTickerEntries, getTickerStats, getCurrentTick, getGameStatus } from "../lib/db.js";
-import { getAssetBalance, getExplorerTxUrl, getExplorerAccountUrl } from "../lib/stellar.js";
-import { onGameEvent } from "../orchestrator/tick.js";
-import { onTickerUpdate } from "../lib/mpp-client.js";
-
-const PORT = process.env.DISPLAY_PORT || 3001;
-
-const app = express();
-const server = http.createServer(app);
-const wss = new WebSocketServer({ server });
-
-// Track connected clients
-const clients = new Set<WebSocket>();
-
-wss.on("connection", (ws) => {
-  clients.add(ws);
-  console.log("Display client connected");
-
-  // Send initial state
-  sendFullState(ws);
-
-  ws.on("close", () => {
-    clients.delete(ws);
-    console.log("Display client disconnected");
-  });
-});
-
-function broadcast(message: object): void {
-  const data = JSON.stringify(message);
-  for (const client of clients) {
-    if (client.readyState === WebSocket.OPEN) {
-      client.send(data);
-    }
-  }
-}
-
-async function sendFullState(ws: WebSocket): Promise<void> {
-  const agents = getAllAgents();
-  const agentsWithBalances = await Promise.all(
-    agents.map(async (agent) => ({
-      ...agent,
-      balance: await getAssetBalance(agent.publicKey),
-      explorerUrl: getExplorerAccountUrl(agent.publicKey),
-    }))
-  );
-
-  const tickerStats = getTickerStats();
-
-  ws.send(JSON.stringify({
-    type: "full_state",
-    data: {
-      status: getGameStatus(),
-      tick: getCurrentTick(),
-      tickIntervalMs: parseInt(process.env.TICK_INTERVAL_MS || "300000", 10),
-      maxTicks: parseInt(process.env.MAX_TICKS || "48", 10),
-      agents: agentsWithBalances.map((a) => ({
-        id: a.id,
-        name: a.name,
-        title: a.title,
-        prestige: a.prestige,
-        balance: a.balance,
-        statusEffects: a.statusEffects,
-        allies: a.allies,
-        explorerUrl: a.explorerUrl,
-      })),
-      recentEvents: getRecentEvents(20),
-      ticker: getRecentTickerEntries(15),
-      stats: {
-        totalTransactions: tickerStats.total,
-        totalAmountMoved: tickerStats.amountMoved,
-        avgSettlementTime: tickerStats.avgSettlement,
-      },
-    },
-  }));
-}
-
-// Subscribe to game events
-onGameEvent((event: GameEvent) => {
-  broadcast({
-    type: "game_event",
-    data: event,
-  });
-});
-
-// Subscribe to ticker updates
-onTickerUpdate((entry: TickerEntry) => {
-  broadcast({
-    type: "ticker_update",
-    data: {
-      ...entry,
-      explorerUrl: entry.txHash ? getExplorerTxUrl(entry.txHash) : undefined,
-    },
-  });
-});
-
-// Serve the display HTML
-app.get("/", (req, res) => {
-  res.send(DISPLAY_HTML);
-});
-
-// API endpoints for polling (fallback)
-app.get("/api/state", async (req, res) => {
-  const agents = getAllAgents();
-  const agentsWithBalances = await Promise.all(
-    agents.map(async (agent) => ({
-      id: agent.id,
-      name: agent.name,
-      title: agent.title,
-      prestige: agent.prestige,
-      balance: await getAssetBalance(agent.publicKey),
-      statusEffects: agent.statusEffects,
-      allies: agent.allies,
-    }))
-  );
-
-  res.json({
-    status: getGameStatus(),
-    tick: getCurrentTick(),
-    tickIntervalMs: parseInt(process.env.TICK_INTERVAL_MS || "300000", 10),
-    maxTicks: parseInt(process.env.MAX_TICKS || "48", 10),
-    agents: agentsWithBalances,
-    recentEvents: getRecentEvents(20),
-    ticker: getRecentTickerEntries(15),
-    stats: getTickerStats(),
-  });
-});
-
-export function startDisplayServer(): void {
-  server.listen(PORT, () => {
-    console.log(`Display server running on http://localhost:${PORT}`);
-  });
-}
-
-// HTML for the display page — full-fat corporate-dashboard parody.
-const DISPLAY_HTML = `<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8">
@@ -188,6 +50,24 @@ const DISPLAY_HTML = `<!DOCTYPE html>
 
     a { color: var(--info); }
     a:hover { color: var(--navy); }
+
+    /* === Intro bar (links to claim flow) ============================ */
+    .intro-bar {
+      background: #f1c40f;
+      color: #1c3a64;
+      padding: 8px 24px;
+      font-size: 13px;
+      font-weight: 600;
+      text-align: center;
+      letter-spacing: 0.3px;
+    }
+    .intro-bar a {
+      color: #1c3a64;
+      text-decoration: underline;
+    }
+    .intro-bar a:hover {
+      color: #2c5896;
+    }
 
     /* === Header banner ============================================== */
     .exec-banner {
@@ -269,6 +149,24 @@ const DISPLAY_HTML = `<!DOCTYPE html>
     .meta-item.countdown .meta-value {
       color: #f1c40f;
     }
+
+    /* Temporary admin pause button (Phase 5). Plain corporate-looking button
+       in the header. Bearer secret prompted on first click, kept in memory. */
+    .pause-btn {
+      background: rgba(255,255,255,0.10);
+      border: 1px solid rgba(255,255,255,0.25);
+      color: var(--navy-text);
+      font-family: inherit;
+      font-size: 12px;
+      letter-spacing: 0.4px;
+      padding: 8px 14px;
+      border-radius: 3px;
+      cursor: pointer;
+      transition: background 0.15s ease;
+    }
+    .pause-btn:hover { background: rgba(255,255,255,0.20); }
+    .pause-btn:active { transform: translateY(1px); }
+    .pause-btn.resume { background: rgba(241,196,15,0.20); border-color: rgba(241,196,15,0.50); }
     .meta-item.countdown .meta-value.tick { animation: countdownTick 1s ease-out; }
     @keyframes countdownTick {
       0% { transform: scale(1.05); color: #ffffff; }
@@ -605,7 +503,9 @@ const DISPLAY_HTML = `<!DOCTYPE html>
       justify-content: center;
       flex-direction: column;
       z-index: 1000;
+      pointer-events: none; /* don't block the rest of the page */
     }
+    .halted-overlay > * { pointer-events: auto; } /* but the children stay clickable */
     .halted-overlay.hidden { display: none; }
     .halted-overlay .stamp {
       border: 4px solid #f1c40f;
@@ -622,6 +522,22 @@ const DISPLAY_HTML = `<!DOCTYPE html>
       color: rgba(255,255,255,0.75);
       letter-spacing: 1px;
     }
+    .halted-overlay .resume-cta {
+      margin-top: 28px;
+      background: #f1c40f;
+      color: var(--navy);
+      border: 0;
+      padding: 12px 28px;
+      font-family: inherit;
+      font-size: 14px;
+      font-weight: 700;
+      letter-spacing: 1px;
+      text-transform: uppercase;
+      border-radius: 3px;
+      cursor: pointer;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.25);
+    }
+    .halted-overlay .resume-cta:hover { background: #f8d35a; }
 
     /* === Empty state ================================================ */
     .empty-state {
@@ -636,6 +552,11 @@ const DISPLAY_HTML = `<!DOCTYPE html>
   <div id="halted-overlay" class="halted-overlay hidden">
     <div class="stamp">Cycle Paused</div>
     <div class="sub">Strategic Review In Progress · State Preserved</div>
+    <button id="resume-cta" class="resume-cta">▶ Resume Cycle</button>
+  </div>
+
+  <div class="intro-bar">
+    <span>New here? <a href="/intro.html">Adopt one of these managers</a> and get quarterly emails about their corporate descent.</span>
   </div>
 
   <header class="exec-banner" id="banner">
@@ -660,6 +581,7 @@ const DISPLAY_HTML = `<!DOCTYPE html>
         <span class="meta-label">Next Sync-up</span>
         <span class="meta-value" id="countdown">—</span>
       </div>
+      <button id="pause-btn" class="pause-btn" title="Pause / resume the simulation (admin)">⏸ Pause</button>
     </div>
   </header>
 
@@ -720,6 +642,17 @@ const DISPLAY_HTML = `<!DOCTYPE html>
 
   <script>
     // ============================================================
+    // Config — orchestrator URL is overridable for local dev (set
+    // window.ORCHESTRATOR_BASE before this script in a <script> tag,
+    // or via query string: ?orchestrator=https://... ).
+    // ============================================================
+    const _qsOrch = new URLSearchParams(location.search).get('orchestrator');
+    const ORCHESTRATOR_BASE = (window.ORCHESTRATOR_BASE
+      || _qsOrch
+      || 'https://orchestrator.briana-761.workers.dev').replace(/\/$/, '');
+    const ORCHESTRATOR_WS = ORCHESTRATOR_BASE.replace(/^http/, 'ws') + '/ws';
+
+    // ============================================================
     // Hover-link: highlight matching pairs of (event, ticker entry)
     // by tx hash.
     // ============================================================
@@ -737,13 +670,57 @@ const DISPLAY_HTML = `<!DOCTYPE html>
 
     // ============================================================
     // State + WebSocket
+    //
+    // Bootstrap: fetch /api/state once on load, then subscribe to /ws
+    // for incremental events. The WebSocket auto-reconnects on close
+    // (orchestrator DO is supposed to live forever; any drop is transient).
     // ============================================================
-    const ws = new WebSocket('ws://' + window.location.host);
-
     let tickIntervalMs = 300000;
     let lastTickStartMs = Date.now();
     let currentTick = 0;
+    let currentStatus = 'setup';
     let prevPrestige = new Map();
+    let bootstrapped = false;
+    const wsQueue = [];
+
+    async function bootstrap() {
+      try {
+        const r = await fetch(ORCHESTRATOR_BASE + '/api/state');
+        const data = await r.json();
+        updateFullState(data);
+        bootstrapped = true;
+        // Drain any events queued during bootstrap.
+        for (const m of wsQueue) routeMessage(m);
+        wsQueue.length = 0;
+      } catch (err) {
+        console.error('[bootstrap] failed:', err);
+        document.getElementById('stream').innerHTML =
+          '<div class="empty-state">Connection to MegaCorp servers failed. Retrying…</div>';
+        setTimeout(bootstrap, 2000);
+      }
+    }
+
+    function routeMessage(msg) {
+      if (msg.type === 'game_event') handleGameEvent(msg.data);
+      else if (msg.type === 'ticker_update') handleTickerUpdate(msg.data);
+    }
+
+    function connectWs() {
+      const ws = new WebSocket(ORCHESTRATOR_WS);
+      ws.onmessage = (event) => {
+        const msg = JSON.parse(event.data);
+        if (!bootstrapped) wsQueue.push(msg);
+        else routeMessage(msg);
+      };
+      ws.onclose = () => {
+        console.log('[ws] disconnected, retrying in 2s');
+        setTimeout(connectWs, 2000);
+      };
+      ws.onerror = (err) => console.error('[ws] error', err);
+    }
+
+    bootstrap();
+    connectWs();
 
     // Unified feed correlation:
     //   feedByEntryId[entryId]  → DOM node for paid actions
@@ -776,19 +753,13 @@ const DISPLAY_HTML = `<!DOCTYPE html>
       game_resumed: 'Resumed',
     };
 
-    ws.onmessage = (event) => {
-      const msg = JSON.parse(event.data);
-      if (msg.type === 'full_state') updateFullState(msg.data);
-      else if (msg.type === 'game_event') handleGameEvent(msg.data);
-      else if (msg.type === 'ticker_update') handleTickerUpdate(msg.data);
-    };
-
     // ============================================================
     // Initial state
     // ============================================================
     function updateFullState(data) {
       tickIntervalMs = data.tickIntervalMs || tickIntervalMs;
       currentTick = data.tick;
+      currentStatus = data.status;
       lastTickStartMs = Date.now() - 0; // best estimate; will recalibrate on next tick
       document.getElementById('cycle').textContent = data.tick;
       document.getElementById('status').textContent = humanStatus(data.status);
@@ -1127,13 +1098,20 @@ const DISPLAY_HTML = `<!DOCTYPE html>
     }
     async function refreshFromApi() {
       try {
-        const r = await fetch('/api/state');
+        const r = await fetch(ORCHESTRATOR_BASE + '/api/state');
         const data = await r.json();
+        // Resume detection: if we were halted and are now running, reset the
+        // countdown so it counts from the new tick interval, not from a stale
+        // pre-pause baseline.
+        if (currentStatus === 'halted' && data.status === 'running') {
+          lastTickStartMs = Date.now();
+        }
+        currentStatus = data.status;
         document.getElementById('cycle').textContent = data.tick;
         document.getElementById('status').textContent = humanStatus(data.status);
         document.getElementById('halted-overlay').classList.toggle('hidden', data.status !== 'halted');
         renderLeaderboard(data.agents);
-        setKpis(data.stats.amountMoved, data.stats.total, data.stats.avgSettlement, data.agents.length);
+        setKpis(data.stats.totalAmountMoved, data.stats.totalTransactions, data.stats.avgSettlementTime, data.agents.length);
       } catch (e) { /* network blip; next event will retry */ }
     }
 
@@ -1141,12 +1119,23 @@ const DISPLAY_HTML = `<!DOCTYPE html>
     // Countdown (client-side timer — no server roundtrip)
     // ============================================================
     setInterval(() => {
+      const el = document.getElementById('countdown');
+      // While the game is paused, freeze the countdown — the server isn't
+      // firing alarms, so a draining timer would be misleading. Resume detection
+      // in refreshFromApi resets lastTickStartMs when the game un-halts.
+      if (currentStatus === 'halted') {
+        el.textContent = 'Paused';
+        return;
+      }
+      if (currentStatus === 'ended') {
+        el.textContent = '—';
+        return;
+      }
       const elapsed = Date.now() - lastTickStartMs;
       const remaining = Math.max(0, tickIntervalMs - elapsed);
       const sec = Math.floor(remaining / 1000);
       const m = Math.floor(sec / 60);
       const s = sec % 60;
-      const el = document.getElementById('countdown');
       el.textContent = m + ':' + (s < 10 ? '0' + s : s);
       el.classList.remove('tick'); void el.offsetWidth; el.classList.add('tick');
     }, 1000);
@@ -1176,14 +1165,81 @@ const DISPLAY_HTML = `<!DOCTYPE html>
       if (s === 'setup') return 'Initializing';
       return s;
     }
+
+    // ============================================================
+    // Pause / resume button (temporary). Bearer secret is asked once
+    // per session and kept in sessionStorage. Button label tracks the
+    // current game status from the most recent /api/state read.
+    // ============================================================
+    const pauseBtn = document.getElementById('pause-btn');
+    function syncPauseLabel(status) {
+      if (!pauseBtn) return;
+      if (status === 'halted') {
+        pauseBtn.textContent = '▶ Resume';
+        pauseBtn.classList.add('resume');
+      } else {
+        pauseBtn.textContent = '⏸ Pause';
+        pauseBtn.classList.remove('resume');
+      }
+    }
+    function getAdminSecret() {
+      let s = sessionStorage.getItem('adminSecret');
+      if (s) return s;
+      s = prompt('Admin secret (kept in sessionStorage for this tab):');
+      if (s) sessionStorage.setItem('adminSecret', s);
+      return s;
+    }
+    async function callPauseResume(intent) {
+      const secret = getAdminSecret();
+      if (!secret) return;
+      const path = intent === 'resume' ? '/admin/resume' : '/admin/halt';
+      try {
+        const r = await fetch(ORCHESTRATOR_BASE + path, {
+          method: 'POST',
+          headers: { 'Authorization': 'Bearer ' + secret },
+        });
+        if (r.status === 401 || r.status === 403) {
+          sessionStorage.removeItem('adminSecret');
+          alert('Admin secret rejected. Try again.');
+        } else if (!r.ok) {
+          const t = await r.text();
+          alert('Halt/resume failed: ' + r.status + ' ' + t.slice(0, 200));
+        }
+        refreshFromApi();
+      } catch (e) {
+        alert('Network error: ' + e.message);
+      }
+    }
+
+    pauseBtn?.addEventListener('click', async () => {
+      const isPaused = pauseBtn.classList.contains('resume');
+      pauseBtn.disabled = true;
+      try { await callPauseResume(isPaused ? 'resume' : 'halt'); }
+      finally { pauseBtn.disabled = false; }
+    });
+
+    const resumeCta = document.getElementById('resume-cta');
+    resumeCta?.addEventListener('click', async () => {
+      resumeCta.disabled = true;
+      try { await callPauseResume('resume'); }
+      finally { resumeCta.disabled = false; }
+    });
+
+    // Patch updateFullState + refreshFromApi to also sync the pause button.
+    const _origUpdateFullState = updateFullState;
+    updateFullState = function (data) {
+      _origUpdateFullState(data);
+      syncPauseLabel(data.status);
+    };
+    const _origRefresh = refreshFromApi;
+    refreshFromApi = async function () {
+      await _origRefresh();
+      try {
+        const r = await fetch(ORCHESTRATOR_BASE + '/api/state');
+        const d = await r.json();
+        syncPauseLabel(d.status);
+      } catch {}
+    };
   </script>
 </body>
-</html>`;
-
-// Run if executed directly
-if (import.meta.url === `file://${process.argv[1]}`) {
-  import("../lib/db.js").then(({ initDatabase }) => {
-    initDatabase();
-    startDisplayServer();
-  });
-}
+</html>

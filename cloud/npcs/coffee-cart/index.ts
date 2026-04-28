@@ -37,6 +37,15 @@ const ENDPOINTS = {
       statusEffect: { type: "caffeinated", duration: 2 },
     },
   },
+  "/coffee-chat": {
+    price: 5,
+    payload: {
+      item: "coffee_chat",
+      effect: "low_stakes_networking",
+      description: "Two coffees for a casual catch-up. No agenda. Probably.",
+      flavor: "Half work-talk, half complaining about the org chart",
+    },
+  },
 } as const;
 
 export default {

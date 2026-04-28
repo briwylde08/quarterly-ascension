@@ -49,6 +49,16 @@ const ENDPOINTS: Record<string, Endpoint> = {
       complaints: [],
     }),
   },
+  "/whistleblower": {
+    price: 10,
+    needsTarget: true,
+    payload: (target) => ({
+      action: "whistleblower_filed",
+      target,
+      description: `Whistleblower complaint filed against ${target}. HR will review whether the complaint has merit.`,
+      corporateSpeak: "MegaCorp values integrity. Substantiated reports are eligible for our Ethics & Compliance Bounty.",
+    }),
+  },
 };
 
 export default {

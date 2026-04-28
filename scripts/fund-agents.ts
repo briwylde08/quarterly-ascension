@@ -13,7 +13,7 @@ async function main() {
     process.exit(1);
   }
 
-  initDatabase();
+  await initDatabase();
 
   const fundingPublic = Keypair.fromSecret(FUNDING_ACCOUNT_SECRET).publicKey();
 
@@ -30,7 +30,7 @@ async function main() {
   console.log(`Target per agent: $${STARTING_BUDGET} ${ASSET_CODE}`);
   console.log();
 
-  const agents = getAllAgents();
+  const agents = await getAllAgents();
   if (agents.length === 0) {
     console.error("ERROR: No agents in database. Run `npm run setup` first.");
     process.exit(1);

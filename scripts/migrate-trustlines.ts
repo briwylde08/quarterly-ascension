@@ -24,14 +24,14 @@ async function main() {
     process.exit(1);
   }
 
-  initDatabase();
+  await initDatabase();
 
   console.log(`Migrating trustlines to ${ASSET_CODE} (issuer: ${ASSET_ISSUER.slice(0, 8)}...)\n`);
 
   const accounts: Account[] = [];
 
   // Agents from the DB
-  const agents = getAllAgents();
+  const agents = await getAllAgents();
   for (const agent of agents) {
     accounts.push({ label: agent.name, secretKey: agent.secretKey });
   }

@@ -41,8 +41,8 @@ async function setup() {
 
   // Initialize database
   console.log("Initializing database...");
-  initDatabase();
-  resetDatabase();
+  await initDatabase();
+  await resetDatabase();
   console.log("Database ready.\n");
 
   const accounts: AccountData[] = [];
@@ -71,7 +71,7 @@ async function setup() {
     }
 
     // Save to database
-    saveAgent({
+    await saveAgent({
       id: persona.id,
       personaId: persona.id,
       name: persona.name,

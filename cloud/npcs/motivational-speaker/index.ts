@@ -68,6 +68,17 @@ const ENDPOINTS: Record<string, Endpoint> = {
       statusEffect: { type: "mandatory_motivation", target, duration: 2 },
     }),
   },
+  "/mentorship": {
+    price: 15,
+    needsTarget: true,
+    payload: (target) => ({
+      action: "mentorship_session",
+      target,
+      description: `Booked a mentorship session for ${target}.`,
+      speaker: pick(SPEAKER_NAMES),
+      mentorshipNote: "MegaCorp's Pay-It-Forward program rewards mentors with a stipend.",
+    }),
+  },
 };
 
 export default {

@@ -1,0 +1,52 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "orchestrator",
+  "main": "src/worker.ts",
+  "compatibility_date": "2026-04-28",
+  "compatibility_flags": ["nodejs_compat"],
+
+  "vars": {
+    "ASSET_CODE": "DLBR",
+    "ASSET_ISSUER": "GBJQKX4HMW3X2SLAXBCNOYNSAXYKYAHBXYAKGV4ZJZTEA6OPU5ZWGSG4",
+    "ASSET_SAC": "CDJA3FKDCWFVWJ544X2AZRFO54IZ6RALRAVDDCA5IIWY4EERZQD23XZD",
+    "STELLAR_NETWORK": "testnet",
+    "HORIZON_URL": "https://horizon-testnet.stellar.org",
+    "OPENAI_BASE_URL": "https://gateway.ai.cloudflare.com/v1/761663b4f4fb18d989e23e5dd4a7e165/quarterly-ascension/compat",
+    "NPC_BASE_URL": "https://__npc__.briana-761.workers.dev",
+    "TICK_INTERVAL_MS": "300000",
+    "MAX_TICKS": "48",
+
+    // Phase 5: NPC reward source addresses (public keys are non-sensitive; the
+    // matching SECRETs are pushed via `wrangler secret put`).
+    "HR_DEPT_ADDRESS": "GD334TP3L7FCSHHG6EJYSUCUWHDV3QLO36Y2MA4JUABAMYC3PZ4ZPHA4",
+    "MOTIVATIONAL_SPEAKER_ADDRESS": "GDH3L6HTC47MR5JXMN6F7RFBWI4IH7ZYZRNC4AQNPVYV5ASZXNMC7BBZ"
+  },
+
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "quarterly-ascension",
+      "database_id": "33bf069f-8265-42a7-ad37-4a1fe6798d85"
+    }
+  ],
+
+  "durable_objects": {
+    "bindings": [
+      {
+        "name": "ORCHESTRATOR",
+        "class_name": "GameOrchestrator"
+      }
+    ]
+  },
+
+  "migrations": [
+    {
+      "tag": "v1",
+      "new_sqlite_classes": ["GameOrchestrator"]
+    }
+  ],
+
+  "observability": {
+    "enabled": true
+  }
+}

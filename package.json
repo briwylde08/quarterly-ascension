@@ -9,10 +9,7 @@
   ],
   "scripts": {
     "setup": "tsx src/setup.ts",
-    "services": "tsx src/services/index.ts",
-    "start": "tsx src/index.ts",
-    "dev": "tsx watch src/index.ts",
-    "display": "tsx src/display/server.ts"
+    "typecheck": "tsc --noEmit"
   },
   "dependencies": {
     "@stellar/mpp": "^0.5.0",

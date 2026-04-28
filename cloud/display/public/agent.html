@@ -1,0 +1,343 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>MegaCorp · Manager Profile</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    :root {
+      --navy: #1c3a64; --navy-2: #2c5896; --navy-text: #ffffff;
+      --bg: #f4f6fa; --panel: #ffffff; --panel-head: #dce9f5;
+      --border: #c8d6e5; --border-2: #aab9c9;
+      --text: #2c3e50; --text-muted: #7a8b99; --text-faint: #9aaab8;
+      --success: #27ae60; --warning: #d68910; --danger: #c0392b;
+      --shadow: 0 1px 4px rgba(28,58,100,0.08);
+    }
+    html, body { font-family: Calibri, "Segoe UI", Arial, sans-serif; font-size: 14px; color: var(--text); background: var(--bg); min-height: 100vh; line-height: 1.5; }
+    a { color: #2471a3; }
+
+    .exec-banner { background: linear-gradient(180deg, var(--navy) 0%, var(--navy-2) 100%); color: var(--navy-text); padding: 16px 24px; display: flex; justify-content: space-between; align-items: center; border-bottom: 3px solid #f1c40f; }
+    .brand-mark { font-size: 20px; font-weight: 700; letter-spacing: 0.5px; }
+    .brand-mark::before { content: "▸ "; color: #f1c40f; }
+    .nav-links a { color: rgba(255,255,255,0.85); margin-left: 16px; text-decoration: none; font-size: 13px; letter-spacing: 0.4px; }
+    .nav-links a:hover { color: #ffffff; text-decoration: underline; }
+
+    .layout {
+      max-width: 1100px;
+      margin: 28px auto 60px;
+      padding: 0 24px;
+      display: grid;
+      grid-template-columns: 1fr 380px;
+      gap: 24px;
+    }
+    @media (max-width: 880px) { .layout { grid-template-columns: 1fr; } }
+
+    .panel { background: var(--panel); border: 1px solid var(--border); box-shadow: var(--shadow); }
+    .panel-head { background: var(--panel-head); color: var(--navy); padding: 10px 16px; font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: 1px; border-bottom: 1px solid var(--border); }
+    .panel-body { padding: 18px 20px; }
+
+    .agent-header { display: flex; gap: 18px; align-items: flex-start; margin-bottom: 16px; padding-bottom: 16px; border-bottom: 1px solid var(--border); }
+    .agent-portrait {
+      width: 140px;
+      height: 140px;
+      flex-shrink: 0;
+      border: 1px solid var(--border);
+      box-shadow: var(--shadow);
+      overflow: hidden;
+      background: #ecf0f1;
+    }
+    .agent-portrait img { width: 100%; height: 100%; object-fit: cover; object-position: center 25%; display: block; }
+    .agent-header-text { display: flex; flex-direction: column; gap: 4px; }
+    .agent-name { font-size: 28px; color: var(--navy); font-weight: 700; letter-spacing: -0.3px; line-height: 1.1; }
+    .agent-title { color: var(--text-muted); font-size: 14px; letter-spacing: 0.3px; }
+    .agent-id { font-family: monospace; font-size: 11px; color: var(--text-faint); margin-top: 4px; }
+
+    .stat-strip { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-bottom: 18px; }
+    .stat-tile { background: #f8fafc; border: 1px solid var(--border); padding: 10px 12px; text-align: center; }
+    .stat-label { font-size: 10px; text-transform: uppercase; letter-spacing: 1px; color: var(--text-muted); }
+    .stat-value { font-size: 22px; font-weight: 700; color: var(--navy); font-variant-numeric: tabular-nums; }
+    .stat-suffix { font-size: 11px; color: var(--text-muted); }
+
+    .traits-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px 24px; margin-bottom: 16px; }
+    .trait { display: flex; align-items: center; gap: 10px; }
+    .trait-name { min-width: 80px; font-size: 12px; color: var(--text); font-weight: 600; }
+    .trait-bar { flex: 1; height: 8px; background: #ecf0f1; border-radius: 4px; overflow: hidden; position: relative; }
+    .trait-bar > div { height: 100%; background: var(--navy-2); }
+    .trait.aggression .trait-bar > div { background: var(--danger); }
+    .trait.greed .trait-bar > div { background: var(--warning); }
+    .trait.caution .trait-bar > div { background: var(--success); }
+    .trait.loyalty .trait-bar > div { background: var(--navy-2); }
+    .trait-value { font-size: 11px; color: var(--text-muted); min-width: 28px; text-align: right; font-variant-numeric: tabular-nums; }
+
+    .backstory, .quirk, .speech-style {
+      font-size: 13px;
+      line-height: 1.6;
+      margin-bottom: 12px;
+    }
+    .backstory b, .quirk b, .speech-style b {
+      color: var(--navy);
+      text-transform: uppercase;
+      letter-spacing: 0.6px;
+      font-size: 11px;
+      display: block;
+      margin-bottom: 4px;
+    }
+    .quirk i { color: var(--text); }
+
+    .activity-list { display: flex; flex-direction: column; gap: 0; max-height: 420px; overflow-y: auto; }
+    .activity-row { padding: 10px 16px; border-bottom: 1px solid var(--border); font-size: 12px; }
+    .activity-row:last-child { border-bottom: 0; }
+    .activity-tick { font-family: monospace; color: var(--text-faint); font-size: 10px; margin-bottom: 2px; }
+    .activity-action { font-weight: 600; color: var(--navy); }
+    .activity-outcome { color: var(--text); margin-top: 2px; line-height: 1.4; }
+    .activity-reasoning { color: var(--text-muted); font-style: italic; margin-top: 4px; padding-top: 4px; border-top: 1px dashed var(--border); font-size: 11px; line-height: 1.4; }
+    .activity-prestige { display: inline-block; padding: 1px 6px; font-size: 10px; font-weight: 700; border-radius: 2px; margin-left: 6px; }
+    .activity-prestige.up { background: #d4f4dd; color: var(--success); }
+    .activity-prestige.down { background: #fadbd8; color: var(--danger); }
+
+    .claim-box {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-top: 3px solid #f1c40f;
+      box-shadow: var(--shadow);
+      padding: 20px;
+    }
+    .claim-box h3 { font-size: 14px; text-transform: uppercase; letter-spacing: 1px; color: var(--navy); margin-bottom: 12px; }
+    .claim-box label { display: block; font-size: 12px; color: var(--text-muted); margin-top: 12px; margin-bottom: 4px; text-transform: uppercase; letter-spacing: 0.6px; }
+    .claim-box input { width: 100%; padding: 10px 12px; border: 1px solid var(--border-2); border-radius: 2px; font-size: 14px; font-family: inherit; }
+    .claim-box input:focus { outline: 2px solid var(--navy-2); border-color: var(--navy-2); }
+    .claim-btn { width: 100%; margin-top: 18px; background: var(--navy); color: #ffffff; padding: 12px; border: 0; font-family: inherit; font-size: 14px; font-weight: 600; letter-spacing: 0.6px; cursor: pointer; }
+    .claim-btn:hover { background: var(--navy-2); }
+    .claim-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+    .claim-msg { margin-top: 12px; padding: 10px 14px; font-size: 13px; }
+    .claim-msg.error { background: #fadbd8; color: var(--danger); border-left: 3px solid var(--danger); }
+    .claim-msg.success { background: #d4f4dd; color: var(--success); border-left: 3px solid var(--success); }
+
+    .already-claimed {
+      padding: 18px;
+      background: #fef5e7;
+      color: var(--warning);
+      border-left: 3px solid var(--warning);
+      font-size: 13px;
+    }
+  </style>
+</head>
+<body>
+  <header class="exec-banner">
+    <div class="brand-mark">MegaCorp Inc.</div>
+    <div class="nav-links">
+      <a href="/intro.html">← All Managers</a>
+      <a href="/">Live Dashboard</a>
+    </div>
+  </header>
+
+  <main class="layout">
+    <section class="panel">
+      <div class="panel-head">Manager Profile</div>
+      <div class="panel-body" id="profile-body">
+        <div style="text-align:center;padding:40px 0;color:var(--text-faint)">Loading…</div>
+      </div>
+    </section>
+
+    <aside id="side-col" style="display:flex;flex-direction:column;gap:16px;">
+      <div id="claim-area"></div>
+      <section class="panel">
+        <div class="panel-head">Recent Activity</div>
+        <div class="activity-list" id="activity-list"></div>
+      </section>
+    </aside>
+  </main>
+
+  <script>
+    const ORCHESTRATOR_BASE = window.ORCHESTRATOR_BASE
+      || new URLSearchParams(location.search).get('orchestrator')
+      || 'https://orchestrator.briana-761.workers.dev';
+
+    function escape(s) {
+      return String(s ?? '')
+        .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+    }
+
+    const params = new URLSearchParams(location.search);
+    const agentId = params.get('id');
+    if (!agentId) {
+      document.getElementById('profile-body').innerHTML =
+        '<p>Missing agent id. <a href="/intro.html">← go back</a></p>';
+    } else {
+      load();
+    }
+
+    async function load() {
+      const res = await fetch(`${ORCHESTRATOR_BASE}/api/agent/${encodeURIComponent(agentId)}`);
+      if (res.status === 404) {
+        document.getElementById('profile-body').innerHTML =
+          '<p>No such manager. <a href="/intro.html">← back to roster</a></p>';
+        return;
+      }
+      if (!res.ok) {
+        document.getElementById('profile-body').innerHTML =
+          `<p>Failed to load (HTTP ${res.status}). Try again in a moment.</p>`;
+        return;
+      }
+      const a = await res.json();
+      renderProfile(a);
+      renderActivity(a.recentActions || []);
+      renderClaim(a);
+    }
+
+    function renderProfile(a) {
+      const traits = a.traits || { aggression: 0, greed: 0, caution: 0, loyalty: 0 };
+      const statuses = (a.statusEffects || []).length > 0
+        ? (a.statusEffects.map((s) => s.type.toUpperCase().replace(/_/g, ' '))).join(' · ')
+        : 'NORMAL';
+
+      const portraitUrl = `/images/${encodeURIComponent(a.name)}.png`;
+      document.getElementById('profile-body').innerHTML = `
+        <div class="agent-header">
+          <div class="agent-portrait">
+            <img src="${portraitUrl}" alt="${escape(a.name)}" onerror="this.parentElement.style.display='none'">
+          </div>
+          <div class="agent-header-text">
+            <div class="agent-name">${escape(a.name)}</div>
+            <div class="agent-title">${escape(a.title)}</div>
+            <div class="agent-id">id: ${escape(a.id)} · <a href="${escape(a.explorerUrl)}" target="_blank" rel="noopener">stellar.expert ↗</a></div>
+          </div>
+        </div>
+
+        <div class="stat-strip">
+          <div class="stat-tile">
+            <div class="stat-label">Prestige</div>
+            <div class="stat-value">${a.prestige}</div>
+          </div>
+          <div class="stat-tile">
+            <div class="stat-label">Budget</div>
+            <div class="stat-value">$${Math.round(a.balance)}</div>
+            <div class="stat-suffix">DLBR</div>
+          </div>
+          <div class="stat-tile">
+            <div class="stat-label">Rank</div>
+            <div class="stat-value">#${a.rank}</div>
+            <div class="stat-suffix">of ${a.total}</div>
+          </div>
+          <div class="stat-tile">
+            <div class="stat-label">Allies</div>
+            <div class="stat-value">${(a.allies || []).length}</div>
+          </div>
+        </div>
+
+        <div style="font-size:11px;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.8px;margin-bottom:6px;">Status</div>
+        <div style="font-family:monospace;background:#f8fafc;padding:8px 12px;font-size:12px;margin-bottom:18px;border:1px solid var(--border);">${escape(statuses)}</div>
+
+        <div style="font-size:11px;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.8px;margin-bottom:8px;">Personality Profile</div>
+        <div class="traits-grid">
+          ${traitRow('Aggression', 'aggression', traits.aggression)}
+          ${traitRow('Greed', 'greed', traits.greed)}
+          ${traitRow('Caution', 'caution', traits.caution)}
+          ${traitRow('Loyalty', 'loyalty', traits.loyalty)}
+        </div>
+
+        ${a.backstory ? `<div class="backstory"><b>Backstory</b>${escape(a.backstory)}</div>` : ''}
+        ${a.quirk ? `<div class="quirk"><b>Quirk</b><i>"${escape(a.quirk)}"</i></div>` : ''}
+        ${a.speechStyle ? `<div class="speech-style"><b>Speech style</b>${escape(a.speechStyle)}</div>` : ''}
+      `;
+    }
+
+    function traitRow(label, cls, val) {
+      const v = Math.max(0, Math.min(100, val ?? 0));
+      return `
+        <div class="trait ${cls}">
+          <div class="trait-name">${escape(label)}</div>
+          <div class="trait-bar"><div style="width:${v}%"></div></div>
+          <div class="trait-value">${v}</div>
+        </div>`;
+    }
+
+    function renderActivity(actions) {
+      const list = document.getElementById('activity-list');
+      if (actions.length === 0) {
+        list.innerHTML = '<div style="padding:18px;color:var(--text-faint);font-size:12px;">No recent activity yet.</div>';
+        return;
+      }
+      list.innerHTML = actions.map((a) => {
+        const pc = a.prestigeChange;
+        const badge = pc > 0
+          ? `<span class="activity-prestige up">+${pc}</span>`
+          : pc < 0
+            ? `<span class="activity-prestige down">${pc}</span>`
+            : '';
+        return `
+          <div class="activity-row">
+            <div class="activity-tick">cycle ${a.tick}</div>
+            <div><span class="activity-action">${escape(a.actionType)}</span>${badge}</div>
+            <div class="activity-outcome">${escape(a.outcome || '')}</div>
+            ${a.reasoning ? `<div class="activity-reasoning">"${escape(a.reasoning)}"</div>` : ''}
+          </div>`;
+      }).join('');
+    }
+
+    function renderClaim(a) {
+      const area = document.getElementById('claim-area');
+      if (a.claimed) {
+        area.innerHTML = `
+          <div class="already-claimed">
+            <b>Already adopted</b> by ${escape(a.claimedByName || 'a stakeholder')}.<br>
+            <a href="/intro.html" style="color:var(--warning);">Pick another manager →</a>
+          </div>`;
+        return;
+      }
+      area.innerHTML = `
+        <div class="claim-box">
+          <h3>Adopt ${escape(a.name.split(' ')[0])}</h3>
+          <p style="font-size:12px;color:var(--text-muted);">
+            Get four performance summary emails over the course of the quarter (cycles 12, 24, 36, and a final outcome). One claim per manager.
+          </p>
+          <form id="claim-form">
+            <label>Your name</label>
+            <input id="claim-name" type="text" required maxlength="80" placeholder="Briana Stahl">
+            <label>Email</label>
+            <input id="claim-email" type="email" required placeholder="you@example.com">
+            <button class="claim-btn" type="submit" id="claim-submit">Claim ${escape(a.name)}</button>
+            <div id="claim-msg"></div>
+          </form>
+        </div>`;
+
+      document.getElementById('claim-form').addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const name = document.getElementById('claim-name').value.trim();
+        const email = document.getElementById('claim-email').value.trim();
+        const btn = document.getElementById('claim-submit');
+        const msg = document.getElementById('claim-msg');
+        msg.className = '';
+        msg.innerHTML = '';
+        btn.disabled = true;
+        btn.textContent = 'Submitting…';
+        try {
+          const r = await fetch(`${ORCHESTRATOR_BASE}/api/claim`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ agentId: a.id, name, email }),
+          });
+          const data = await r.json();
+          if (r.ok) {
+            msg.className = 'claim-msg success';
+            msg.innerHTML = `Claim confirmed. Check <b>${escape(email)}</b> for a welcome email — and watch <a href="/">the live dashboard</a>.`;
+            btn.textContent = 'Claimed';
+          } else {
+            msg.className = 'claim-msg error';
+            msg.textContent = data.error || `Claim failed (${r.status})`;
+            btn.disabled = false;
+            btn.textContent = `Claim ${a.name}`;
+          }
+        } catch (err) {
+          msg.className = 'claim-msg error';
+          msg.textContent = 'Network error: ' + err.message;
+          btn.disabled = false;
+          btn.textContent = `Claim ${a.name}`;
+        }
+      });
+    }
+  </script>
+</body>
+</html>

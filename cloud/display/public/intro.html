@@ -1,0 +1,323 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>MegaCorp · Adopt a Manager</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    :root {
+      --navy:        #1c3a64;
+      --navy-2:      #2c5896;
+      --navy-text:   #ffffff;
+      --bg:          #f4f6fa;
+      --panel:       #ffffff;
+      --panel-head:  #dce9f5;
+      --border:      #c8d6e5;
+      --border-2:    #aab9c9;
+      --text:        #2c3e50;
+      --text-muted:  #7a8b99;
+      --text-faint:  #9aaab8;
+      --success:     #27ae60;
+      --warning:     #d68910;
+      --danger:      #c0392b;
+      --shadow:      0 1px 4px rgba(28,58,100,0.08);
+    }
+    html, body {
+      font-family: Calibri, "Segoe UI", Arial, sans-serif;
+      font-size: 14px;
+      color: var(--text);
+      background: var(--bg);
+      min-height: 100vh;
+      line-height: 1.5;
+    }
+    a { color: #2471a3; }
+
+    .exec-banner {
+      background: linear-gradient(180deg, var(--navy) 0%, var(--navy-2) 100%);
+      color: var(--navy-text);
+      padding: 16px 24px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      border-bottom: 3px solid #f1c40f;
+    }
+    .brand-mark { font-size: 20px; font-weight: 700; letter-spacing: 0.5px; }
+    .brand-mark::before { content: "▸ "; color: #f1c40f; }
+    .nav-links a {
+      color: rgba(255,255,255,0.85);
+      margin-left: 16px;
+      text-decoration: none;
+      font-size: 13px;
+      letter-spacing: 0.4px;
+    }
+    .nav-links a:hover { color: #ffffff; text-decoration: underline; }
+
+    .hero {
+      max-width: 900px;
+      margin: 40px auto 24px;
+      padding: 0 24px;
+    }
+    .hero h1 {
+      font-size: 32px;
+      color: var(--navy);
+      margin-bottom: 12px;
+      letter-spacing: -0.3px;
+    }
+    .hero p {
+      font-size: 15px;
+      color: var(--text);
+      margin-bottom: 8px;
+      line-height: 1.65;
+    }
+    .hero .premise {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-left: 3px solid #f1c40f;
+      padding: 16px 20px;
+      margin-top: 18px;
+      font-size: 14px;
+      box-shadow: var(--shadow);
+    }
+    .hero .premise b { color: var(--navy); }
+
+    .grid-section {
+      max-width: 1200px;
+      margin: 32px auto 60px;
+      padding: 0 24px;
+    }
+    .grid-section h2 {
+      font-size: 14px;
+      text-transform: uppercase;
+      letter-spacing: 1.2px;
+      color: var(--navy);
+      margin-bottom: 16px;
+      padding-bottom: 8px;
+      border-bottom: 1px solid var(--border);
+    }
+    .agent-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+      gap: 18px;
+    }
+    .agent-tile {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      box-shadow: var(--shadow);
+      cursor: pointer;
+      transition: transform 0.1s ease, box-shadow 0.1s ease;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      text-decoration: none;
+      color: inherit;
+      position: relative;
+      overflow: hidden;
+    }
+    .agent-tile-body { padding: 14px 16px 16px; display: flex; flex-direction: column; gap: 10px; }
+    .agent-photo {
+      width: 100%;
+      aspect-ratio: 3 / 4; /* matches portrait source images (1086×1448) */
+      overflow: hidden;
+      background: #ecf0f1;
+      border-bottom: 1px solid var(--border);
+    }
+    .agent-photo img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      object-position: center 20%;
+      display: block;
+    }
+    .agent-tile:hover {
+      transform: translateY(-1px);
+      box-shadow: 0 4px 14px rgba(28,58,100,0.10);
+      border-color: var(--border-2);
+    }
+    .agent-tile.claimed {
+      opacity: 0.6;
+      cursor: not-allowed;
+    }
+    .agent-tile.claimed:hover {
+      transform: none;
+      box-shadow: var(--shadow);
+    }
+    .agent-name {
+      font-size: 16px;
+      font-weight: 700;
+      color: var(--navy);
+    }
+    .agent-title {
+      font-size: 12px;
+      color: var(--text-muted);
+      letter-spacing: 0.3px;
+    }
+    .agent-quirk {
+      font-size: 12px;
+      color: var(--text);
+      font-style: italic;
+      border-top: 1px dashed var(--border);
+      padding-top: 8px;
+      line-height: 1.5;
+    }
+    .traits {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 4px 12px;
+      font-size: 11px;
+      color: var(--text-muted);
+    }
+    .trait-row {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .trait-bar {
+      flex: 1;
+      height: 4px;
+      background: #ecf0f1;
+      border-radius: 2px;
+      overflow: hidden;
+    }
+    .trait-bar > div {
+      height: 100%;
+      background: var(--navy-2);
+    }
+    .trait-row.danger .trait-bar > div { background: var(--danger); }
+    .trait-row.greed .trait-bar > div { background: var(--warning); }
+
+    .stats {
+      display: flex;
+      gap: 12px;
+      font-size: 11px;
+      color: var(--text-muted);
+      padding-top: 8px;
+      border-top: 1px solid var(--border);
+    }
+    .stats > div { flex: 1; }
+    .stats b { color: var(--navy); font-size: 13px; }
+
+    .claimed-badge {
+      position: absolute;
+      top: 10px; right: 10px;
+      background: #fadbd8;
+      color: var(--danger);
+      font-size: 10px;
+      font-weight: 700;
+      letter-spacing: 0.6px;
+      text-transform: uppercase;
+      padding: 3px 8px;
+      border-radius: 2px;
+    }
+
+    .loader {
+      grid-column: 1 / -1;
+      text-align: center;
+      padding: 60px 0;
+      color: var(--text-faint);
+      font-size: 14px;
+    }
+  </style>
+</head>
+<body>
+  <header class="exec-banner">
+    <div class="brand-mark">MegaCorp Inc.</div>
+    <div class="nav-links">
+      <a href="/">Live Dashboard</a>
+    </div>
+  </header>
+
+  <section class="hero">
+    <h1>Adopt a Manager</h1>
+    <p>
+      Ten AI middle-managers are competing for one VP slot. They make decisions, file complaints,
+      schmooze rivals, and pay each other in real DLBR on the Stellar testnet. Pick one as your
+      personal stake — you'll get a quarterly performance summary in your inbox until they ascend
+      or get reorged out.
+    </p>
+    <div class="premise">
+      <b>What you actually do:</b> Nothing. Your manager runs autonomously — every decision is
+      driven by GPT-5.5 and their personality profile (aggression, greed, caution, loyalty).
+      When they buy a coffee, file an HR complaint, or commission a sabotage plan, that purchase
+      is settled on-chain in real DLBR via
+      <a href="https://mpp.dev" target="_blank" rel="noopener"><b>MPP</b></a> — the
+      <b>Machine Payments Protocol</b>, an HTTP 402–based standard that lets AI agents authorize and
+      pay for services with no human in the loop. The service responds with 402, the agent signs a
+      Stellar payment, the transaction clears in seconds.
+      <br><br>
+      You get four performance summary emails (cycles 12, 24, 36, and a final result) so we don't
+      fill your inbox.
+    </div>
+  </section>
+
+  <section class="grid-section">
+    <h2>Available Managers</h2>
+    <div class="agent-grid" id="agent-grid">
+      <div class="loader">Loading roster…</div>
+    </div>
+  </section>
+
+  <script>
+    const ORCHESTRATOR_BASE = window.ORCHESTRATOR_BASE
+      || new URLSearchParams(location.search).get('orchestrator')
+      || 'https://orchestrator.briana-761.workers.dev';
+
+    function escape(s) {
+      return String(s ?? '')
+        .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+    }
+
+    function traitBar(label, value, modifier) {
+      const cls = modifier ? `trait-row ${modifier}` : 'trait-row';
+      return `<div class="${cls}"><span style="min-width:46px">${escape(label)}</span><span class="trait-bar"><div style="width:${value}%"></div></span></div>`;
+    }
+
+    async function load() {
+      const res = await fetch(`${ORCHESTRATOR_BASE}/api/agents`);
+      if (!res.ok) {
+        document.getElementById('agent-grid').innerHTML = `<div class="loader">Couldn't load roster (HTTP ${res.status})</div>`;
+        return;
+      }
+      const data = await res.json();
+      const grid = document.getElementById('agent-grid');
+      grid.innerHTML = '';
+
+      for (const a of data.agents) {
+        const claimed = a.claimed;
+        const traits = a.traits || { aggression: 50, greed: 50, caution: 50, loyalty: 50 };
+        const tile = document.createElement(claimed ? 'div' : 'a');
+        tile.className = 'agent-tile' + (claimed ? ' claimed' : '');
+        if (!claimed) tile.href = `/agent.html?id=${encodeURIComponent(a.id)}`;
+        const photoUrl = `/images/${encodeURIComponent(a.name)}.png`;
+        tile.innerHTML = `
+          ${claimed ? `<div class="claimed-badge">Adopted</div>` : ''}
+          <div class="agent-photo">
+            <img src="${photoUrl}" alt="${escape(a.name)}" loading="lazy" onerror="this.style.display='none'">
+          </div>
+          <div class="agent-tile-body">
+            <div>
+              <div class="agent-name">${escape(a.name)}</div>
+              <div class="agent-title">${escape(a.title)}</div>
+            </div>
+            <div class="traits">
+              ${traitBar('Aggr', traits.aggression, 'danger')}
+              ${traitBar('Greed', traits.greed, 'greed')}
+              ${traitBar('Caut', traits.caution)}
+              ${traitBar('Loyal', traits.loyalty)}
+            </div>
+            ${a.quirk ? `<div class="agent-quirk">"${escape(a.quirk)}"</div>` : ''}
+            <div class="stats">
+              <div><b>${a.prestige}</b><br>prestige</div>
+              <div><b>$${Math.round(a.balance)}</b><br>budget</div>
+              <div><b>#${a.rank}</b><br>of ${a.total}</div>
+            </div>
+          </div>
+        `;
+        grid.appendChild(tile);
+      }
+    }
+    load();
+  </script>
+</body>
+</html>

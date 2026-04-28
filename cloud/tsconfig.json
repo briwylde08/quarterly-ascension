@@ -16,6 +16,7 @@
   },
   "include": [
     "npcs/**/*.ts",
+    "orchestrator/**/*.ts",
     "shared/**/*.ts",
     "../shared/**/*.ts"
   ]
