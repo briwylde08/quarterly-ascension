@@ -264,28 +264,36 @@ export async function callPaidService(
 }
 
 /**
- * Service URLs by action type
+ * Service URLs by action type.
+ *
+ * NPC services live on Cloudflare Workers as of Phase 1 of the migration.
+ * Override the base via NPC_BASE_URL_OVERRIDE for local development against
+ * `wrangler dev` instances; production points at the deployed *.workers.dev
+ * subdomains.
  */
+const NPC_BASE = process.env.NPC_BASE_URL_OVERRIDE || "https://__npc__.briana-761.workers.dev";
+const npc = (name: string, path: string) => NPC_BASE.replace("__npc__", name) + path;
+
 export const SERVICE_URLS: Record<string, { url: string; name: string; price: number }> = {
-  buy_coffee: { url: "http://localhost:3010/buy", name: "Coffee Cart", price: 8 },
-  buy_fancy_coffee: { url: "http://localhost:3010/buy-fancy", name: "Coffee Cart", price: 15 },
-  file_complaint: { url: "http://localhost:3011/file-complaint", name: "HR Department", price: 22 },
-  sensitivity_training: { url: "http://localhost:3011/sensitivity-training", name: "HR Department", price: 30 },
-  check_hr_status: { url: "http://localhost:3011/check-status", name: "HR Department", price: 5 },
-  strategy_report: { url: "http://localhost:3012/strategy-report", name: "The Consultant", price: 35 },
-  competitive_intel: { url: "http://localhost:3012/competitive-intel", name: "The Consultant", price: 25 },
-  sabotage_plan: { url: "http://localhost:3012/sabotage-plan", name: "The Consultant", price: 40 },
-  fix_laptop: { url: "http://localhost:3013/fix-laptop", name: "IT Guy", price: 18 },
-  recover_emails: { url: "http://localhost:3013/recover-emails", name: "IT Guy", price: 20 },
-  calendar_conflict: { url: "http://localhost:3013/calendar-conflict", name: "IT Guy", price: 15 },
-  book_ceo_time: { url: "http://localhost:3014/book-ceo-time", name: "Executive Assistant", price: 50 },
-  leak_org_chart: { url: "http://localhost:3014/leak-org-chart", name: "Executive Assistant", price: 25 },
-  schedule_conflict: { url: "http://localhost:3014/schedule-conflict", name: "Executive Assistant", price: 30 },
-  team_lunch: { url: "http://localhost:3015/team-lunch", name: "The Caterer", price: 25 },
-  poison_meeting: { url: "http://localhost:3015/poison-meeting", name: "The Caterer", price: 35 },
-  birthday_cake: { url: "http://localhost:3015/birthday-cake", name: "The Caterer", price: 12 },
-  book_motivation: { url: "http://localhost:3016/book-session", name: "Motivational Speaker", price: 30 },
-  send_motivation: { url: "http://localhost:3016/send-to-rival", name: "Motivational Speaker", price: 35 },
+  buy_coffee:           { url: npc("coffee-cart",          "/buy"),                  name: "Coffee Cart",          price: 8 },
+  buy_fancy_coffee:     { url: npc("coffee-cart",          "/buy-fancy"),            name: "Coffee Cart",          price: 15 },
+  file_complaint:       { url: npc("hr-dept",              "/file-complaint"),       name: "HR Department",        price: 22 },
+  sensitivity_training: { url: npc("hr-dept",              "/sensitivity-training"), name: "HR Department",        price: 30 },
+  check_hr_status:      { url: npc("hr-dept",              "/check-status"),         name: "HR Department",        price: 5 },
+  strategy_report:      { url: npc("consultant",           "/strategy-report"),      name: "The Consultant",       price: 35 },
+  competitive_intel:    { url: npc("consultant",           "/competitive-intel"),    name: "The Consultant",       price: 25 },
+  sabotage_plan:        { url: npc("consultant",           "/sabotage-plan"),        name: "The Consultant",       price: 40 },
+  fix_laptop:           { url: npc("it-guy",               "/fix-laptop"),           name: "IT Guy",               price: 18 },
+  recover_emails:       { url: npc("it-guy",               "/recover-emails"),       name: "IT Guy",               price: 20 },
+  calendar_conflict:    { url: npc("it-guy",               "/calendar-conflict"),    name: "IT Guy",               price: 15 },
+  book_ceo_time:        { url: npc("exec-assistant",       "/book-ceo-time"),        name: "Executive Assistant",  price: 50 },
+  leak_org_chart:       { url: npc("exec-assistant",       "/leak-org-chart"),       name: "Executive Assistant",  price: 25 },
+  schedule_conflict:    { url: npc("exec-assistant",       "/schedule-conflict"),    name: "Executive Assistant",  price: 30 },
+  team_lunch:           { url: npc("caterer",              "/team-lunch"),           name: "The Caterer",          price: 25 },
+  poison_meeting:       { url: npc("caterer",              "/poison-meeting"),       name: "The Caterer",          price: 35 },
+  birthday_cake:        { url: npc("caterer",              "/birthday-cake"),        name: "The Caterer",          price: 12 },
+  book_motivation:      { url: npc("motivational-speaker", "/book-session"),         name: "Motivational Speaker", price: 30 },
+  send_motivation:      { url: npc("motivational-speaker", "/send-to-rival"),        name: "Motivational Speaker", price: 35 },
 };
 
 /**
