@@ -159,15 +159,15 @@ export async function callPaidService(
 
     if (!response.ok) {
       const errorText = await response.text();
+      console.error(`[mpp] ${agentName} → ${serviceName} HTTP ${response.status}\n  body: ${errorText.slice(0, 500)}`);
 
-      // Check if it's an insufficient funds error
-      if (response.status === 402 || errorText.includes("insufficient") || errorText.includes("underfunded")) {
+      if (errorText.includes("insufficient") || errorText.includes("underfunded")) {
         emitTickerUpdate({
           id: entryId,
           fromAgent: agentId,
           fromAgentName: agentName,
           toService: serviceName,
-          amount: 0, // Unknown at this point
+          amount: priceUsdc,
           status: "failed",
           submittedAt,
           error: "insufficient funds",
@@ -181,7 +181,7 @@ export async function callPaidService(
 
       return {
         success: false,
-        error: `Service error: ${response.status} ${errorText}`,
+        error: `Service error: ${response.status} ${errorText.slice(0, 200)}`,
       };
     }
 

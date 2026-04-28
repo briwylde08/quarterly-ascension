@@ -1,6 +1,7 @@
 import express from "express";
 import type { Express, Request, Response, NextFunction } from "express";
 import { Mppx, stellar, Store } from "@stellar/mpp/charge/server";
+import { Request as MppRequest } from "mppx/server";
 
 const ASSET_SAC = process.env.ASSET_SAC || process.env.USDC_SAC || "";
 const MPP_SECRET = process.env.MPP_SECRET || "default-mpp-secret";
@@ -72,13 +73,17 @@ export function createNpcService(config: ServiceConfig, endpoints: EndpointConfi
   for (const endpoint of endpoints) {
     app.post(endpoint.path, async (req: Request, res: Response) => {
       try {
+        // mppx's HTTP transport reads from Web Request (.headers.get(...)).
+        // Express gives us a Node IncomingMessage. Convert via mppx's adapter
+        // before handing to the charge handler — otherwise the credential
+        // header is invisible and the server returns "Malformed Credential".
+        const webRequest = MppRequest.fromNodeListener(req, res);
+
         // The MPP server method calls toBaseUnits() internally — pass the
         // human-readable price as a string and let the lib do the scaling.
-        // (The schema's "base units" docstring is misleading; the impl
-        // expects the human amount.)
         const result = await mppx.stellar.charge({
           amount: endpoint.price.toString(),
-        })(req as unknown as globalThis.Request);
+        })(webRequest);
 
         if (result.status === 402) {
           // Return the 402 challenge response
