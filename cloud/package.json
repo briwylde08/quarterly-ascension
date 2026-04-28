@@ -1,0 +1,20 @@
+{
+  "name": "quarterly-ascension-cloud",
+  "version": "0.1.0",
+  "description": "Cloudflare Workers — NPC services + (eventually) orchestrator/display",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@stellar/mpp": "^0.5.0",
+    "@stellar/stellar-sdk": "^15.0.0",
+    "mppx": "^0.5.0"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^4.20251022.0",
+    "typescript": "^5.7.3",
+    "wrangler": "^4.86.0"
+  }
+}

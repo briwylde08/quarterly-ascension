@@ -3,6 +3,10 @@
   "version": "0.1.0",
   "description": "AI middle-managers compete for VP using real Stellar payments via MPP",
   "type": "module",
+  "workspaces": [
+    ".",
+    "cloud"
+  ],
   "scripts": {
     "setup": "tsx src/setup.ts",
     "services": "tsx src/services/index.ts",

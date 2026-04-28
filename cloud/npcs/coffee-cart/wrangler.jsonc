@@ -1,0 +1,22 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "coffee-cart",
+  "main": "index.ts",
+  "compatibility_date": "2026-04-28",
+  "compatibility_flags": ["nodejs_compat"],
+
+  // Non-secret config. Stellar contract ID and recipient address are public
+  // information (visible on stellar.expert anyway).
+  "vars": {
+    "ASSET_SAC": "CDJA3FKDCWFVWJ544X2AZRFO54IZ6RALRAVDDCA5IIWY4EERZQD23XZD",
+    "RECIPIENT_ADDRESS": "GBHN7CQQ5Q77RQQUDVM3T2FUBT6NAD5KGUOUISO2WGPYJLWCR73MR64K"
+  },
+
+  // MPP_SECRET is set via:  wrangler secret put MPP_SECRET --name coffee-cart
+  // (Same value across all 7 NPCs so they share challenge HMAC validation
+  // — though each Worker only validates its own challenges.)
+
+  "observability": {
+    "enabled": true
+  }
+}

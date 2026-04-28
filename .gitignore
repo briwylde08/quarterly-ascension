@@ -5,3 +5,7 @@ dist/
 *.sqlite
 .DS_Store
 .session-*.md
+
+# Cloudflare Workers local dev secrets
+**/.dev.vars
+.wrangler/
