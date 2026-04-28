@@ -1,0 +1,16 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "exec-assistant",
+  "main": "index.ts",
+  "compatibility_date": "2026-04-28",
+  "compatibility_flags": ["nodejs_compat"],
+
+  "vars": {
+    "ASSET_SAC": "CDJA3FKDCWFVWJ544X2AZRFO54IZ6RALRAVDDCA5IIWY4EERZQD23XZD",
+    "RECIPIENT_ADDRESS": "GBOSURTJZHA3HN6DR7R2WDTJWFE4BEC6PDV4PLSNK2TKDHOQFBXWJUWW"
+  },
+
+  "observability": {
+    "enabled": true
+  }
+}

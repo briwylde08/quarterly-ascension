@@ -1,0 +1,16 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "motivational-speaker",
+  "main": "index.ts",
+  "compatibility_date": "2026-04-28",
+  "compatibility_flags": ["nodejs_compat"],
+
+  "vars": {
+    "ASSET_SAC": "CDJA3FKDCWFVWJ544X2AZRFO54IZ6RALRAVDDCA5IIWY4EERZQD23XZD",
+    "RECIPIENT_ADDRESS": "GDH3L6HTC47MR5JXMN6F7RFBWI4IH7ZYZRNC4AQNPVYV5ASZXNMC7BBZ"
+  },
+
+  "observability": {
+    "enabled": true
+  }
+}

@@ -1,0 +1,16 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "it-guy",
+  "main": "index.ts",
+  "compatibility_date": "2026-04-28",
+  "compatibility_flags": ["nodejs_compat"],
+
+  "vars": {
+    "ASSET_SAC": "CDJA3FKDCWFVWJ544X2AZRFO54IZ6RALRAVDDCA5IIWY4EERZQD23XZD",
+    "RECIPIENT_ADDRESS": "GA6WBIGMEDYY6MIT5ZJGA5AMDRV2RUTF4BKJGOIE66GWKSCMYKMJY3EA"
+  },
+
+  "observability": {
+    "enabled": true
+  }
+}

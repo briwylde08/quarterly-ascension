@@ -1,0 +1,16 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "caterer",
+  "main": "index.ts",
+  "compatibility_date": "2026-04-28",
+  "compatibility_flags": ["nodejs_compat"],
+
+  "vars": {
+    "ASSET_SAC": "CDJA3FKDCWFVWJ544X2AZRFO54IZ6RALRAVDDCA5IIWY4EERZQD23XZD",
+    "RECIPIENT_ADDRESS": "GCGY7HWR2FBDXAQADMAEQWCWBC2X4W6ZLRDPRT6NMKU37UK4CDBAPYVF"
+  },
+
+  "observability": {
+    "enabled": true
+  }
+}
