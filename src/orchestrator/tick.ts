@@ -186,7 +186,7 @@ async function executeAction(
 
       case "schmooze":
         if ("target" in action) {
-          outcome = await handleSchmooze(agent, action.target, tick);
+          outcome = await handleSchmooze(agent, action.target, tick, reasoning);
         }
         break;
 
@@ -206,20 +206,20 @@ async function executeAction(
 
       case "accept_alliance":
         if ("target" in action && agent.pendingAlliance === action.target) {
-          outcome = await handleAllianceAccept(agent, action.target, tick);
+          outcome = await handleAllianceAccept(agent, action.target, tick, reasoning);
           prestigeChange = 5;
         }
         break;
 
       case "reject_alliance":
         if ("target" in action && agent.pendingAlliance === action.target) {
-          outcome = await handleAllianceReject(agent, action.target, tick);
+          outcome = await handleAllianceReject(agent, action.target, tick, reasoning);
         }
         break;
 
       case "break_alliance":
         if ("target" in action && agent.allies.includes(action.target)) {
-          outcome = await handleAllianceBreak(agent, action.target, tick);
+          outcome = await handleAllianceBreak(agent, action.target, tick, reasoning);
           prestigeChange = -30;
         }
         break;
@@ -241,6 +241,17 @@ async function executeAction(
 
   // Log the action
   logAction(tick, agent.id, action.type, action, reasoning, outcome, prestigeChange, txHash);
+
+  // Some actions are resolved by handlers that emit their own specifically-typed
+  // events (alliance_formed, alliance_rejected, alliance_broken). For those,
+  // suppress this generic outer event to avoid showing the same beat twice
+  // in the feed.
+  const HANDLER_EMITS_OWN: Set<Action["type"]> = new Set([
+    "accept_alliance",
+    "reject_alliance",
+    "break_alliance",
+  ]);
+  if (HANDLER_EMITS_OWN.has(action.type)) return;
 
   // Emit event
   emitEvent({
@@ -430,7 +441,7 @@ async function executePaidAction(
 /**
  * Handle schmooze action (potential alliance)
  */
-async function handleSchmooze(agent: Agent, targetId: string, tick: number): Promise<string> {
+async function handleSchmooze(agent: Agent, targetId: string, tick: number, _reasoning?: string): Promise<string> {
   const target = getAgent(targetId);
   if (!target) return "Target not found";
 
@@ -439,18 +450,9 @@ async function handleSchmooze(agent: Agent, targetId: string, tick: number): Pro
     return `Chatted with ally ${target.name}`;
   }
 
-  // Propose alliance
+  // Propose alliance. The outer executeAction emit covers this in the feed
+  // (with reasoning) — emitting an inner event here would duplicate it.
   updateAgentPendingAlliance(targetId, agent.id);
-
-  emitEvent({
-    id: createEventId(),
-    tick,
-    timestamp: new Date(),
-    type: "action",
-    agentId: agent.id,
-    targetId,
-    description: `${agent.name} proposed alliance to ${target.name}`,
-  });
 
   return `Proposed alliance to ${target.name}`;
 }
@@ -458,7 +460,7 @@ async function handleSchmooze(agent: Agent, targetId: string, tick: number): Pro
 /**
  * Handle alliance acceptance
  */
-async function handleAllianceAccept(agent: Agent, proposerId: string, tick: number): Promise<string> {
+async function handleAllianceAccept(agent: Agent, proposerId: string, tick: number, reasoning?: string): Promise<string> {
   const proposer = getAgent(proposerId);
   if (!proposer) return "Proposer not found";
 
@@ -482,6 +484,7 @@ async function handleAllianceAccept(agent: Agent, proposerId: string, tick: numb
     targetId: proposerId,
     description: `${agent.name} and ${proposer.name} formed an alliance`,
     prestigeChange: 5,
+    reasoning,
   });
 
   return `Formed alliance with ${proposer.name}`;
@@ -490,7 +493,7 @@ async function handleAllianceAccept(agent: Agent, proposerId: string, tick: numb
 /**
  * Handle alliance rejection
  */
-async function handleAllianceReject(agent: Agent, proposerId: string, tick: number): Promise<string> {
+async function handleAllianceReject(agent: Agent, proposerId: string, tick: number, reasoning?: string): Promise<string> {
   const proposer = getAgent(proposerId);
   if (!proposer) return "Proposer not found";
 
@@ -509,6 +512,7 @@ async function handleAllianceReject(agent: Agent, proposerId: string, tick: numb
     targetId: proposerId,
     description: `${agent.name} rejected ${proposer.name}'s alliance proposal`,
     prestigeChange: -10,
+    reasoning,
   });
 
   return `Rejected alliance with ${proposer.name}`;
@@ -517,7 +521,7 @@ async function handleAllianceReject(agent: Agent, proposerId: string, tick: numb
 /**
  * Handle breaking an alliance (betrayal)
  */
-async function handleAllianceBreak(agent: Agent, formerAllyId: string, tick: number): Promise<string> {
+async function handleAllianceBreak(agent: Agent, formerAllyId: string, tick: number, reasoning?: string): Promise<string> {
   const formerAlly = getAgent(formerAllyId);
   if (!formerAlly) return "Former ally not found";
 
@@ -538,6 +542,7 @@ async function handleAllianceBreak(agent: Agent, formerAllyId: string, tick: num
     targetId: formerAllyId,
     description: `${agent.name} BETRAYED ${formerAlly.name}!`,
     prestigeChange: -30,
+    reasoning,
   });
 
   return `Betrayed ${formerAlly.name}`;

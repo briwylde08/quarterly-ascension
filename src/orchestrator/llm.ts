@@ -172,6 +172,53 @@ function parseAction(response: string, agent: Agent): { action: Action; reasonin
 }
 
 /**
+ * Turn an action.type like "take_credit" into a human phrase like "take credit".
+ */
+function humanizeActionType(type: string): string {
+  return type.replace(/_/g, " ");
+}
+
+/**
+ * When validation rejects the LLM's pick, we replace the agent's reasoning
+ * with an in-character corporate excuse instead of a dry "Wanted to X but: Y".
+ * Keeps the comedy beat in the action feed even when the LLM picks something
+ * the rules don't allow.
+ */
+function corporateExcuse(action: Action, reason: string): string {
+  const verb = humanizeActionType(action.type);
+  const target = ("target" in action && action.target) ? action.target : "someone";
+
+  switch (reason) {
+    case "Invalid target":
+      return `Was going to ${verb} ${target}, but couldn't find them on the org chart. Pretty sure they were quietly let go in the last reorg. RIP.`;
+
+    case "Insufficient funds":
+      return `Tried to ${verb}, but the corporate card came back declined. I'll need to circle back next quarter, finance is being awful.`;
+
+    case "Cannot target an ally with hostile action":
+      return `Was about to ${verb} ${target}, then remembered we're in a strategic synergy partnership. Awkward. Let's table it.`;
+
+    case "Action requires a target":
+      return `Wanted to ${verb}, but apparently I forgot to loop in a stakeholder. Lesson learned, will sync offline.`;
+
+    case "Technical difficulties - must rest":
+      return `My laptop is, regrettably, bricked. IT says 8-12 weeks. I'll be working from notebook today.`;
+
+    case "Under review - cannot book CEO time":
+      return `Audit's still sniffing around my Q3 numbers. Best to keep my head down this cycle.`;
+
+    case "Unknown action type":
+      return `Had a transformational idea, but it was honestly a bit too disruptive for our risk profile. Maybe next quarter.`;
+
+    case "Already acted this tick":
+      return `Already filed three deliverables this morning, my bandwidth is genuinely Stretched. Need to recharge.`;
+
+    default:
+      return `Wanted to ${verb}${target !== "someone" ? " " + target : ""}, but ${reason.toLowerCase()}. Suboptimal.`;
+  }
+}
+
+/**
  * Validate an action is legal for this agent
  */
 function validateAction(action: Action, agent: Agent, balance: number, allAgents: Agent[]): { valid: boolean; reason?: string } {
@@ -274,7 +321,10 @@ export async function getAgentDecision(
     const validation = validateAction(action, agent, balance, allAgents);
     if (!validation.valid) {
       console.log(`${agent.name}'s action invalid (${validation.reason}), defaulting to work`);
-      return { action: { type: "work" }, reasoning: `Wanted to ${action.type} but: ${validation.reason}` };
+      return {
+        action: { type: "work" },
+        reasoning: corporateExcuse(action, validation.reason ?? "unknown"),
+      };
     }
 
     return { action, reasoning };
