@@ -55,6 +55,8 @@ async function sendFullState(ws: WebSocket): Promise<void> {
     data: {
       status: getGameStatus(),
       tick: getCurrentTick(),
+      tickIntervalMs: parseInt(process.env.TICK_INTERVAL_MS || "300000", 10),
+      maxTicks: parseInt(process.env.MAX_TICKS || "48", 10),
       agents: agentsWithBalances.map((a) => ({
         id: a.id,
         name: a.name,
@@ -118,6 +120,8 @@ app.get("/api/state", async (req, res) => {
   res.json({
     status: getGameStatus(),
     tick: getCurrentTick(),
+    tickIntervalMs: parseInt(process.env.TICK_INTERVAL_MS || "300000", 10),
+    maxTicks: parseInt(process.env.MAX_TICKS || "48", 10),
     agents: agentsWithBalances,
     recentEvents: getRecentEvents(20),
     ticker: getRecentTickerEntries(15),
@@ -131,201 +135,471 @@ export function startDisplayServer(): void {
   });
 }
 
-// HTML for the display page
+// HTML for the display page — full-fat corporate-dashboard parody.
 const DISPLAY_HTML = `<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Quarterly Ascension</title>
+  <title>MegaCorp · Q1 FY2026 Performance Dashboard</title>
   <style>
+    /* ====================================================================
+       MegaCorp Q1 FY2026 Performance Dashboard
+       Theme: drab-realistic corporate intranet, c. 2007.
+       ==================================================================== */
+
     * { margin: 0; padding: 0; box-sizing: border-box; }
-    body {
-      font-family: 'Courier New', monospace;
-      background: #0a0a0a;
-      color: #00ff00;
+
+    :root {
+      --navy:        #1c3a64;
+      --navy-2:      #2c5896;
+      --navy-text:   #ffffff;
+      --bg:          #f4f6fa;
+      --panel:       #ffffff;
+      --panel-head:  #dce9f5;
+      --panel-head-text: #1c3a64;
+      --border:      #c8d6e5;
+      --border-2:    #aab9c9;
+      --text:        #2c3e50;
+      --text-muted:  #7a8b99;
+      --text-faint:  #9aaab8;
+
+      --success:     #27ae60;
+      --success-bg:  #d4f4dd;
+      --warning:     #d68910;
+      --warning-bg:  #fef5e7;
+      --danger:      #c0392b;
+      --danger-bg:   #fadbd8;
+      --info:        #2471a3;
+      --info-bg:     #d6eaf8;
+      --neutral-bg:  #ecf0f1;
+
+      --shadow:      0 1px 2px rgba(28, 58, 100, 0.06), 0 1px 4px rgba(28, 58, 100, 0.05);
+    }
+
+    html, body {
+      font-family: Calibri, "Segoe UI", Arial, sans-serif;
+      font-size: 13px;
+      color: var(--text);
+      background: var(--bg);
       min-height: 100vh;
-      padding: 20px;
+      line-height: 1.4;
     }
-    .container {
+
+    a { color: var(--info); }
+    a:hover { color: var(--navy); }
+
+    /* === Header banner ============================================== */
+    .exec-banner {
+      background: linear-gradient(180deg, var(--navy) 0%, var(--navy-2) 100%);
+      color: var(--navy-text);
+      padding: 10px 24px;
       display: grid;
-      grid-template-columns: 1fr 350px;
+      grid-template-columns: auto 1fr auto;
       gap: 20px;
-      max-width: 1800px;
-      margin: 0 auto;
+      align-items: center;
+      border-bottom: 3px solid #f1c40f;
+      transition: background 0.6s ease;
     }
-    .header {
-      grid-column: 1 / -1;
+    .exec-banner.tick-pulse { animation: tickHeader 1.4s ease-out; }
+    @keyframes tickHeader {
+      0% { background: linear-gradient(180deg, var(--navy) 0%, var(--navy-2) 100%); }
+      30% { background: linear-gradient(180deg, #2c5896 0%, #4575b3 100%); }
+      100% { background: linear-gradient(180deg, var(--navy) 0%, var(--navy-2) 100%); }
+    }
+
+    .brand {
+      display: flex;
+      flex-direction: column;
+    }
+    .brand-mark {
+      font-size: 18px;
+      font-weight: 700;
+      letter-spacing: 0.5px;
+    }
+    .brand-mark::before {
+      content: "▸ ";
+      color: #f1c40f;
+    }
+    .brand-tagline {
+      font-size: 11px;
+      color: rgba(255,255,255,0.75);
+      text-transform: uppercase;
+      letter-spacing: 1px;
+    }
+
+    .doc-title {
+      text-align: center;
+      font-size: 14px;
+      font-weight: 600;
+      letter-spacing: 0.4px;
+    }
+    .doc-classification {
+      font-size: 10px;
+      color: rgba(255,255,255,0.7);
+      text-transform: uppercase;
+      letter-spacing: 1.5px;
+      text-align: center;
+    }
+
+    .header-meta {
+      display: flex;
+      gap: 16px;
+      align-items: center;
+    }
+    .meta-item {
+      background: rgba(255,255,255,0.10);
+      padding: 6px 12px;
+      border-radius: 3px;
+      border: 1px solid rgba(255,255,255,0.15);
+      min-width: 110px;
+    }
+    .meta-label {
+      font-size: 9px;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      color: rgba(255,255,255,0.65);
+      display: block;
+    }
+    .meta-value {
+      font-size: 14px;
+      font-weight: 600;
+      font-variant-numeric: tabular-nums;
+    }
+    .meta-item.countdown .meta-value {
+      color: #f1c40f;
+    }
+    .meta-item.countdown .meta-value.tick { animation: countdownTick 1s ease-out; }
+    @keyframes countdownTick {
+      0% { transform: scale(1.05); color: #ffffff; }
+      100% { transform: scale(1.00); color: #f1c40f; }
+    }
+
+    /* === KPI strip ================================================== */
+    .kpi-strip {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 12px;
+      padding: 14px 24px;
+      background: var(--bg);
+    }
+    .kpi-tile {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-top: 3px solid var(--navy);
+      box-shadow: var(--shadow);
+      padding: 12px 14px;
+    }
+    .kpi-label {
+      font-size: 10px;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      color: var(--text-muted);
+      font-weight: 600;
+    }
+    .kpi-sublabel {
+      font-size: 11px;
+      color: var(--text-faint);
+      margin-bottom: 6px;
+    }
+    .kpi-value {
+      font-size: 24px;
+      font-weight: 700;
+      color: var(--navy);
+      font-variant-numeric: tabular-nums;
+    }
+    .kpi-suffix {
+      font-size: 12px;
+      color: var(--text-muted);
+      font-weight: 400;
+      margin-left: 4px;
+    }
+    .kpi-tile.value-bumped .kpi-value { animation: kpiBump 0.5s ease-out; }
+    @keyframes kpiBump {
+      0% { transform: scale(1); color: var(--navy); }
+      30% { transform: scale(1.06); color: var(--success); }
+      100% { transform: scale(1); color: var(--navy); }
+    }
+
+    /* === Main two-column grid ======================================= */
+    .dash-grid {
+      display: grid;
+      grid-template-columns: minmax(420px, 38%) 1fr;
+      gap: 14px;
+      padding: 0 24px 14px 24px;
+    }
+
+    .panel {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      box-shadow: var(--shadow);
+      display: flex;
+      flex-direction: column;
+      min-height: 0;
+    }
+    .panel-head {
+      background: var(--panel-head);
+      color: var(--panel-head-text);
+      padding: 8px 14px;
+      border-bottom: 1px solid var(--border);
       display: flex;
       justify-content: space-between;
       align-items: center;
-      padding: 15px 20px;
-      background: #111;
-      border: 1px solid #333;
+      font-size: 12px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.6px;
     }
-    .title {
-      font-size: 24px;
-      font-weight: bold;
-    }
-    .status {
-      display: flex;
-      gap: 30px;
-      font-size: 14px;
-    }
-    .status-item { color: #888; }
-    .status-value { color: #00ff00; }
-    .panel {
-      background: #111;
-      border: 1px solid #333;
-      padding: 15px;
-    }
-    .panel-title {
-      font-size: 14px;
-      color: #888;
-      margin-bottom: 15px;
-      border-bottom: 1px solid #333;
-      padding-bottom: 10px;
-    }
-    .main-content {
-      display: flex;
-      flex-direction: column;
-      gap: 20px;
+    .panel-head .panel-meta {
+      font-size: 10px;
+      font-weight: 400;
+      color: var(--text-muted);
+      letter-spacing: 0.4px;
+      text-transform: none;
     }
 
-    /* Leaderboard */
-    .leaderboard { display: flex; flex-direction: column; gap: 8px; }
-    .agent-row {
-      display: grid;
-      grid-template-columns: 30px 1fr 80px 80px;
-      gap: 10px;
-      padding: 8px;
-      background: #1a1a1a;
-      align-items: center;
-    }
-    .agent-row:nth-child(1) { border-left: 3px solid gold; }
-    .agent-row:nth-child(2) { border-left: 3px solid silver; }
-    .agent-row:nth-child(3) { border-left: 3px solid #cd7f32; }
-    .rank { color: #666; }
-    .agent-name { font-weight: bold; }
-    .agent-title { font-size: 11px; color: #666; }
-    .prestige { color: #00ff00; text-align: right; }
-    .budget { color: #ffcc00; text-align: right; }
-    .budget.low { color: #ff4444; }
-
-    /* Event Feed */
-    .event-feed {
-      max-height: 300px;
+    /* === Leaderboard ================================================ */
+    .leaderboard {
       overflow-y: auto;
-      display: flex;
-      flex-direction: column;
-      gap: 10px;
+      max-height: calc(100vh - 280px);
     }
-    .event {
-      padding: 10px;
-      background: #1a1a1a;
-      border-left: 3px solid #333;
+    .manager-row {
+      display: grid;
+      grid-template-columns: 30px 1fr auto;
+      gap: 10px;
+      padding: 10px 14px;
+      border-bottom: 1px solid var(--border);
+      align-items: center;
+      cursor: pointer;
+      transition: background 0.12s, transform 0.45s ease;
+    }
+    .manager-row:hover { background: var(--info-bg); }
+    .manager-row .rank {
+      font-size: 16px;
+      font-weight: 700;
+      color: var(--text-muted);
+      text-align: center;
+    }
+    .manager-row.rank-1 .rank { color: #d4ac0d; }
+    .manager-row.rank-2 .rank { color: #707b7c; }
+    .manager-row.rank-3 .rank { color: #b9770e; }
+
+    .manager-identity .name {
+      font-weight: 600;
+      color: var(--text);
       font-size: 13px;
     }
-    .event.payment { border-left-color: #00ff00; }
-    .event.payment_failed { border-left-color: #ff4444; }
-    .event.alliance_formed { border-left-color: #00ccff; }
-    .event.alliance_broken { border-left-color: #ff00ff; }
-    .event.random_event { border-left-color: #ffcc00; }
-    .event-time { color: #666; font-size: 11px; }
-    .event-desc { margin-top: 5px; }
-    .event-quote {
-      margin-top: 6px;
-      padding: 6px 8px;
-      background: #0d0d0d;
-      border-left: 2px solid #444;
-      font-size: 12px;
-      font-style: italic;
-      color: #bbb;
-      line-height: 1.4;
-      white-space: pre-wrap;
-    }
-
-    /* Hover-link: when you hover on either an event or a ticker entry that
-       has a tx hash, both halves of the pair pulse so the eye can connect
-       the in-character action to its on-chain settlement. */
-    .event[data-tx-hash], .ticker-entry[data-tx-hash] { cursor: pointer; transition: background 0.15s; }
-    .event.linked-hover, .ticker-entry.linked-hover {
-      background: #1f2a1f !important;
-      box-shadow: 0 0 0 1px #00ff00 inset;
-    }
-
-    /* Payment Ticker */
-    .ticker {
-      display: flex;
-      flex-direction: column;
-      gap: 12px;
-      max-height: calc(100vh - 200px);
-      overflow-y: auto;
-    }
-    .ticker-entry {
-      padding: 12px;
-      background: #1a1a1a;
-      border-left: 3px solid #333;
-    }
-    .ticker-entry.pending { border-left-color: #ffcc00; }
-    .ticker-entry.submitted { border-left-color: #00ccff; }
-    .ticker-entry.settled { border-left-color: #00ff00; }
-    .ticker-entry.failed { border-left-color: #ff4444; background: #2a1a1a; }
-    .ticker-from { font-weight: bold; }
-    .ticker-to { color: #888; }
-    .ticker-amount { color: #00ff00; font-size: 16px; margin: 5px 0; }
-    .ticker-tx {
+    .manager-identity .title {
       font-size: 11px;
-      color: #666;
-      word-break: break-all;
+      color: var(--text-muted);
     }
-    .ticker-tx a { color: #00ccff; text-decoration: none; }
-    .ticker-tx a:hover { text-decoration: underline; }
-    .ticker-time { font-size: 11px; color: #888; margin-top: 5px; }
-    .ticker-status {
-      display: inline-block;
-      padding: 2px 6px;
+    .manager-identity .traits {
       font-size: 10px;
-      border-radius: 3px;
-      margin-left: 5px;
+      color: var(--text-faint);
+      letter-spacing: 0.3px;
+      margin-top: 2px;
+      font-family: "Consolas", "Menlo", monospace;
     }
-    .ticker-status.pending { background: #3d3d00; color: #ffcc00; }
-    .ticker-status.submitted { background: #003d3d; color: #00ccff; }
-    .ticker-status.settled { background: #003d00; color: #00ff00; }
-    .ticker-status.failed { background: #3d0000; color: #ff4444; }
-    .ticker-quote {
-      margin-top: 8px;
-      padding: 8px 10px;
-      background: #0d0d0d;
-      border-left: 2px solid #444;
+    .manager-identity .badges {
+      display: flex;
+      gap: 4px;
+      margin-top: 4px;
+      flex-wrap: wrap;
+    }
+    .badge {
+      font-size: 9px;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      padding: 2px 6px;
+      border-radius: 2px;
+      font-weight: 600;
+      border: 1px solid currentColor;
+    }
+    .badge.tired { color: var(--text-muted); background: var(--neutral-bg); }
+    .badge.caffeinated { color: var(--info); background: var(--info-bg); }
+    .badge.inspired { color: var(--success); background: var(--success-bg); }
+    .badge.under_investigation { color: var(--warning); background: var(--warning-bg); }
+    .badge.problematic { color: var(--danger); background: var(--danger-bg); }
+    .badge.under_review { color: var(--warning); background: var(--warning-bg); }
+    .badge.technical_difficulties { color: var(--danger); background: var(--danger-bg); }
+    .badge.has_deliverable { color: var(--success); background: var(--success-bg); }
+
+    .manager-stats {
+      text-align: right;
+      font-variant-numeric: tabular-nums;
+    }
+    .manager-stats .prestige {
+      font-size: 16px;
+      font-weight: 700;
+      color: var(--navy);
+    }
+    .manager-stats .prestige.bumped { animation: prestigeBump 0.6s ease-out; }
+    @keyframes prestigeBump {
+      0%   { transform: scale(1); color: var(--navy); }
+      30%  { transform: scale(1.15); color: var(--success); }
+      100% { transform: scale(1); color: var(--navy); }
+    }
+    .manager-stats .balance {
       font-size: 12px;
+      color: var(--text-muted);
+    }
+    .manager-stats .balance.low { color: var(--danger); font-weight: 600; }
+
+    /* === Activity stream (merged feed) ============================== */
+    .stream {
+      overflow-y: auto;
+      max-height: calc(100vh - 280px);
+      padding: 0;
+    }
+    .feed-entry {
+      padding: 12px 16px;
+      border-bottom: 1px solid var(--border);
+      animation: slideInRight 0.35s ease-out;
+      position: relative;
+    }
+    @keyframes slideInRight {
+      from { opacity: 0; transform: translateX(40px); }
+      to   { opacity: 1; transform: translateX(0); }
+    }
+
+    .feed-entry .feed-head {
+      display: flex;
+      gap: 10px;
+      align-items: baseline;
+      font-size: 10px;
+      color: var(--text-faint);
+      text-transform: uppercase;
+      letter-spacing: 0.6px;
+      margin-bottom: 4px;
+    }
+    .feed-entry .feed-head .cycle {
+      font-weight: 700;
+      color: var(--navy);
+    }
+    .feed-entry .feed-head .badge-type {
+      margin-left: auto;
+      padding: 1px 6px;
+      border-radius: 2px;
+      font-weight: 600;
+      letter-spacing: 0.5px;
+    }
+    .feed-entry .feed-head .badge-type.action { background: var(--neutral-bg); color: var(--text-muted); }
+    .feed-entry .feed-head .badge-type.payment { background: var(--success-bg); color: var(--success); }
+    .feed-entry .feed-head .badge-type.payment_failed { background: var(--danger-bg); color: var(--danger); }
+    .feed-entry .feed-head .badge-type.alliance_formed { background: var(--info-bg); color: var(--info); }
+    .feed-entry .feed-head .badge-type.alliance_rejected { background: var(--warning-bg); color: var(--warning); }
+    .feed-entry .feed-head .badge-type.alliance_broken { background: var(--danger-bg); color: var(--danger); }
+    .feed-entry .feed-head .badge-type.random_event { background: #f4ecf7; color: #8e44ad; }
+    .feed-entry .feed-head .badge-type.status_effect { background: var(--neutral-bg); color: var(--text-muted); }
+
+    .feed-action {
+      font-size: 13px;
+      color: var(--text);
+      margin-bottom: 6px;
+    }
+    .feed-action .actor { font-weight: 600; color: var(--navy); }
+    .feed-action .arrow { color: var(--text-faint); margin: 0 4px; }
+    .feed-action .recipient { font-weight: 500; }
+
+    .feed-mpp {
+      display: flex;
+      gap: 14px;
+      align-items: center;
+      margin: 6px 0;
+      padding: 8px 10px;
+      background: #f8fafd;
+      border: 1px solid var(--border);
+      border-radius: 3px;
+      font-size: 12px;
+      font-variant-numeric: tabular-nums;
+    }
+    .feed-mpp .amount {
+      font-weight: 700;
+      font-size: 14px;
+      color: var(--navy);
+    }
+    .feed-mpp .status-badge {
+      padding: 2px 8px;
+      border-radius: 2px;
+      font-size: 10px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+    .feed-mpp .status-badge.pending { background: var(--warning-bg); color: var(--warning); animation: blink 1s infinite; }
+    .feed-mpp .status-badge.submitted { background: var(--info-bg); color: var(--info); animation: blink 0.8s infinite; }
+    .feed-mpp .status-badge.settled { background: var(--success-bg); color: var(--success); }
+    .feed-mpp .status-badge.failed { background: var(--danger-bg); color: var(--danger); }
+    @keyframes blink {
+      50% { opacity: 0.55; }
+    }
+    .feed-mpp .settlement-time { color: var(--text-muted); font-size: 11px; }
+    .feed-mpp .tx-link {
+      margin-left: auto;
+      font-family: "Consolas", "Menlo", monospace;
+      font-size: 11px;
+    }
+    .feed-mpp .tx-link a { color: var(--info); text-decoration: none; }
+    .feed-mpp .tx-link a:hover { text-decoration: underline; }
+
+    .feed-quote {
+      margin-top: 6px;
+      padding: 6px 10px;
+      background: #fff8e1;
+      border-left: 3px solid #f1c40f;
       font-style: italic;
-      color: #bbb;
-      line-height: 1.4;
+      font-size: 12px;
+      color: #5d4e07;
+      line-height: 1.5;
       white-space: pre-wrap;
     }
-
-    /* Stats footer */
-    .stats-footer {
-      grid-column: 1 / -1;
-      display: flex;
-      justify-content: space-between;
-      padding: 15px 20px;
-      background: #111;
-      border: 1px solid #333;
+    .feed-outcome {
+      margin-top: 4px;
       font-size: 12px;
-      color: #888;
+      color: var(--text-muted);
+      font-style: italic;
     }
-    .stat-value { color: #00ff00; }
+    .feed-error {
+      margin-top: 4px;
+      font-size: 11px;
+      color: var(--danger);
+      font-weight: 600;
+    }
 
-    /* Halted state */
+    .feed-entry.flash-settled { animation: flashSettled 1s ease-out; }
+    @keyframes flashSettled {
+      0%   { background: var(--success-bg); }
+      100% { background: transparent; }
+    }
+    .feed-entry.flash-failed { animation: flashFailed 1s ease-out; }
+    @keyframes flashFailed {
+      0%   { background: var(--danger-bg); }
+      100% { background: transparent; }
+    }
+    .feed-entry.linked-hover { background: #fff9d8; }
+
+    /* === Footer ===================================================== */
+    .legal-footer {
+      padding: 8px 24px;
+      background: var(--navy);
+      color: rgba(255,255,255,0.65);
+      font-size: 10px;
+      letter-spacing: 0.5px;
+      text-align: center;
+      border-top: 1px solid #0d1f3a;
+    }
+    .legal-footer .stamp {
+      color: #f1c40f;
+      font-weight: 600;
+      letter-spacing: 1px;
+    }
+
+    /* === Halted overlay ============================================= */
     .halted-overlay {
       position: fixed;
-      top: 0;
-      left: 0;
-      right: 0;
-      bottom: 0;
-      background: rgba(0,0,0,0.9);
+      inset: 0;
+      background: rgba(28, 58, 100, 0.92);
+      color: #ffffff;
       display: flex;
       align-items: center;
       justify-content: center;
@@ -333,58 +607,122 @@ const DISPLAY_HTML = `<!DOCTYPE html>
       z-index: 1000;
     }
     .halted-overlay.hidden { display: none; }
-    .halted-text {
-      font-size: 48px;
-      color: #ffcc00;
-      margin-bottom: 20px;
+    .halted-overlay .stamp {
+      border: 4px solid #f1c40f;
+      color: #f1c40f;
+      font-size: 36px;
+      font-weight: 700;
+      letter-spacing: 4px;
+      padding: 16px 40px;
+      transform: rotate(-3deg);
+      text-transform: uppercase;
     }
-    .halted-subtext { color: #888; }
+    .halted-overlay .sub {
+      margin-top: 18px;
+      color: rgba(255,255,255,0.75);
+      letter-spacing: 1px;
+    }
+
+    /* === Empty state ================================================ */
+    .empty-state {
+      padding: 32px;
+      text-align: center;
+      color: var(--text-faint);
+      font-style: italic;
+    }
   </style>
 </head>
 <body>
   <div id="halted-overlay" class="halted-overlay hidden">
-    <div class="halted-text">⏸️ GAME PAUSED</div>
-    <div class="halted-subtext">Halted by admin · State preserved · Awaiting resume</div>
+    <div class="stamp">Cycle Paused</div>
+    <div class="sub">Strategic Review In Progress · State Preserved</div>
   </div>
 
-  <div class="container">
-    <div class="header">
-      <div class="title">QUARTERLY ASCENSION</div>
-      <div class="status">
-        <div class="status-item">Tick: <span class="status-value" id="tick">0</span></div>
-        <div class="status-item">Status: <span class="status-value" id="status">setup</span></div>
-        <div class="status-item">Agents: <span class="status-value" id="agent-count">0</span></div>
+  <header class="exec-banner" id="banner">
+    <div class="brand">
+      <div class="brand-mark">MegaCorp Inc.</div>
+      <div class="brand-tagline">Synergy &amp; Strategic Operations Division</div>
+    </div>
+    <div>
+      <div class="doc-title">Q1 FY2026 Performance Dashboard</div>
+      <div class="doc-classification">Confidential · Internal Distribution Only</div>
+    </div>
+    <div class="header-meta">
+      <div class="meta-item">
+        <span class="meta-label">Cycle</span>
+        <span class="meta-value" id="cycle">0</span>
+      </div>
+      <div class="meta-item">
+        <span class="meta-label">Status</span>
+        <span class="meta-value" id="status">Initializing</span>
+      </div>
+      <div class="meta-item countdown">
+        <span class="meta-label">Next Sync-up</span>
+        <span class="meta-value" id="countdown">—</span>
       </div>
     </div>
+  </header>
 
-    <div class="main-content">
-      <div class="panel">
-        <div class="panel-title">LEADERBOARD</div>
-        <div class="leaderboard" id="leaderboard"></div>
+  <section class="kpi-strip">
+    <div class="kpi-tile" id="kpi-settlements">
+      <div class="kpi-label">Settlements YTD</div>
+      <div class="kpi-sublabel">Aggregate Capital Movement</div>
+      <div class="kpi-value">$<span id="kpi-amount">0.00</span><span class="kpi-suffix">DLBR</span></div>
+    </div>
+    <div class="kpi-tile" id="kpi-tx">
+      <div class="kpi-label">Transaction Throughput</div>
+      <div class="kpi-sublabel">Cleared On-Chain Settlements</div>
+      <div class="kpi-value"><span id="kpi-count">0</span><span class="kpi-suffix">tx</span></div>
+    </div>
+    <div class="kpi-tile" id="kpi-velocity">
+      <div class="kpi-label">Operational Velocity</div>
+      <div class="kpi-sublabel">Mean Settlement Latency</div>
+      <div class="kpi-value"><span id="kpi-velocity-val">0.0</span><span class="kpi-suffix">sec</span></div>
+    </div>
+    <div class="kpi-tile" id="kpi-roster">
+      <div class="kpi-label">Active Headcount</div>
+      <div class="kpi-sublabel">Managers In Cycle</div>
+      <div class="kpi-value"><span id="kpi-headcount">0</span><span class="kpi-suffix">FTE</span></div>
+    </div>
+  </section>
+
+  <main class="dash-grid">
+    <section class="panel">
+      <div class="panel-head">
+        <span>Executive Leaderboard</span>
+        <span class="panel-meta">Sorted by Prestige · click manager for review</span>
       </div>
-
-      <div class="panel">
-        <div class="panel-title">LATEST ACTIONS</div>
-        <div class="event-feed" id="events"></div>
+      <div class="leaderboard" id="leaderboard">
+        <div class="empty-state">No managers reporting yet.</div>
       </div>
-    </div>
+    </section>
 
-    <div class="panel">
-      <div class="panel-title">LIVE SETTLEMENTS</div>
-      <div class="ticker" id="ticker"></div>
-    </div>
+    <section class="panel">
+      <div class="panel-head">
+        <span>Manager Activity Stream</span>
+        <span class="panel-meta">Live · in-character justifications &amp; on-chain settlement</span>
+      </div>
+      <div class="stream" id="stream">
+        <div class="empty-state">Waiting for the first cycle to begin…</div>
+      </div>
+    </section>
+  </main>
 
-    <div class="stats-footer">
-      <div>TOTAL SETTLED: <span class="stat-value" id="total-tx">0</span> transactions</div>
-      <div>DLBR MOVED: <span class="stat-value" id="total-amount">$0.00</span></div>
-      <div>AVG SETTLEMENT: <span class="stat-value" id="avg-time">0.0s</span></div>
-    </div>
-  </div>
+  <footer class="legal-footer">
+    <span class="stamp">CONFIDENTIAL</span>
+    &nbsp;·&nbsp;
+    Strategic Insights Engine v3.2
+    &nbsp;·&nbsp;
+    Generated by MegaCorp People Analytics &amp; Synergy Division
+    &nbsp;·&nbsp;
+    Settlement layer: Stellar testnet (DLBR · Deliverabills)
+  </footer>
 
   <script>
-    // Hover-link: highlight matching pairs of (event, ticker entry) by tx hash.
-    // Both halves of the pair pulse so the eye can connect the in-character
-    // action description to its on-chain settlement.
+    // ============================================================
+    // Hover-link: highlight matching pairs of (event, ticker entry)
+    // by tx hash.
+    // ============================================================
     document.addEventListener('mouseover', (e) => {
       const el = e.target.closest('[data-tx-hash]');
       if (!el) return;
@@ -397,188 +735,446 @@ const DISPLAY_HTML = `<!DOCTYPE html>
       document.querySelectorAll('.linked-hover').forEach(n => n.classList.remove('linked-hover'));
     });
 
+    // ============================================================
+    // State + WebSocket
+    // ============================================================
     const ws = new WebSocket('ws://' + window.location.host);
+
+    let tickIntervalMs = 300000;
+    let lastTickStartMs = Date.now();
+    let currentTick = 0;
+    let prevPrestige = new Map();
+
+    // Unified feed correlation:
+    //   feedByEntryId[entryId]  → DOM node for paid actions
+    //   feedByTxHash[txHash]    → DOM node once tx hash is known (post-settle)
+    const feedByEntryId = new Map();
+    const feedByTxHash = new Map();
+    // Free-event entries are keyed by event.id in feedByEntryId too.
+
+    const STATUS_LABEL = {
+      pending:   'Pending Authorization',
+      submitted: 'In Settlement',
+      settled:   'Cleared & Reconciled',
+      failed:    'Settlement Exception',
+    };
+
+    const STATUS_PRIORITY = { pending: 0, submitted: 1, settled: 2, failed: 2 };
+
+    const TYPE_LABEL = {
+      action: 'Standup',
+      payment: 'Settlement',
+      payment_failed: 'Settlement Failed',
+      alliance_formed: 'Alliance Formed',
+      alliance_rejected: 'Alliance Rejected',
+      alliance_broken: 'Alliance Broken',
+      random_event: 'Q1 Memo',
+      status_effect: 'HR Update',
+      game_start: 'Cycle Begins',
+      game_end: 'Cycle Closed',
+      game_halted: 'Strategic Pause',
+      game_resumed: 'Resumed',
+    };
 
     ws.onmessage = (event) => {
       const msg = JSON.parse(event.data);
-
-      if (msg.type === 'full_state') {
-        updateFullState(msg.data);
-      } else if (msg.type === 'game_event') {
-        addEvent(msg.data);
-        scheduleLeaderboardRefresh();
-      } else if (msg.type === 'ticker_update') {
-        updateTicker(msg.data);
-        scheduleLeaderboardRefresh();
-      }
+      if (msg.type === 'full_state') updateFullState(msg.data);
+      else if (msg.type === 'game_event') handleGameEvent(msg.data);
+      else if (msg.type === 'ticker_update') handleTickerUpdate(msg.data);
     };
 
-    // Coalesce rapid-fire updates: only re-fetch state at most every 1s.
+    // ============================================================
+    // Initial state
+    // ============================================================
+    function updateFullState(data) {
+      tickIntervalMs = data.tickIntervalMs || tickIntervalMs;
+      currentTick = data.tick;
+      lastTickStartMs = Date.now() - 0; // best estimate; will recalibrate on next tick
+      document.getElementById('cycle').textContent = data.tick;
+      document.getElementById('status').textContent = humanStatus(data.status);
+      document.getElementById('halted-overlay').classList.toggle('hidden', data.status !== 'halted');
+
+      // Stats
+      setKpis(data.stats.totalAmountMoved, data.stats.totalTransactions, data.stats.avgSettlementTime, data.agents.length);
+
+      // Leaderboard
+      data.agents.forEach(a => prevPrestige.set(a.id, a.prestige));
+      renderLeaderboard(data.agents);
+
+      // Feed: replay events + ticker, sorted by tick desc / time desc
+      const stream = document.getElementById('stream');
+      stream.innerHTML = '';
+      feedByEntryId.clear();
+      feedByTxHash.clear();
+
+      // Build a chronological list (oldest first) so we can prepend each.
+      const items = [];
+      for (const e of data.recentEvents) items.push({ kind: 'event', payload: e, ts: new Date(e.timestamp).getTime() });
+      for (const t of data.ticker) items.push({ kind: 'ticker', payload: t, ts: t.settledAt || t.submittedAt || 0 });
+      items.sort((a, b) => a.ts - b.ts);
+      for (const it of items) {
+        if (it.kind === 'event') handleGameEvent(it.payload, /*replay*/ true);
+        else handleTickerUpdate(it.payload, /*replay*/ true);
+      }
+      if (stream.children.length === 0) {
+        stream.innerHTML = '<div class="empty-state">Waiting for the first cycle to begin…</div>';
+      }
+    }
+
+    // ============================================================
+    // Live updates
+    // ============================================================
+    function handleGameEvent(event, replay) {
+      // Tick boundary detection — reset the countdown when we see a higher tick.
+      if (typeof event.tick === 'number' && event.tick > currentTick) {
+        currentTick = event.tick;
+        lastTickStartMs = Date.now();
+        document.getElementById('cycle').textContent = currentTick;
+        document.getElementById('banner').classList.remove('tick-pulse');
+        // force reflow to restart animation
+        void document.getElementById('banner').offsetWidth;
+        document.getElementById('banner').classList.add('tick-pulse');
+      }
+
+      // Paid action: merge into existing pending/settled entry by tx hash.
+      if (event.txHash && feedByTxHash.has(event.txHash)) {
+        const row = feedByTxHash.get(event.txHash);
+        enrichPaidRowWithEvent(row, event);
+        return;
+      }
+
+      // Free action (or paid event without a matched ticker — fallback): create a fresh entry.
+      const row = renderFreeFeedEntry(event);
+      feedByEntryId.set(event.id, row);
+      prependFeedEntry(row, replay);
+
+      // Refresh leaderboard since prestige might have moved.
+      if (!replay) scheduleLeaderboardRefresh();
+    }
+
+    function handleTickerUpdate(entry, replay) {
+      const existing = feedByEntryId.get(entry.id);
+      if (existing) {
+        updatePaidFeedRow(existing, entry);
+      } else {
+        const row = renderPaidFeedEntry(entry);
+        feedByEntryId.set(entry.id, row);
+        if (entry.txHash) feedByTxHash.set(entry.txHash, row);
+        prependFeedEntry(row, replay);
+      }
+      // Also keep tx-hash index up to date if the hash arrived this update.
+      if (entry.txHash) {
+        feedByTxHash.set(entry.txHash, feedByEntryId.get(entry.id));
+      }
+
+      // Visual pulse on terminal states.
+      if (entry.status === 'settled' && !replay) {
+        const row = feedByEntryId.get(entry.id);
+        row.classList.remove('flash-settled'); void row.offsetWidth; row.classList.add('flash-settled');
+      } else if (entry.status === 'failed' && !replay) {
+        const row = feedByEntryId.get(entry.id);
+        row.classList.remove('flash-failed'); void row.offsetWidth; row.classList.add('flash-failed');
+      }
+
+      if (!replay) scheduleLeaderboardRefresh();
+    }
+
+    function prependFeedEntry(row, replay) {
+      const stream = document.getElementById('stream');
+      const empty = stream.querySelector('.empty-state');
+      if (empty) empty.remove();
+      stream.insertBefore(row, stream.firstChild);
+      if (replay) row.style.animation = 'none';
+      // Cap to 60 entries.
+      while (stream.children.length > 60) stream.removeChild(stream.lastChild);
+    }
+
+    // ============================================================
+    // Renderers
+    // ============================================================
+    function renderPaidFeedEntry(t) {
+      const div = document.createElement('article');
+      div.className = 'feed-entry paid';
+      if (t.txHash) div.dataset.txHash = t.txHash;
+      div.dataset.entryId = t.id;
+      div.innerHTML = paidFeedInnerHTML(t, /*outcome*/ null);
+      return div;
+    }
+
+    function renderFreeFeedEntry(e) {
+      const div = document.createElement('article');
+      div.className = 'feed-entry free';
+      if (e.txHash) div.dataset.txHash = e.txHash;
+      div.dataset.eventId = e.id;
+      div.innerHTML = freeFeedInnerHTML(e);
+      return div;
+    }
+
+    function updatePaidFeedRow(row, t) {
+      // Preserve any outcome/event description that was already added.
+      const outcomeNode = row.querySelector('.feed-outcome');
+      const outcome = outcomeNode ? outcomeNode.textContent : null;
+      row.innerHTML = paidFeedInnerHTML(t, outcome);
+      if (t.txHash) row.dataset.txHash = t.txHash;
+    }
+
+    function enrichPaidRowWithEvent(row, event) {
+      const entryId = row.dataset.entryId;
+      // Pull current ticker fields back out of the DOM (rough but works); the next
+      // ticker_update will re-render cleanly. For now, just append outcome + reasoning.
+      const existingQuote = row.querySelector('.feed-quote');
+      if (event.reasoning && !existingQuote) {
+        const q = document.createElement('blockquote');
+        q.className = 'feed-quote';
+        q.textContent = '"' + event.reasoning + '"';
+        row.appendChild(q);
+      }
+      const existingOutcome = row.querySelector('.feed-outcome');
+      if (event.description && !existingOutcome) {
+        const o = document.createElement('div');
+        o.className = 'feed-outcome';
+        o.textContent = stripActorPrefix(event.description);
+        row.appendChild(o);
+      }
+    }
+
+    function paidFeedInnerHTML(t, outcomeText) {
+      const time = formatTime(t.settledAt || t.submittedAt || Date.now());
+      const statusKey = t.status || 'pending';
+      const statusLabel = STATUS_LABEL[statusKey] || statusKey;
+      const settlementHtml = t.settlementTime != null
+        ? '<span class="settlement-time">⏱ ' + t.settlementTime.toFixed(1) + 's</span>'
+        : '';
+      const txHtml = t.txHash
+        ? '<span class="tx-link">tx: ' + (t.explorerUrl
+            ? '<a href="' + t.explorerUrl + '" target="_blank" rel="noopener">' + shortHash(t.txHash) + ' ↗</a>'
+            : shortHash(t.txHash)) + '</span>'
+        : '';
+      const quoteHtml = t.reasoning ? '<blockquote class="feed-quote">"' + escape(t.reasoning) + '"</blockquote>' : '';
+      const errorHtml = t.error ? '<div class="feed-error">Network response: ' + escape(t.error) + '</div>' : '';
+      const outcomeHtml = outcomeText ? '<div class="feed-outcome">' + escape(outcomeText) + '</div>' : '';
+
+      return ''
+        + '<div class="feed-head">'
+        +   '<span class="cycle">Cycle ' + (t.cycle || currentTick) + '</span>'
+        +   '<span>' + time + '</span>'
+        +   '<span class="badge-type ' + (statusKey === 'failed' ? 'payment_failed' : 'payment') + '">' + (statusKey === 'failed' ? 'Settlement Failed' : 'Settlement') + '</span>'
+        + '</div>'
+        + '<div class="feed-action">'
+        +   '<span class="actor">' + escape(t.fromAgentName) + '</span>'
+        +   '<span class="arrow">→</span>'
+        +   '<span class="recipient">' + escape(t.toService) + '</span>'
+        + '</div>'
+        + '<div class="feed-mpp">'
+        +   '<span class="amount">$' + (t.amount != null ? Number(t.amount).toFixed(2) : '0.00') + ' DLBR</span>'
+        +   '<span class="status-badge ' + statusKey + '">' + statusLabel + '</span>'
+        +   settlementHtml
+        +   txHtml
+        + '</div>'
+        + errorHtml
+        + quoteHtml
+        + outcomeHtml;
+    }
+
+    function freeFeedInnerHTML(e) {
+      const time = formatTime(new Date(e.timestamp).getTime());
+      const type = e.type || 'action';
+      const label = TYPE_LABEL[type] || type;
+      const quoteHtml = e.reasoning ? '<blockquote class="feed-quote">"' + escape(e.reasoning) + '"</blockquote>' : '';
+      const prestigeHtml = e.prestigeChange
+        ? '<div class="feed-outcome">Prestige adjustment: ' + (e.prestigeChange > 0 ? '+' : '') + e.prestigeChange + '</div>'
+        : '';
+      return ''
+        + '<div class="feed-head">'
+        +   '<span class="cycle">Cycle ' + (e.tick != null ? e.tick : currentTick) + '</span>'
+        +   '<span>' + time + '</span>'
+        +   '<span class="badge-type ' + type + '">' + label + '</span>'
+        + '</div>'
+        + '<div class="feed-action">' + escape(e.description) + '</div>'
+        + quoteHtml
+        + prestigeHtml;
+    }
+
+    function stripActorPrefix(desc) {
+      // "Chad Synergize: Sent diane to sensitivity training" → "Sent diane to sensitivity training"
+      const i = desc.indexOf(':');
+      return i > 0 ? desc.slice(i + 1).trim() : desc;
+    }
+
+    // ============================================================
+    // Leaderboard (with rank-shuffle FLIP animation)
+    // ============================================================
+    function renderLeaderboard(agents) {
+      const sorted = agents.slice().sort((a, b) => b.prestige - a.prestige);
+      const lb = document.getElementById('leaderboard');
+
+      // Capture old positions (FLIP)
+      const before = new Map();
+      lb.querySelectorAll('.manager-row').forEach(el => {
+        before.set(el.dataset.agentId, el.getBoundingClientRect().top);
+      });
+
+      // Rebuild
+      lb.innerHTML = sorted.map((a, i) => managerRowHTML(a, i)).join('') ||
+        '<div class="empty-state">No managers reporting yet.</div>';
+
+      // Animate (FLIP)
+      lb.querySelectorAll('.manager-row').forEach(el => {
+        const oldTop = before.get(el.dataset.agentId);
+        const newTop = el.getBoundingClientRect().top;
+        if (oldTop != null && oldTop !== newTop) {
+          const dy = oldTop - newTop;
+          el.style.transform = 'translateY(' + dy + 'px)';
+          el.style.transition = 'none';
+          requestAnimationFrame(() => {
+            el.style.transition = 'transform 0.45s ease';
+            el.style.transform = '';
+          });
+        }
+        // Pulse prestige if it changed since last render
+        const id = el.dataset.agentId;
+        const a = sorted.find(x => x.id === id);
+        if (a && prevPrestige.has(id) && prevPrestige.get(id) !== a.prestige) {
+          const p = el.querySelector('.prestige');
+          if (p) { p.classList.remove('bumped'); void p.offsetWidth; p.classList.add('bumped'); }
+        }
+      });
+
+      // Update memory of last-seen prestige
+      sorted.forEach(a => prevPrestige.set(a.id, a.prestige));
+    }
+
+    function managerRowHTML(a, i) {
+      const rank = i + 1;
+      const traits = personaTraits(a.id);
+      const traitText = traits ? ('A' + traits.aggression + ' · G' + traits.greed + ' · C' + traits.caution + ' · L' + traits.loyalty) : '';
+      const badges = (a.statusEffects || []).map(e =>
+        '<span class="badge ' + e.type + '">' + e.type.replace(/_/g, ' ') + '</span>'
+      ).join('');
+      return '<div class="manager-row rank-' + rank + '" data-agent-id="' + a.id + '">'
+        + '<div class="rank">' + rank + '</div>'
+        + '<div class="manager-identity">'
+        +   '<div class="name">' + escape(a.name) + '</div>'
+        +   '<div class="title">' + escape(a.title) + '</div>'
+        +   (traitText ? '<div class="traits">' + traitText + '</div>' : '')
+        +   (badges ? '<div class="badges">' + badges + '</div>' : '')
+        + '</div>'
+        + '<div class="manager-stats">'
+        +   '<div class="prestige">' + a.prestige + '</div>'
+        +   '<div class="balance' + ((a.balance != null && a.balance < 50) ? ' low' : '') + '">$' + (a.balance != null ? Number(a.balance).toFixed(0) : '–') + '</div>'
+        + '</div>'
+        + '</div>';
+    }
+
+    // Hardcoded persona traits for inline display (must match agents/personas.ts).
+    // This is just for the in-leaderboard "A85 · G70 · C20 · L40" line.
+    const PERSONA_TRAITS = {
+      chad:     { aggression: 85, greed: 70, caution: 20, loyalty: 40 },
+      linda:    { aggression: 30, greed: 50, caution: 90, loyalty: 60 },
+      trevor:   { aggression: 70, greed: 40, caution: 30, loyalty: 20 },
+      brenda:   { aggression: 20, greed: 30, caution: 95, loyalty: 80 },
+      kevin:    { aggression: 80, greed: 95, caution: 25, loyalty: 15 },
+      diane:    { aggression: 40, greed: 40, caution: 70, loyalty: 70 },
+      marcus:   { aggression: 60, greed: 60, caution: 50, loyalty: 85 },
+      stacy:    { aggression: 35, greed: 25, caution: 45, loyalty: 50 },
+      ron:      { aggression: 25, greed: 80, caution: 85, loyalty: 30 },
+      jen:      { aggression: 65, greed: 55, caution: 40, loyalty: 65 },
+    };
+    function personaTraits(id) { return PERSONA_TRAITS[id] || null; }
+
+    // ============================================================
+    // KPIs
+    // ============================================================
+    function setKpis(amount, count, velocity, headcount) {
+      animateNumber('kpi-amount', amount, v => v.toFixed(2));
+      animateNumber('kpi-count', count, v => v.toFixed(0));
+      animateNumber('kpi-velocity-val', velocity, v => v.toFixed(1));
+      animateNumber('kpi-headcount', headcount, v => v.toFixed(0));
+    }
+    function animateNumber(id, target, fmt) {
+      const el = document.getElementById(id);
+      if (!el) return;
+      const current = parseFloat((el.textContent || '0').replace(/[^0-9.\\-]/g, '')) || 0;
+      if (current === target) return;
+      const tile = el.closest('.kpi-tile');
+      const start = current;
+      const delta = target - start;
+      const duration = 600;
+      const startTime = performance.now();
+      function step(now) {
+        const t = Math.min(1, (now - startTime) / duration);
+        const eased = 1 - Math.pow(1 - t, 3);
+        el.textContent = fmt(start + delta * eased);
+        if (t < 1) requestAnimationFrame(step);
+        else el.textContent = fmt(target);
+      }
+      requestAnimationFrame(step);
+      if (tile && delta !== 0) {
+        tile.classList.remove('value-bumped'); void tile.offsetWidth; tile.classList.add('value-bumped');
+      }
+    }
+
+    // ============================================================
+    // Periodic state refresh (debounced). Triggered by every event.
+    // ============================================================
     let leaderboardRefreshTimer = null;
     function scheduleLeaderboardRefresh() {
       if (leaderboardRefreshTimer) return;
       leaderboardRefreshTimer = setTimeout(() => {
         leaderboardRefreshTimer = null;
-        refreshLeaderboardAndStats();
-      }, 1000);
+        refreshFromApi();
+      }, 800);
     }
-
-    async function refreshLeaderboardAndStats() {
+    async function refreshFromApi() {
       try {
         const r = await fetch('/api/state');
         const data = await r.json();
+        document.getElementById('cycle').textContent = data.tick;
+        document.getElementById('status').textContent = humanStatus(data.status);
+        document.getElementById('halted-overlay').classList.toggle('hidden', data.status !== 'halted');
         renderLeaderboard(data.agents);
-        document.getElementById('tick').textContent = data.tick;
-        document.getElementById('status').textContent = data.status;
-        document.getElementById('agent-count').textContent = data.agents.length;
-        document.getElementById('total-tx').textContent = data.stats.total;
-        document.getElementById('total-amount').textContent = '$' + data.stats.amountMoved.toFixed(2);
-        document.getElementById('avg-time').textContent = data.stats.avgSettlement.toFixed(1) + 's';
-      } catch (e) {
-        // Network blip; next event will retry.
-      }
+        setKpis(data.stats.amountMoved, data.stats.total, data.stats.avgSettlement, data.agents.length);
+      } catch (e) { /* network blip; next event will retry */ }
     }
 
-    function renderLeaderboard(agents) {
-      const leaderboard = document.getElementById('leaderboard');
-      leaderboard.innerHTML = agents
-        .slice()
-        .sort((a, b) => b.prestige - a.prestige)
-        .map((agent, i) => \`
-          <div class="agent-row">
-            <div class="rank">#\${i + 1}</div>
-            <div>
-              <div class="agent-name">\${agent.name}</div>
-              <div class="agent-title">\${agent.title}</div>
-            </div>
-            <div class="prestige">\${agent.prestige}</div>
-            <div class="budget \${agent.balance < 50 ? 'low' : ''}">\$\${agent.balance.toFixed(0)}</div>
-          </div>
-        \`).join('');
-    }
+    // ============================================================
+    // Countdown (client-side timer — no server roundtrip)
+    // ============================================================
+    setInterval(() => {
+      const elapsed = Date.now() - lastTickStartMs;
+      const remaining = Math.max(0, tickIntervalMs - elapsed);
+      const sec = Math.floor(remaining / 1000);
+      const m = Math.floor(sec / 60);
+      const s = sec % 60;
+      const el = document.getElementById('countdown');
+      el.textContent = m + ':' + (s < 10 ? '0' + s : s);
+      el.classList.remove('tick'); void el.offsetWidth; el.classList.add('tick');
+    }, 1000);
 
-    function updateFullState(data) {
-      document.getElementById('tick').textContent = data.tick;
-      document.getElementById('status').textContent = data.status;
-      document.getElementById('agent-count').textContent = data.agents.length;
-
-      // Halted overlay
-      const overlay = document.getElementById('halted-overlay');
-      if (data.status === 'halted') {
-        overlay.classList.remove('hidden');
-      } else {
-        overlay.classList.add('hidden');
-      }
-
-      // Leaderboard
-      renderLeaderboard(data.agents);
-
-      // Events
-      const events = document.getElementById('events');
-      events.innerHTML = data.recentEvents.map(e => renderEvent(e)).join('');
-
-      // Ticker
-      const ticker = document.getElementById('ticker');
-      ticker.innerHTML = data.ticker.map(t => renderTickerEntry(t)).join('');
-
-      // Stats
-      document.getElementById('total-tx').textContent = data.stats.totalTransactions;
-      document.getElementById('total-amount').textContent = '$' + data.stats.totalAmountMoved.toFixed(2);
-      document.getElementById('avg-time').textContent = data.stats.avgSettlementTime.toFixed(1) + 's';
-    }
-
-    function addEvent(event) {
-      const events = document.getElementById('events');
-      const html = renderEvent(event);
-      events.insertAdjacentHTML('afterbegin', html);
-
-      // Keep max 20 events
-      while (events.children.length > 20) {
-        events.removeChild(events.lastChild);
-      }
-    }
-
-    function updateTicker(entry) {
-      const ticker = document.getElementById('ticker');
-      const existingEl = document.querySelector(\`[data-ticker-id="\${entry.id}"]\`);
-
-      if (existingEl) {
-        existingEl.outerHTML = renderTickerEntry(entry);
-      } else {
-        ticker.insertAdjacentHTML('afterbegin', renderTickerEntry(entry));
-
-        // Keep max 15 entries
-        while (ticker.children.length > 15) {
-          ticker.removeChild(ticker.lastChild);
-        }
-      }
-
-      // Update stats
-      fetch('/api/state')
-        .then(r => r.json())
-        .then(data => {
-          document.getElementById('total-tx').textContent = data.stats.total;
-          document.getElementById('total-amount').textContent = '$' + data.stats.amountMoved.toFixed(2);
-          document.getElementById('avg-time').textContent = data.stats.avgSettlement.toFixed(1) + 's';
-        });
-    }
-
-    function renderEvent(e) {
-      const time = new Date(e.timestamp).toLocaleTimeString();
-      const escapeHtml = (s) => String(s)
+    // ============================================================
+    // Helpers
+    // ============================================================
+    function escape(s) {
+      return String(s)
         .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
         .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
-      const txAttr = e.txHash ? \` data-tx-hash="\${e.txHash}"\` : '';
-      const quoteHtml = e.reasoning
-        ? \`<div class="event-quote">"\${escapeHtml(e.reasoning)}"</div>\`
-        : '';
-      return \`
-        <div class="event \${e.type}"\${txAttr}>
-          <div class="event-time">\${time} · Tick \${e.tick}</div>
-          <div class="event-desc">\${e.description}</div>
-          \${quoteHtml}
-        </div>
-      \`;
     }
-
-    function renderTickerEntry(t) {
-      const statusClass = t.status;
-      const statusText = t.status === 'settled' ? '✓ settled' :
-                        t.status === 'failed' ? '✗ FAILED' :
-                        t.status === 'submitted' ? 'broadcasting...' : 'signing...';
-
-      let txLink = '';
-      if (t.txHash) {
-        const shortHash = t.txHash.slice(0, 4) + '...' + t.txHash.slice(-4);
-        txLink = t.explorerUrl
-          ? \`<a href="\${t.explorerUrl}" target="_blank">\${shortHash}</a>\`
-          : shortHash;
-      }
-
-      const escapeHtml = (s) => String(s)
-        .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
-        .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
-
-      const quoteHtml = t.reasoning
-        ? \`<div class="ticker-quote">"\${escapeHtml(t.reasoning)}"</div>\`
-        : '';
-
-      const txAttr = t.txHash ? \` data-tx-hash="\${t.txHash}"\` : '';
-
-      return \`
-        <div class="ticker-entry \${statusClass}" data-ticker-id="\${t.id}"\${txAttr}>
-          <div class="ticker-from">\${t.fromAgentName}</div>
-          <div class="ticker-to">→ \${t.toService}</div>
-          <div class="ticker-amount">\$\${t.amount.toFixed(2)} DLBR</div>
-          \${t.txHash ? \`<div class="ticker-tx">tx: \${txLink}</div>\` : ''}
-          <div class="ticker-time">
-            \${t.settlementTime ? '⏱ ' + t.settlementTime.toFixed(1) + 's' : ''}
-            <span class="ticker-status \${statusClass}">\${statusText}</span>
-          </div>
-          \${t.error ? \`<div class="ticker-tx" style="color: #ff4444">reason: \${t.error}</div>\` : ''}
-          \${quoteHtml}
-        </div>
-      \`;
+    function shortHash(h) {
+      return h ? h.slice(0, 4) + '…' + h.slice(-4) : '';
+    }
+    function formatTime(ms) {
+      const d = new Date(ms);
+      const hh = String(d.getHours()).padStart(2, '0');
+      const mm = String(d.getMinutes()).padStart(2, '0');
+      const ss = String(d.getSeconds()).padStart(2, '0');
+      return hh + ':' + mm + ':' + ss;
+    }
+    function humanStatus(s) {
+      if (s === 'running') return 'Operating';
+      if (s === 'halted') return 'On Pause';
+      if (s === 'ended') return 'Q1 Closed';
+      if (s === 'setup') return 'Initializing';
+      return s;
     }
   </script>
 </body>
