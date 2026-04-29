@@ -280,11 +280,66 @@
     function renderClaim(a) {
       const area = document.getElementById('claim-area');
       if (a.claimed) {
+        const gameInProgress = a.gameStatus === 'running';
+        const releaseSection = gameInProgress
+          ? `<div style="margin-top:14px;padding-top:14px;border-top:1px solid #f1c40f;font-size:12px;color:var(--text-muted);">
+               🔒 <b>Locked during active cycle.</b> You can release this manager once the game halts or ends.
+             </div>`
+          : `<div style="margin-top:14px;padding-top:14px;border-top:1px solid #f1c40f;">
+               <details>
+                 <summary style="cursor:pointer;color:var(--warning);font-size:12px;font-weight:600;letter-spacing:0.4px;text-transform:uppercase;">Release this manager →</summary>
+                 <p style="font-size:12px;color:var(--text-muted);margin-top:10px;line-height:1.5;">
+                   Confirm by entering the email you used to adopt them. The slot reopens for someone else.
+                 </p>
+                 <form id="release-form" style="margin-top:8px;">
+                   <input id="release-email" type="email" required placeholder="email@used.to.adopt"
+                          style="width:100%;padding:8px 10px;border:1px solid var(--border-2);border-radius:2px;font-size:13px;font-family:inherit;">
+                   <button id="release-submit" type="submit"
+                           style="width:100%;margin-top:10px;background:var(--danger);color:#fff;padding:9px;border:0;font-family:inherit;font-size:12px;font-weight:600;letter-spacing:0.6px;text-transform:uppercase;cursor:pointer;">
+                     Release ${escape(a.name)}
+                   </button>
+                   <div id="release-msg" style="margin-top:8px;font-size:12px;"></div>
+                 </form>
+               </details>
+             </div>`;
         area.innerHTML = `
           <div class="already-claimed">
             <b>Already adopted</b> by ${escape(a.claimedByName || 'a stakeholder')}.<br>
             <a href="/intro.html" style="color:var(--warning);">Pick another manager →</a>
+            ${releaseSection}
           </div>`;
+        if (!gameInProgress) {
+          document.getElementById('release-form').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const email = document.getElementById('release-email').value.trim();
+            const btn = document.getElementById('release-submit');
+            const msg = document.getElementById('release-msg');
+            msg.style.color = 'var(--text-muted)';
+            msg.textContent = 'Releasing…';
+            btn.disabled = true;
+            try {
+              const r = await fetch(`${ORCHESTRATOR_BASE}/api/release`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ agentId: a.id, email }),
+              });
+              const data = await r.json();
+              if (r.ok) {
+                msg.style.color = 'var(--success)';
+                msg.textContent = `Released. The slot is open again. Reloading…`;
+                setTimeout(() => location.reload(), 1100);
+              } else {
+                msg.style.color = 'var(--danger)';
+                msg.textContent = data.error || `Release failed (${r.status})`;
+                btn.disabled = false;
+              }
+            } catch (err) {
+              msg.style.color = 'var(--danger)';
+              msg.textContent = 'Network error: ' + err.message;
+              btn.disabled = false;
+            }
+          });
+        }
         return;
       }
       area.innerHTML = `

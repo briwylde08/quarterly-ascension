@@ -33,7 +33,9 @@ export type StatusEffectType =
   | "technical_difficulties"
   | "has_deliverable"
   | "mandatory_motivation"
-  | "meeting_blocked";
+  | "meeting_blocked"
+  /** Sabotage_plan paints a target — take_credit against them auto-succeeds. */
+  | "marked";
 
 export interface ActionResult {
   success: boolean;

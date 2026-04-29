@@ -54,7 +54,7 @@ const ENDPOINTS: Record<string, Endpoint> = {
     },
   },
   "/send-to-rival": {
-    price: 35,
+    price: 25,
     needsTarget: true,
     payload: (target) => ({
       action: "mandatory_motivation_assigned",

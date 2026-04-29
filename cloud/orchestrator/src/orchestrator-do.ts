@@ -322,6 +322,7 @@ export class GameOrchestrator {
       const persona = getPersona(agent.personaId);
       const recentActions = await db.getRecentActionLogsForAgent(agent.id, 12);
       const balance = await stellar.getAssetBalance(agent.publicKey);
+      const gameStatus = await db.getGameStatus();
 
       return Response.json({
         id: agent.id,
@@ -339,6 +340,7 @@ export class GameOrchestrator {
         allies: agent.allies,
         claimed: !!agent.claimedBy,
         claimedByName: agent.claimedByName,
+        gameStatus,
         explorerUrl: stellar.getExplorerAccountUrl(agent.publicKey),
         recentActions: recentActions.map((r) => ({
           tick: r.tick,
@@ -406,6 +408,49 @@ export class GameOrchestrator {
       }
 
       return Response.json({ ok: true, agentId, claimedByName: trimmedName });
+    }
+
+    // Release a claim. Allowed only when the game is NOT running, and the
+    // requester proves ownership by supplying the email used at claim time.
+    if (path === "/release" && request.method === "POST") {
+      const status = await db.getGameStatus();
+      if (status === "running") {
+        return Response.json(
+          { error: "Cannot release a manager while a cycle is in progress. Try after halt or end-of-game." },
+          { status: 400 }
+        );
+      }
+
+      let body: { agentId?: string; email?: string };
+      try {
+        body = await request.json();
+      } catch {
+        return Response.json({ error: "invalid JSON body" }, { status: 400 });
+      }
+      const { agentId, email } = body;
+      if (!agentId || !email) {
+        return Response.json({ error: "agentId and email both required" }, { status: 400 });
+      }
+      const trimmedEmail = email.trim().toLowerCase();
+
+      const claimedAgent = await db.getAgent(agentId);
+      if (!claimedAgent) return Response.json({ error: "agent not found" }, { status: 404 });
+      if (!claimedAgent.claimedBy) {
+        return Response.json({ error: "agent is not claimed" }, { status: 400 });
+      }
+      if (claimedAgent.claimedBy.toLowerCase() !== trimmedEmail) {
+        // Don't leak whether the email was wrong vs the agent was claimed by
+        // someone else — same status code either way.
+        return Response.json({ error: "email does not match the claim record" }, { status: 403 });
+      }
+
+      const releasedFromName = claimedAgent.claimedByName;
+      await this.env.DB
+        .prepare("UPDATE agents SET claimed_by = NULL, claimed_by_name = NULL WHERE id = ?")
+        .bind(agentId)
+        .run();
+
+      return Response.json({ ok: true, agentId, releasedFrom: releasedFromName });
     }
 
     if (path === "/state") {

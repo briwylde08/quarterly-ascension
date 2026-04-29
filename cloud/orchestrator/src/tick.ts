@@ -169,7 +169,40 @@ export async function processTick(deps: TickDeps): Promise<void> {
   // Phase 5: passive ticks (Inspired bonus + Tired/Problematic decay)
   await applyPassiveStatusDecay(deps, tick);
 
+  // Phase 5b: fatigue check. Any agent who has gone 4+ consecutive ticks
+  // without a `rest` action accrues `tired` status (-2 prestige/tick decay
+  // for 3 ticks, removable by coffee or rest). Without this, `buy_coffee`
+  // and `buy_fancy_coffee` were dead weight in the action economy because
+  // `tired` was almost never applied — the coffee_machine_broken random
+  // event was its only source.
+  await applyFatigue(deps, tick);
+
   console.log(`\nTick ${tick} complete.\n`);
+}
+
+async function applyFatigue(deps: TickDeps, tick: number): Promise<void> {
+  const { db, emit } = deps;
+  const agents = await db.getAllAgents();
+  for (const agent of agents) {
+    // Already tired or caffeinated? skip.
+    if (agent.statusEffects.some((e) => e.type === "tired" || e.type === "caffeinated")) continue;
+    const recent = await db.getRecentActionLogsForAgent(agent.id, 4);
+    if (recent.length < 4) continue;
+    const allNonRest = recent.every((r) => r.action_type !== "rest");
+    if (!allNonRest) continue;
+    await db.updateAgentStatusEffects(agent.id, [
+      ...agent.statusEffects,
+      { type: "tired", expiresAtTick: tick + 3 },
+    ]);
+    await emit({
+      id: uuid(),
+      tick,
+      timestamp: new Date(),
+      type: "status_effect",
+      agentId: agent.id,
+      description: `${agent.name} hit the wall (4 cycles without rest) — now Tired (-2 prestige/cycle for 3 cycles, removed by coffee).`,
+    });
+  }
 }
 
 /**
@@ -247,15 +280,28 @@ async function executeAction(
 
       case "take_credit":
         if ("target" in action) {
-          const success = Math.random() < 0.4;
+          // Marked targets (from sabotage_plan) auto-succeed — the dossier
+          // is in your hand and the receipts have been pre-disputed.
+          const target = await db.getAgent(action.target);
+          const targetIsMarked = target?.statusEffects.some((e) => e.type === "marked") ?? false;
+          const success = targetIsMarked || Math.random() < 0.4;
           if (success) {
             prestigeChange = 30;
-            outcome = `Successfully took credit for ${action.target}'s work`;
+            outcome = targetIsMarked
+              ? `Successfully took credit for ${action.target}'s work (the sabotage dossier made it stick)`
+              : `Successfully took credit for ${action.target}'s work`;
           } else {
             prestigeChange = -20;
             outcome = `Failed to take credit - ${action.target} had receipts`;
           }
           await db.updateAgentPrestige(agent.id, prestigeChange);
+          // Marked status is consumed once exploited.
+          if (targetIsMarked && target) {
+            await db.updateAgentStatusEffects(
+              action.target,
+              target.statusEffects.filter((e) => e.type !== "marked")
+            );
+          }
         }
         break;
 
@@ -275,7 +321,7 @@ async function executeAction(
       case "break_alliance":
         if ("target" in action && agent.allies.includes(action.target)) {
           outcome = await handleAllianceBreak(deps, agent, action.target, tick, reasoning);
-          prestigeChange = -30;
+          prestigeChange = -15; // self-cost reduced from -30 (handler also locks ex-ally out for 1 tick)
         }
         break;
 
@@ -370,7 +416,12 @@ async function executePaidAction(
 
     case "file_complaint":
       if ("target" in action) {
-        outcome = `Filed HR complaint against ${action.target}`;
+        // Buff: filer also gets +5 prestige for "managerial diligence." Without
+        // this the action only restricted the target's retaliation and gave
+        // the filer nothing — strictly worse than free take_credit.
+        prestigeChange = 5;
+        outcome = `Filed HR complaint against ${action.target}; you receive a "diligence" prestige bonus`;
+        await db.updateAgentPrestige(agent.id, prestigeChange);
         const target = await db.getAgent(action.target);
         if (target) {
           await db.updateAgentStatusEffects(action.target, [
@@ -418,18 +469,36 @@ async function executePaidAction(
         const shortAction = last ? `${last.action_type} (t${last.tick})` : "no recent action";
         lines.push(`${t.name}: ${shortAction}`);
       }
-      outcome = `Competitive intel — top 3 last moves: ${lines.join("; ")}`;
+      // New: also spread rumors that nick the leader. Pure-info actions were
+      // never picked in the first run; an immediate -3 to the top non-self
+      // rival makes this a real competitive move.
+      const topRival = top3[0];
+      if (topRival) {
+        await db.updateAgentPrestige(topRival.id, -3);
+      }
+      outcome = `Competitive intel — top 3 last moves: ${lines.join("; ")}.${topRival ? ` Rumor-spreading nicked ${topRival.name} for -3 prestige.` : ""}`;
       break;
     }
 
     case "sabotage_plan":
       if ("target" in action) {
+        // Buff: stronger prestige hit (-3 → -10) plus a "marked" debuff that
+        // makes any take_credit against the target auto-succeed for 2 ticks.
+        // Turns sabotage_plan into a setup-then-execute play instead of an
+        // overpriced info dump.
         const recent = await db.getRecentActionLogsForAgent(action.target, 3);
         const summary = recent.length > 0
           ? recent.map((r) => `t${r.tick}:${r.action_type}`).join(", ")
           : "no recent activity";
-        await db.updateAgentPrestige(action.target, -3);
-        outcome = `Sabotage dossier on ${action.target} (-3 prestige to target). Recent moves: ${summary}`;
+        await db.updateAgentPrestige(action.target, -10);
+        const target = await db.getAgent(action.target);
+        if (target) {
+          await db.updateAgentStatusEffects(action.target, [
+            ...target.statusEffects.filter((e) => e.type !== "marked"),
+            { type: "marked", expiresAtTick: tick + 2, source: agent.id },
+          ]);
+        }
+        outcome = `Sabotage dossier on ${action.target}: -10 prestige + marked for 2 cycles (next take_credit against them auto-succeeds). Recent moves: ${summary}`;
       }
       break;
 
@@ -439,7 +508,15 @@ async function executePaidAction(
         const summary = recent.length > 0
           ? recent.map((r) => `t${r.tick}:${r.action_type}`).join(", ")
           : "no recent activity";
-        outcome = `Recovered ${action.target}'s recent inbox traces: ${summary}`;
+        // Buff: 30% chance to expose & nuke the target's pending alliance.
+        // Adds an actionable wrinkle on top of the info reveal.
+        const target = await db.getAgent(action.target);
+        let expose = "";
+        if (target && target.pendingAlliance && Math.random() < 0.3) {
+          await db.updateAgentPendingAlliance(action.target, null);
+          expose = ` Bonus find: forwarded a draft alliance with ${target.pendingAlliance} that quietly evaporated.`;
+        }
+        outcome = `Recovered ${action.target}'s recent inbox traces: ${summary}.${expose}`;
       }
       break;
 
@@ -447,10 +524,17 @@ async function executePaidAction(
       if ("target" in action) {
         const target = await db.getAgent(action.target);
         if (target) {
+          // Buff: always apply meeting_blocked (1 tick) on top of clearing
+          // has_deliverable + pending_alliance. Without this, calendar_conflict
+          // did literally nothing if the target had neither — and most agents
+          // don't.
           const cleaned = target.statusEffects.filter((e) => e.type !== "has_deliverable");
-          await db.updateAgentStatusEffects(action.target, cleaned);
+          await db.updateAgentStatusEffects(action.target, [
+            ...cleaned,
+            { type: "meeting_blocked", expiresAtTick: tick + 1, source: agent.id },
+          ]);
           await db.updateAgentPendingAlliance(action.target, null);
-          outcome = `Triple-booked ${action.target}'s calendar. Their deliverable prep + pending alliance are toast.`;
+          outcome = `Triple-booked ${action.target}'s calendar. Deliverable prep + pending alliance gone, and they're meeting-blocked for 1 cycle.`;
         }
       }
       break;
@@ -466,7 +550,12 @@ async function executePaidAction(
         .filter((a) => a.allies.length > 0)
         .map((a) => `${a.id}↔${a.allies.join(",")}`)
         .join(" | ");
-      outcome = `Insider info — wealth ranking top 3: ${top}. Active alliances: ${allies || "none"}.`;
+      // Buff: tangible reward — +5 prestige for "positioning yourself well
+      // with insider info." Otherwise this $25 action returned data the LLM
+      // already had access to.
+      prestigeChange = 5;
+      await db.updateAgentPrestige(agent.id, prestigeChange);
+      outcome = `Insider info — wealth ranking top 3: ${top}. Active alliances: ${allies || "none"}. Positional advantage: +5 prestige.`;
       break;
     }
 
@@ -712,8 +801,18 @@ async function handleAllianceBreak(deps: TickDeps, agent: Agent, formerAllyId: s
 
   await db.updateAgentAllies(agent.id, agent.allies.filter((id) => id !== formerAllyId));
   await db.updateAgentAllies(formerAllyId, formerAlly.allies.filter((id) => id !== agent.id));
-  await db.updateAgentPrestige(agent.id, -30);
-  await db.updateAgentPrestige(formerAllyId, 15);
+
+  // Reworked: was self -30 / ex-ally +15 (pure loss for the betrayer; never
+  // chosen). Now self -15, ex-ally gets `under_investigation` against you for
+  // 1 tick — they can't immediately retaliate. Calculated nuke instead of
+  // pointless self-harm.
+  await db.updateAgentPrestige(agent.id, -15);
+  await db.updateAgentStatusEffects(formerAllyId, [
+    ...formerAlly.statusEffects.filter((e) =>
+      !(e.type === "under_investigation" && e.source === agent.id)
+    ),
+    { type: "under_investigation", expiresAtTick: tick + 1, source: agent.id },
+  ]);
 
   await emit({
     id: uuid(),
@@ -722,8 +821,8 @@ async function handleAllianceBreak(deps: TickDeps, agent: Agent, formerAllyId: s
     type: "alliance_broken",
     agentId: agent.id,
     targetId: formerAllyId,
-    description: `${agent.name} BETRAYED ${formerAlly.name}!`,
-    prestigeChange: -30,
+    description: `${agent.name} BETRAYED ${formerAlly.name}! ${formerAlly.name} is locked out of retaliation for 1 cycle.`,
+    prestigeChange: -15,
     reasoning,
   });
 

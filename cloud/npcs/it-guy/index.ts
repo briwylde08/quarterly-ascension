@@ -25,7 +25,7 @@ type Endpoint = { price: number; needsTarget: boolean; payload: (target?: string
 
 const ENDPOINTS: Record<string, Endpoint> = {
   "/fix-laptop": {
-    price: 18,
+    price: 12,
     needsTarget: true,
     payload: (target) => ({
       action: "laptop_fixed",

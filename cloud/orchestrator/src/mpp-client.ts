@@ -233,7 +233,7 @@ export function buildServiceUrls(npcBase: string): Record<string, { url: string;
     strategy_report:      { url: npc("consultant",           "/strategy-report"),      name: "The Consultant",       price: 35 },
     competitive_intel:    { url: npc("consultant",           "/competitive-intel"),    name: "The Consultant",       price: 25 },
     sabotage_plan:        { url: npc("consultant",           "/sabotage-plan"),        name: "The Consultant",       price: 40 },
-    fix_laptop:           { url: npc("it-guy",               "/fix-laptop"),           name: "IT Guy",               price: 18 },
+    fix_laptop:           { url: npc("it-guy",               "/fix-laptop"),           name: "IT Guy",               price: 12 },
     recover_emails:       { url: npc("it-guy",               "/recover-emails"),       name: "IT Guy",               price: 20 },
     calendar_conflict:    { url: npc("it-guy",               "/calendar-conflict"),    name: "IT Guy",               price: 15 },
     book_ceo_time:        { url: npc("exec-assistant",       "/book-ceo-time"),        name: "Executive Assistant",  price: 50 },
@@ -243,7 +243,7 @@ export function buildServiceUrls(npcBase: string): Record<string, { url: string;
     poison_meeting:       { url: npc("caterer",              "/poison-meeting"),       name: "The Caterer",          price: 35 },
     birthday_cake:        { url: npc("caterer",              "/birthday-cake"),        name: "The Caterer",          price: 12 },
     book_motivation:      { url: npc("motivational-speaker", "/book-session"),         name: "Motivational Speaker", price: 30 },
-    send_motivation:      { url: npc("motivational-speaker", "/send-to-rival"),        name: "Motivational Speaker", price: 35 },
+    send_motivation:      { url: npc("motivational-speaker", "/send-to-rival"),        name: "Motivational Speaker", price: 25 },
 
     // Phase 5 — earning paths.
     whistleblower_bounty: { url: npc("hr-dept",              "/whistleblower"),        name: "HR Department",        price: 10 },

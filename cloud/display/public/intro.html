@@ -164,14 +164,13 @@
       box-shadow: 0 4px 14px rgba(28,58,100,0.10);
       border-color: var(--border-2);
     }
-    .agent-tile.claimed {
-      opacity: 0.6;
-      cursor: not-allowed;
+    /* Claimed tiles stay clickable (so you can view + optionally release).
+       Visual cue is the "Adopted" badge + a lightly desaturated photo.
+       Tile-wide opacity is avoided so the badge can stay vibrant. */
+    .agent-tile.claimed .agent-photo {
+      filter: grayscale(0.35) brightness(0.92);
     }
-    .agent-tile.claimed:hover {
-      transform: none;
-      box-shadow: var(--shadow);
-    }
+    .agent-tile.claimed .agent-name { color: var(--text-muted); }
     .agent-name {
       font-size: 16px;
       font-weight: 700;
@@ -230,14 +229,16 @@
     .claimed-badge {
       position: absolute;
       top: 10px; right: 10px;
-      background: #fadbd8;
-      color: var(--danger);
+      background: var(--danger);
+      color: #ffffff;
       font-size: 10px;
       font-weight: 700;
-      letter-spacing: 0.6px;
+      letter-spacing: 0.8px;
       text-transform: uppercase;
-      padding: 3px 8px;
+      padding: 4px 10px;
       border-radius: 2px;
+      box-shadow: 0 1px 4px rgba(28, 58, 100, 0.18);
+      z-index: 10; /* sit above the photo */
     }
 
     .loader {
@@ -331,9 +332,11 @@
       for (const a of data.agents) {
         const claimed = a.claimed;
         const traits = a.traits || { aggression: 50, greed: 50, caution: 50, loyalty: 50 };
-        const tile = document.createElement(claimed ? 'div' : 'a');
+        // Always link through to the agent profile — claimed tiles are still
+        // viewable (and can be released between games via the profile page).
+        const tile = document.createElement('a');
         tile.className = 'agent-tile' + (claimed ? ' claimed' : '');
-        if (!claimed) tile.href = `/agent.html?id=${encodeURIComponent(a.id)}`;
+        tile.href = `/agent.html?id=${encodeURIComponent(a.id)}`;
         const photoUrl = `/images/${encodeURIComponent(a.name)}.png`;
         tile.innerHTML = `
           ${claimed ? `<div class="claimed-badge">Adopted</div>` : ''}
