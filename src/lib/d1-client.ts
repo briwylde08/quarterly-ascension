@@ -51,12 +51,17 @@ export class D1Error extends Error {
 }
 
 function getEnv(): { token: string; account: string; dbId: string } {
-  const token = process.env.CLOUDFLARE_API_TOKEN;
+  // Read D1_API_TOKEN (preferred) and fall back to CLOUDFLARE_API_TOKEN for
+  // back-compat. They were the same name historically, but wrangler v4 also
+  // auto-loads CLOUDFLARE_API_TOKEN from .env at the project root and that
+  // hijacks deploys when the D1 token lacks `pages:write` scope. Renaming
+  // ours sidesteps the collision.
+  const token = process.env.D1_API_TOKEN || process.env.CLOUDFLARE_API_TOKEN;
   const account = process.env.CF_ACCOUNT_ID;
   const dbId = process.env.CF_D1_DATABASE_ID;
   if (!token || !account || !dbId) {
     throw new Error(
-      "D1 client missing env: CLOUDFLARE_API_TOKEN, CF_ACCOUNT_ID, CF_D1_DATABASE_ID must all be set"
+      "D1 client missing env: D1_API_TOKEN, CF_ACCOUNT_ID, CF_D1_DATABASE_ID must all be set"
     );
   }
   return { token, account, dbId };

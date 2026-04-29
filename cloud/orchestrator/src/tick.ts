@@ -16,7 +16,7 @@ import type { Action, Agent, GameEvent, StatusEffect } from "./types.js";
 import type { Db } from "./db.js";
 import type { Stellar } from "./stellar.js";
 import { MppClient, buildServiceUrls, isPaidAction } from "./mpp-client.js";
-import { getAgentDecision, type LlmDeps } from "./llm.js";
+import { getAgentDecision, type LlmDeps, type TickCtx } from "./llm.js";
 import { processRandomEvents, type RandomEventsState } from "./random-events.js";
 
 export interface RewardSources {
@@ -85,9 +85,22 @@ export async function processTick(deps: TickDeps): Promise<void> {
     }
   }
 
+  // Pre-fetch tick-wide context: full agent roster, recent leaked emails, and
+  // every agent's DLBR balance fetched in parallel. Random events (audit) and
+  // every getAgentDecision call reuse these instead of refetching, which cuts
+  // ~30 subrequests off a typical tick and keeps us under the per-invocation
+  // cap on heavy ticks (paid actions, scheduled emails, etc.).
+  const refreshedAgents = await db.getAllAgents();
+  const leakedEmails = await db.getRecentLeakedEmails(5);
+  const balanceEntries = await Promise.all(
+    refreshedAgents.map(async (a) => [a.id, await stellar.getAssetBalance(a.publicKey)] as [string, number])
+  );
+  const balances = new Map(balanceEntries);
+  const tickCtx: TickCtx = { allAgents: refreshedAgents, leakedEmails, balances };
+
   // Phase 2: random events. processRandomEvents now returns events + signals
   // (e.g. skipDecisions when All-Hands fires).
-  const eventsResult = await processRandomEvents({ db, stellar, rewards }, randomEventsState, tick);
+  const eventsResult = await processRandomEvents({ db, stellar, rewards, balances }, randomEventsState, tick);
   for (const event of eventsResult.events) await emit(event);
 
   // Phase 3: if All-Hands fired, every agent's action this tick is replaced
@@ -125,7 +138,7 @@ export async function processTick(deps: TickDeps): Promise<void> {
       continue;
     }
 
-    const { action, reasoning } = await getAgentDecision(llm, agent, tick);
+    const { action, reasoning } = await getAgentDecision(llm, agent, tick, tickCtx);
     decisions.push({ agent, action, reasoning });
     console.log(`${agent.name}: ${action.type}${("target" in action) ? ` → ${action.target}` : ""}`);
   }
@@ -493,8 +506,11 @@ async function executePaidAction(
 
     case "strategy_report": {
       // The New Initiative midgame event halves future strategy report rewards.
+      // Bumped from 25→35 (and 12→18 post-NI) so the LLM picks it more often
+      // — in the previous run nobody ever held has_deliverable when New
+      // Initiative fired, which made the midgame pivot toothless.
       const newInit = (await db.getGameStateValue("new_initiative_active")) === "true";
-      prestigeChange = newInit ? 12 : 25;
+      prestigeChange = newInit ? 18 : 35;
       outcome = `Received consultant report${newInit ? " (post-pivot, prestige halved)" : ""}: "${result.data?.deliverable?.title || "Strategic Document"}"`;
       await db.updateAgentPrestige(agent.id, prestigeChange);
       const a = (await db.getAgent(agent.id))!;

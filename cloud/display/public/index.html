@@ -321,6 +321,23 @@
     .badge.under_review { color: var(--warning); background: var(--warning-bg); }
     .badge.technical_difficulties { color: var(--danger); background: var(--danger-bg); }
     .badge.has_deliverable { color: var(--success); background: var(--success-bg); }
+    .badge.winner {
+      color: #1c3a64;
+      background: #fef5e7;
+      border-color: #f1c40f;
+      font-weight: 700;
+    }
+    .manager-row.winner {
+      background: linear-gradient(90deg, #fef5e7 0%, #ffffff 60%);
+      border-left: 3px solid #f1c40f;
+    }
+    .manager-row.winner .rank {
+      color: #f1c40f;
+    }
+    .manager-row.winner .name {
+      color: #1c3a64;
+      font-weight: 700;
+    }
 
     .manager-stats {
       text-align: right;
@@ -539,6 +556,113 @@
     }
     .halted-overlay .resume-cta:hover { background: #f8d35a; }
 
+    /* === End-of-game winner overlay ================================ */
+    .ended-overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(28, 58, 100, 0.92);
+      color: #ffffff;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 1100;
+      pointer-events: none;
+    }
+    .ended-overlay > * { pointer-events: auto; }
+    .ended-overlay.hidden { display: none; }
+    .ended-card {
+      background: #ffffff;
+      color: var(--text);
+      width: min(440px, 92vw);
+      box-shadow: 0 20px 60px rgba(0, 0, 0, 0.45);
+      border-top: 4px solid #f1c40f;
+      padding: 28px 28px 24px;
+      text-align: center;
+      animation: endedRise 0.6s cubic-bezier(0.2, 0.9, 0.3, 1.2);
+    }
+    @keyframes endedRise {
+      0%   { transform: translateY(40px) scale(0.92); opacity: 0; }
+      100% { transform: translateY(0) scale(1); opacity: 1; }
+    }
+    .ended-stamp {
+      display: inline-block;
+      border: 3px solid #f1c40f;
+      color: #1c3a64;
+      font-size: 14px;
+      font-weight: 800;
+      letter-spacing: 4px;
+      padding: 6px 18px;
+      transform: rotate(-3deg);
+      text-transform: uppercase;
+      background: #fef5e7;
+      margin-bottom: 22px;
+    }
+    .ended-portrait {
+      width: 120px;
+      height: 120px;
+      margin: 0 auto 16px;
+      border: 2px solid #f1c40f;
+      box-shadow: 0 6px 20px rgba(28, 58, 100, 0.18);
+      overflow: hidden;
+      background: #ecf0f1;
+    }
+    .ended-portrait img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      object-position: center 20%;
+      display: block;
+    }
+    .ended-headline {
+      font-size: 22px;
+      font-weight: 700;
+      color: var(--navy);
+      letter-spacing: -0.2px;
+      margin-bottom: 6px;
+      line-height: 1.2;
+    }
+    .ended-sub {
+      font-size: 14px;
+      color: var(--text-muted);
+      margin-bottom: 14px;
+      line-height: 1.5;
+    }
+    .ended-stats {
+      display: flex;
+      gap: 18px;
+      justify-content: center;
+      font-size: 12px;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      padding: 12px 0;
+      border-top: 1px solid var(--border);
+      border-bottom: 1px solid var(--border);
+      margin: 0 0 18px;
+    }
+    .ended-stats b {
+      display: block;
+      color: var(--navy);
+      font-size: 22px;
+      font-weight: 700;
+      letter-spacing: 0;
+      font-variant-numeric: tabular-nums;
+      text-transform: none;
+    }
+    .ended-dismiss {
+      background: var(--navy);
+      color: #ffffff;
+      border: 0;
+      padding: 11px 24px;
+      font-family: inherit;
+      font-size: 13px;
+      font-weight: 600;
+      letter-spacing: 0.6px;
+      text-transform: uppercase;
+      cursor: pointer;
+    }
+    .ended-dismiss:hover { background: var(--navy-2); }
+
     /* === Empty state ================================================ */
     .empty-state {
       padding: 32px;
@@ -553,6 +677,22 @@
     <div class="stamp">Cycle Paused</div>
     <div class="sub">Strategic Review In Progress · State Preserved</div>
     <button id="resume-cta" class="resume-cta">▶ Resume Cycle</button>
+  </div>
+
+  <div id="ended-overlay" class="ended-overlay hidden">
+    <div class="ended-card">
+      <div class="ended-stamp">🏆 Promoted</div>
+      <div class="ended-portrait" id="ended-portrait" hidden>
+        <img id="ended-portrait-img" alt="">
+      </div>
+      <div class="ended-headline" id="ended-headline">Congratulations!</div>
+      <div class="ended-sub" id="ended-sub">You've been promoted to VP of Q1 Operations.</div>
+      <div class="ended-stats">
+        <div><b id="ended-prestige">—</b>Final Prestige</div>
+        <div><b id="ended-rank">#1</b>Closing Rank</div>
+      </div>
+      <button id="ended-dismiss" class="ended-dismiss">View Final Standings</button>
+    </div>
   </div>
 
   <div class="intro-bar">
@@ -1017,15 +1157,21 @@
 
     function managerRowHTML(a, i) {
       const rank = i + 1;
+      const isWinner = rank === 1 && currentStatus === 'ended';
       const traits = personaTraits(a.id);
       const traitText = traits ? ('A' + traits.aggression + ' · G' + traits.greed + ' · C' + traits.caution + ' · L' + traits.loyalty) : '';
-      const badges = (a.statusEffects || []).map(e =>
+      const effectBadges = (a.statusEffects || []).map(e =>
         '<span class="badge ' + e.type + '">' + e.type.replace(/_/g, ' ') + '</span>'
       ).join('');
-      return '<div class="manager-row rank-' + rank + '" data-agent-id="' + a.id + '">'
+      const winnerBadge = isWinner
+        ? '<span class="badge winner">👑 Promoted to VP</span>'
+        : '';
+      const badges = winnerBadge + effectBadges;
+      const namePrefix = isWinner ? '👑 ' : '';
+      return '<div class="manager-row rank-' + rank + (isWinner ? ' winner' : '') + '" data-agent-id="' + a.id + '">'
         + '<div class="rank">' + rank + '</div>'
         + '<div class="manager-identity">'
-        +   '<div class="name">' + escape(a.name) + '</div>'
+        +   '<div class="name">' + namePrefix + escape(a.name) + '</div>'
         +   '<div class="title">' + escape(a.title) + '</div>'
         +   (traitText ? '<div class="traits">' + traitText + '</div>' : '')
         +   (badges ? '<div class="badges">' + badges + '</div>' : '')
@@ -1165,6 +1311,72 @@
       if (s === 'setup') return 'Initializing';
       return s;
     }
+
+    // ============================================================
+    // End-of-game winner overlay. Triggered when status === "ended".
+    // Dismissal stores `endedDismissedAt=<tick>` in sessionStorage so a
+    // brand-new game (different end-tick) re-shows the celebration; the
+    // same tab won't re-show this game's overlay after dismissal.
+    // ============================================================
+    function showEndedOverlay(data) {
+      const overlay = document.getElementById('ended-overlay');
+      if (!overlay || data.status !== 'ended') {
+        overlay && overlay.classList.add('hidden');
+        return;
+      }
+      const dismissedAt = sessionStorage.getItem('endedDismissedAt');
+      if (dismissedAt && parseInt(dismissedAt, 10) === data.tick) {
+        overlay.classList.add('hidden');
+        return;
+      }
+      const winner = (data.agents && data.agents[0]) || null;
+      if (!winner) return;
+
+      const firstName = winner.name.split(' ')[0];
+      document.getElementById('ended-headline').textContent =
+        `Congratulations, ${winner.name}!`;
+      document.getElementById('ended-sub').textContent =
+        `${firstName} has been promoted to Vice President of Q1 Operations. The break-room cake is on its way.`;
+      document.getElementById('ended-prestige').textContent = String(winner.prestige);
+      const rank = (data.agents.findIndex((a) => a.id === winner.id) + 1) || 1;
+      document.getElementById('ended-rank').textContent = `#${rank}`;
+
+      const portrait = document.getElementById('ended-portrait');
+      const img = document.getElementById('ended-portrait-img');
+      img.onerror = () => { portrait.hidden = true; };
+      img.onload = () => { portrait.hidden = false; };
+      img.src = `/images/${encodeURIComponent(winner.name)}.png`;
+      img.alt = winner.name;
+
+      overlay.classList.remove('hidden');
+    }
+    document.getElementById('ended-dismiss')?.addEventListener('click', () => {
+      const overlay = document.getElementById('ended-overlay');
+      overlay.classList.add('hidden');
+      // Remember the tick we dismissed at, so this run doesn't re-pop.
+      try {
+        const lastTick = parseInt(document.getElementById('cycle')?.textContent || '0', 10);
+        sessionStorage.setItem('endedDismissedAt', String(lastTick));
+      } catch {}
+    });
+
+    // Hook into the existing bootstrap + refresh path so the overlay
+    // appears whether the page loads after the game ended OR the game
+    // ends while the page is open.
+    const _origUpdateFullState_v2 = updateFullState;
+    updateFullState = function (data) {
+      _origUpdateFullState_v2(data);
+      showEndedOverlay(data);
+    };
+    const _origRefresh_v2 = refreshFromApi;
+    refreshFromApi = async function () {
+      await _origRefresh_v2();
+      try {
+        const r = await fetch(ORCHESTRATOR_BASE + '/api/state');
+        const d = await r.json();
+        showEndedOverlay(d);
+      } catch {}
+    };
 
     // ============================================================
     // Pause / resume button (temporary). Bearer secret is asked once

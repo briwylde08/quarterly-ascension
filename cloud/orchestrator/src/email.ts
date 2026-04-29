@@ -8,7 +8,7 @@
 import type { Agent, GameEvent } from "./types.js";
 import { getPersona } from "./personas.js";
 
-const RESEND_FROM = "MegaCorp HR <onboarding@resend.dev>";
+const RESEND_FROM = "MegaCorp HR <hr@megacorp.lol>";
 const RESEND_REPLY_TO: string | null = null;
 
 interface SendEmailInput {
@@ -138,6 +138,165 @@ ${SHELL_FOOT}`;
   };
 }
 
+// --- HR-flavored commentary bank, keyed by action type --------------------
+// Each entry is a pool of 2 dry-corporate one-liners that get injected as a
+// sub-bullet under each activity. Picked at random per call so a manager who
+// did the same action 3 times doesn't get 3 identical commentaries.
+const HR_COMMENTARY: Record<string, string[]> = {
+  work: [
+    "Visible. Q3 alignment retained.",
+    "Hands-on contribution detected — rare these days.",
+  ],
+  rest: [
+    "Reportedly 'recharging.' We allow it.",
+    "PTO-adjacent. Not technically taken.",
+  ],
+  schmooze: [
+    "Strategic relationship-building. The cafeteria has cameras.",
+    "Coffee-grade networking. Confluence pending.",
+  ],
+  buy_coffee: [
+    "Routine caffeine procurement. Logged.",
+    "Standard-issue corporate fuel.",
+  ],
+  buy_fancy_coffee: [
+    "Pour-over acquired. The cup itself is trying to network.",
+    "$15 espresso drink with self-reported productivity gain.",
+  ],
+  file_complaint: [
+    "Formal HR filing. Adjudication pending.",
+    "Slack-screenshot-grade complaint registered.",
+  ],
+  sensitivity_training: [
+    "Three-hour workshop enrolled. No break.",
+    "Mandatory growth opportunity assigned.",
+  ],
+  check_hr_status: [
+    "Defensive paperwork audit complete.",
+    "Self-PII inquiry. Comprehensive.",
+  ],
+  strategy_report: [
+    "Deliverable acquired. Pull-through energy.",
+    "Consultant report filed in the official binder.",
+  ],
+  competitive_intel: [
+    "Reconnaissance executed. Information asymmetry restored.",
+    "Skimmed the others' decks. They are not impressive.",
+  ],
+  sabotage_plan: [
+    "Dossier compiled. Filed in the desk drawer for later use.",
+    "Opposition research paid in full.",
+  ],
+  fix_laptop: [
+    "Target's laptop receives 'maintenance.' Downtime: 1 cycle.",
+    "IT escalation initiated. Mysterious BSODs ensue.",
+  ],
+  recover_emails: [
+    "Forensic recovery successful. The receipts are something.",
+    "Old inbox traces salvaged from the void.",
+  ],
+  calendar_conflict: [
+    "Calendar Tetris executed. Target's morning now overbooked.",
+    "Three meetings, one slot. Outlook will not be sorting it out.",
+  ],
+  leak_org_chart: [
+    "Insider info procured. The wealth ranking is illuminating.",
+    "Org chart with un-redacted compensation data acquired.",
+  ],
+  schedule_conflict: [
+    "Their CEO meeting reflows. The invite has 'vanished.'",
+    "Calendar dispatch successful. Confusion engineered.",
+  ],
+  team_lunch: [
+    "Catered lunch hosted. Goodwill modestly inflated.",
+    "Free food: the reliable prestige multiplier.",
+  ],
+  poison_meeting: [
+    "The shrimp was 'off.' Coincidence, surely.",
+    "Catering compromised. Their meeting concluded earlier than planned.",
+  ],
+  birthday_cake: [
+    "Cake brought. Reputation rehabilitation, ~$12 retail.",
+    "Sheet cake from Costco. No one suspects strategic intent.",
+  ],
+  book_motivation: [
+    "Inspirational session attended. You are now caffeinated by mantras.",
+    "Motivational speaker booked. You came back with bullet points.",
+  ],
+  send_motivation: [
+    "Target sent to seminar. They will not return inspired.",
+    "Mandatory four-hour mantra immersion assigned.",
+  ],
+  accept_alliance: [
+    "Alliance formalized. Strategic synergy bloc consolidated.",
+    "Strategic partnership recognized in writing.",
+  ],
+  reject_alliance: [
+    "Alliance offer declined. Visibility hit registered.",
+    "RSVP'd 'no thanks' to the partnership invite.",
+  ],
+  break_alliance: [
+    "Alliance dissolved. Cold-shoulder dynamics begin.",
+    "Strategic synergy partnership formally rescinded.",
+  ],
+  mentorship: [
+    "Mentorship cred logged. Pay-It-Forward stipend disbursed.",
+    "Senior-to-junior visibility play. Stipend included.",
+  ],
+  coffee_chat: [
+    "Mutual visibility achieved. Low-stakes networking.",
+    "Casual catch-up. Neither party committed to anything.",
+  ],
+};
+
+function pickFlavor<T>(list: T[]): T {
+  return list[Math.floor(Math.random() * list.length)];
+}
+
+function hrCommentary(actionType: string, outcome: string): string {
+  // Outcome-dependent action types — pick from success vs failure pool.
+  if (actionType === "take_credit") {
+    return outcome.toLowerCase().startsWith("successfully")
+      ? pickFlavor([
+          "Re-attribution successful. Confluence updated retroactively.",
+          "Credit transfer cleared. The Slack thread is mysteriously empty.",
+        ])
+      : pickFlavor([
+          "Credit-transfer attempt rejected. Receipts and timestamps invoked.",
+          "Counterparty produced a Notion doc. Audit was humiliating.",
+        ]);
+  }
+  if (actionType === "book_ceo_time") {
+    if (outcome.toLowerCase().includes("blocked")) {
+      return "Calendar collision. Meeting cancelled before it could start.";
+    }
+    return outcome.toLowerCase().includes("successful")
+      ? pickFlavor([
+          "CEO visibly nodded. Q-rating up.",
+          "Right slide at the right time. Executive sponsorship assumed.",
+        ])
+      : pickFlavor([
+          "CEO meeting concluded in awkward silence. Empty-handed.",
+          "30 minutes of small talk and no deck. Painful.",
+        ]);
+  }
+  if (actionType === "whistleblower_bounty") {
+    return outcome.toLowerCase().includes("paid") || outcome.toLowerCase().includes("flagged")
+      ? pickFlavor([
+          "Whistleblower bounty disbursed. Receipts checked.",
+          "Substantiated report. HR very pleased.",
+        ])
+      : pickFlavor([
+          "Whistleblower report dismissed. HR very disappointed.",
+          "False report filed. Sympathy bonus issued to target.",
+        ]);
+  }
+
+  const pool = HR_COMMENTARY[actionType];
+  if (!pool || pool.length === 0) return "";
+  return pickFlavor(pool);
+}
+
 // --- Progress summary (ticks 12, 24, 36) -----------------------------------
 
 export interface ProgressSummaryInput {
@@ -178,14 +337,23 @@ export function progressSummaryEmail(opts: ProgressSummaryInput): SendEmailInput
     highlights.push(`${sparkle} Currently Inspired — gaining +5/cycle automatically`);
   }
 
-  const activityLines = actions.length === 0
-    ? ["• No notable activity this period."]
+  // Each activity now has a main fact-line and an HR-commentary sub-line.
+  // The commentary picks from action-type-specific flavor pools so a manager
+  // who did `work` three times in a period gets three different observations.
+  const activityItems = actions.length === 0
+    ? [{ main: "No notable activity this period.", commentary: "" }]
     : actions.slice(0, 8).map((a) => {
         const sign = a.prestige_change !== null && a.prestige_change !== 0
           ? ` (${a.prestige_change > 0 ? "+" : ""}${a.prestige_change} prestige)`
           : "";
-        return `• ${a.action_type}${sign} — ${a.outcome.slice(0, 120)}`;
+        return {
+          main: `${a.action_type}${sign} — ${a.outcome.slice(0, 140)}`,
+          commentary: hrCommentary(a.action_type, a.outcome),
+        };
       });
+  const activityLines = activityItems.map((it) =>
+    it.commentary ? `• ${it.main}\n   ↳ ${it.commentary}` : `• ${it.main}`
+  );
 
   const quoteLines = notableQuotes.length > 0
     ? notableQuotes.slice(0, 3).map((q) => `"${q}"`)
@@ -221,8 +389,12 @@ export function progressSummaryEmail(opts: ProgressSummaryInput): SendEmailInput
   <div style="font-size:12px;font-family:monospace;background:#f4f6fa;padding:8px 10px;margin:10px 0 18px;">${escapeHtml(statusLine(agent, balance, rank, total))}</div>
 
   <div style="background:#dce9f5;color:#1c3a64;padding:8px 14px;font-size:12px;text-transform:uppercase;letter-spacing:1px;font-weight:600;margin-bottom:0;border:1px solid #c8d6e5;border-bottom:0;">This period's activities</div>
-  <ul style="margin:0;padding:14px 18px 14px 32px;border:1px solid #c8d6e5;font-size:13px;line-height:1.7;">
-    ${activityLines.map((line) => `<li style="margin-bottom:4px;">${escapeHtml(line.replace(/^• /, ""))}</li>`).join("")}
+  <ul style="margin:0;padding:14px 18px 14px 32px;border:1px solid #c8d6e5;font-size:13px;line-height:1.6;">
+    ${activityItems.map((it) => `
+      <li style="margin-bottom:10px;">
+        <div>${escapeHtml(it.main)}</div>
+        ${it.commentary ? `<div style="font-style:italic;color:#7a8b99;font-size:11px;margin-top:3px;letter-spacing:0.2px;">↳ ${escapeHtml(it.commentary)}</div>` : ""}
+      </li>`).join("")}
   </ul>
 
   <div style="background:#dce9f5;color:#1c3a64;padding:8px 14px;font-size:12px;text-transform:uppercase;letter-spacing:1px;font-weight:600;margin:18px 0 0;border:1px solid #c8d6e5;border-bottom:0;">Highlights</div>

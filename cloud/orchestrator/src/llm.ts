@@ -31,7 +31,7 @@ const ALL_ACTIONS = [
   { type: "file_complaint", description: "File HR complaint (target gets Under Investigation; can't retaliate against you for 1 tick)", cost: 22, requiresTarget: true },
   { type: "sensitivity_training", description: "Send rival to sensitivity training (target -20 prestige + Problematic for 4 ticks: -3 prestige/tick decay)", cost: 30, requiresTarget: true },
   { type: "check_hr_status", description: "See who has filed complaints against you", cost: 5 },
-  { type: "strategy_report", description: "Get consultant report (+25 prestige, gives Deliverable; halved after a New Initiative pivot)", cost: 35 },
+  { type: "strategy_report", description: "Get consultant report (+35 prestige, gives Deliverable for a future +40 CEO meeting; halved to +18 after a New Initiative pivot)", cost: 35 },
   { type: "competitive_intel", description: "Learn top 3 agents' last action", cost: 25 },
   { type: "sabotage_plan", description: "Get dirt on a target (reveals their last 3 actions; -3 prestige to target)", cost: 40, requiresTarget: true },
   { type: "fix_laptop", description: "Sabotage target's laptop (they're forced to rest next tick)", cost: 18, requiresTarget: true },
@@ -51,6 +51,15 @@ const ALL_ACTIONS = [
   { type: "mentorship", description: "Mentor target ($15 cost; non-self target). Self +5 prestige + $30 stipend; target +10 prestige. Wholesome alternative to take_credit.", cost: 15, requiresTarget: true },
   { type: "coffee_chat", description: "Casual coffee with target ($5; non-self). Both gain +3 prestige. No alliance proposed. Low-stakes networking.", cost: 5, requiresTarget: true },
 ];
+
+export interface TickCtx {
+  /** All agents, freshly read at the start of the tick. */
+  allAgents: Agent[];
+  /** Recent leaked emails (max 5). */
+  leakedEmails: Array<{ fromAgent: string; toAgent: string; subject: string; body: string }>;
+  /** Pre-fetched DLBR balances by agent id, computed in parallel at tick start. */
+  balances: Map<string, number>;
+}
 
 interface DecisionContext {
   agent: Agent;
@@ -107,6 +116,23 @@ function buildContextPrompt(ctx: DecisionContext): string {
       }).join("\n")}\n`
     : "";
 
+  // Anti-pattern nudge: reasoning models lock onto a single action once
+  // they've used it a few times. If an action shows up >=3x in the last 5,
+  // drop a one-liner suggesting (not forcing) variety.
+  const recentSlice = recentActions.slice(-5);
+  const actionCounts = new Map<string, number>();
+  for (const a of recentSlice) {
+    actionCounts.set(a.action_type, (actionCounts.get(a.action_type) ?? 0) + 1);
+  }
+  let lockInNote = "";
+  for (const [actionType, count] of actionCounts) {
+    if (count >= 3) {
+      lockInNote =
+        `\nSTRATEGY NOTE: You've chosen '${actionType}' ${count} of your last ${recentSlice.length} cycles. That's a strong pattern. Your rivals likely see it too — consider whether your default move is still the optimal one this cycle, or whether varying your approach would catch them off-guard. (Sticking with it is fine if it's still right; just don't pick it on autopilot.)\n`;
+      break;
+    }
+  }
+
   return `
 CURRENT SITUATION (Tick ${currentTick}):
 
@@ -122,7 +148,7 @@ ${otherAgents.map((a) => `- id: ${a.id} — ${a.name} (${a.title}): ${a.prestige
 
 YOUR RECENT ACTIONS:
 ${recentActions.slice(-5).map((a) => `- Tick ${a.tick}: ${a.action_type} → ${a.outcome}`).join("\n") || "None yet"}
-${leakSection}
+${lockInNote}${leakSection}
 AVAILABLE ACTIONS:
 ${availableActions.map((a) => `- ${a.type}${a.cost > 0 ? ` ($${a.cost})` : " (free)"}${a.requiresTarget ? " [requires target]" : ""}: ${a.description}`).join("\n")}
 
@@ -297,17 +323,21 @@ function validateAction(action: Action, agent: Agent, balance: number, allAgents
 export async function getAgentDecision(
   deps: LlmDeps,
   agent: Agent,
-  currentTick: number
+  currentTick: number,
+  tickCtx: TickCtx
 ): Promise<{ action: Action; reasoning: string }> {
   const persona = getPersona(agent.personaId);
   if (!persona) {
     return { action: { type: "work" }, reasoning: "No persona found" };
   }
 
-  const balance = await deps.stellar.getAssetBalance(agent.publicKey);
-  const allAgents = await deps.db.getAllAgents();
+  // Tick-wide context is pre-fetched once by processTick — reuse it instead
+  // of re-querying per agent (this used to cost ~30 subrequests per tick and
+  // pushed us over the per-invocation cap on heavy ticks).
+  const balance = tickCtx.balances.get(agent.id) ?? 0;
+  const allAgents = tickCtx.allAgents;
+  const leakedEmails = tickCtx.leakedEmails;
   const recentActions = await deps.db.getAgentActionLogs(agent.id, Math.max(0, currentTick - 10), currentTick);
-  const leakedEmails = await deps.db.getRecentLeakedEmails(5);
 
   const context: DecisionContext = { agent, balance, currentTick, allAgents, recentActions, leakedEmails };
 

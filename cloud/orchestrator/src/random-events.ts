@@ -23,16 +23,29 @@ export interface RandomEventsState {
   triggeredOnce: Set<string>;
   lastWeeklyTick: number;       // 12-tick cycle (mandatory fun, audit, quarterly bonus)
   lastEmployeeMonthTick: number; // 8-tick cycle (employee of the month)
+  /** Audit cooldown: agentId → tick of last audit. Eligible victims must be
+   *  >= 12 ticks since their last audit, otherwise we skip them. Without
+   *  this, the lowest-balance agent gets pinned with -30 prestige + under
+   *  review every weekly tick (death spiral). */
+  recentAudits: Map<string, number>;
 }
 
 export function createRandomEventsState(): RandomEventsState {
-  return { triggeredOnce: new Set(), lastWeeklyTick: 0, lastEmployeeMonthTick: 0 };
+  return {
+    triggeredOnce: new Set(),
+    lastWeeklyTick: 0,
+    lastEmployeeMonthTick: 0,
+    recentAudits: new Map(),
+  };
 }
 
 interface EventDeps {
   db: Db;
   stellar: Stellar;
   rewards: RewardSources;
+  /** Pre-fetched balance map (agentId → DLBR), supplied by processTick.
+   *  Audit reuses it to avoid 10 redundant Horizon calls per weekly tick. */
+  balances?: Map<string, number>;
 }
 
 export interface RandomEventsResult {
@@ -52,7 +65,7 @@ export async function processRandomEvents(
   if (tick > 0 && tick % 12 === 0 && tick !== state.lastWeeklyTick) {
     state.lastWeeklyTick = tick;
     events.push(...(await mandatoryFun(deps, tick)));
-    events.push(...(await audit(deps, tick)));
+    events.push(...(await audit(deps, state, tick)));
     events.push(...(await quarterlyBonus(deps, tick)));
   }
 
@@ -69,7 +82,10 @@ export async function processRandomEvents(
   }
 
   // Random per-tick rolls
-  if (Math.random() < 0.10) {
+  // All-Hands skips the entire decisions phase for this tick, which is
+  // disruptive — keep the probability low so 4-hour games still see most
+  // ticks produce action.
+  if (Math.random() < 0.05) {
     events.push(...(await allHands(tick)));
     skipDecisions = true;
   }
@@ -309,13 +325,15 @@ async function employeeOfTheMonth(deps: EventDeps, tick: number): Promise<GameEv
   );
   counts.sort((x, y) => y.n - x.n);
   const winner = counts[0];
-  if (winner.n === 0) {
+  // Bar raised to 3+ work actions in 8 cycles — winning with 1 work action
+  // looked silly in the first run.
+  if (winner.n < 3) {
     return [{
       id: uuid(),
       tick,
       timestamp: new Date(),
       type: "random_event",
-      description: `EMPLOYEE OF THE MONTH: nominations were "underwhelming." Award not given this cycle.`,
+      description: `EMPLOYEE OF THE MONTH: nominations were "underwhelming" — no manager logged enough actual work to qualify. Award withheld this cycle.`,
     }];
   }
 
@@ -373,24 +391,47 @@ async function mandatoryFun(deps: EventDeps, tick: number): Promise<GameEvent[]>
 
 // === Audit (weekly) =========================================================
 
-async function audit(deps: EventDeps, tick: number): Promise<GameEvent[]> {
+async function audit(deps: EventDeps, state: RandomEventsState, tick: number): Promise<GameEvent[]> {
   const agents = await deps.db.getAllAgents();
   if (agents.length === 0) return [];
 
-  let lowestBalance = Infinity;
-  let biggestSpender = agents[0];
+  // Cooldown: skip anyone audited in the last 12 ticks. Without this, whoever
+  // hits the lowest balance once gets pinned and audited every weekly cycle.
+  const eligible = agents.filter((a) => {
+    const last = state.recentAudits.get(a.id);
+    return !last || tick - last >= 12;
+  });
 
-  for (const agent of agents) {
-    const balance = await deps.stellar.getAssetBalance(agent.publicKey);
-    if (balance < lowestBalance) {
-      lowestBalance = balance;
-      biggestSpender = agent;
-    }
+  if (eligible.length === 0) {
+    return [{
+      id: uuid(),
+      tick,
+      timestamp: new Date(),
+      type: "random_event",
+      description: "AUDIT: HR queued an audit, but every plausible suspect is already on review. Deferred to next quarter.",
+    }];
   }
 
-  await deps.db.updateAgentPrestige(biggestSpender.id, -30);
-  const agentData = (await deps.db.getAgent(biggestSpender.id))!;
-  await deps.db.updateAgentStatusEffects(biggestSpender.id, [
+  // Use the pre-fetched balance map when present (cheap), else fall back.
+  const balanceFor = async (a: typeof eligible[number]) =>
+    deps.balances?.get(a.id) ?? (await deps.stellar.getAssetBalance(a.publicKey));
+
+  const ranked = await Promise.all(
+    eligible.map(async (a) => ({ agent: a, balance: await balanceFor(a) }))
+  );
+  ranked.sort((x, y) => x.balance - y.balance);
+
+  // Pick randomly from the bottom 3 of eligible — adds variety so the same
+  // person doesn't get audited twice in a row even if their balance is still
+  // lowest right after the cooldown clears.
+  const pool = ranked.slice(0, Math.min(3, ranked.length));
+  const victim = pool[Math.floor(Math.random() * pool.length)].agent;
+
+  state.recentAudits.set(victim.id, tick);
+
+  await deps.db.updateAgentPrestige(victim.id, -30);
+  const agentData = (await deps.db.getAgent(victim.id))!;
+  await deps.db.updateAgentStatusEffects(victim.id, [
     ...agentData.statusEffects,
     { type: "under_review" as const, expiresAtTick: tick + 4 },
   ]);
@@ -400,8 +441,8 @@ async function audit(deps: EventDeps, tick: number): Promise<GameEvent[]> {
     tick,
     timestamp: new Date(),
     type: "random_event",
-    agentId: biggestSpender.id,
-    description: `AUDIT: ${biggestSpender.name} is under review for excessive spending! -30 prestige`,
+    agentId: victim.id,
+    description: `AUDIT: ${victim.name} is under review for excessive spending! -30 prestige`,
     prestigeChange: -30,
   }];
 }

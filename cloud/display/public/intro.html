@@ -94,6 +94,36 @@
       margin-bottom: 16px;
       padding-bottom: 8px;
       border-bottom: 1px solid var(--border);
+      display: flex;
+      align-items: baseline;
+      justify-content: space-between;
+      gap: 12px;
+    }
+    .claim-progress {
+      font-size: 12px;
+      color: var(--text-muted);
+      letter-spacing: 0.4px;
+      text-transform: none;
+      font-weight: 400;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .claim-progress-bar {
+      width: 140px;
+      height: 6px;
+      background: #ecf0f1;
+      border-radius: 3px;
+      overflow: hidden;
+    }
+    .claim-progress-bar > div {
+      height: 100%;
+      background: #f1c40f;
+      transition: width 0.3s ease;
+    }
+    .claim-progress b {
+      color: var(--navy);
+      font-variant-numeric: tabular-nums;
     }
     .agent-grid {
       display: grid;
@@ -251,7 +281,13 @@
   </section>
 
   <section class="grid-section">
-    <h2>Available Managers</h2>
+    <h2>
+      <span>Available Managers</span>
+      <span class="claim-progress" id="claim-progress" hidden>
+        <b id="claim-count">0</b> / <b id="claim-total">10</b> adopted
+        <span class="claim-progress-bar"><div id="claim-bar" style="width:0%"></div></span>
+      </span>
+    </h2>
     <div class="agent-grid" id="agent-grid">
       <div class="loader">Loading roster…</div>
     </div>
@@ -282,6 +318,15 @@
       const data = await res.json();
       const grid = document.getElementById('agent-grid');
       grid.innerHTML = '';
+
+      // Claim progress strip — engagement only, doesn't gate the game.
+      const total = data.agents.length;
+      const claimedCount = data.agents.filter((a) => a.claimed).length;
+      const progress = document.getElementById('claim-progress');
+      document.getElementById('claim-count').textContent = claimedCount;
+      document.getElementById('claim-total').textContent = total;
+      document.getElementById('claim-bar').style.width = total ? `${(claimedCount / total) * 100}%` : '0%';
+      progress.hidden = false;
 
       for (const a of data.agents) {
         const claimed = a.claimed;

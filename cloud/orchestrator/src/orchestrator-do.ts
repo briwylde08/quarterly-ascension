@@ -472,6 +472,29 @@ export class GameOrchestrator {
     const maxTicks = parseInt(this.env.MAX_TICKS, 10);
     if (tick >= maxTicks) {
       await db.setGameStatus("ended");
+
+      // Emit a game_end event so live dashboards can show the winner overlay.
+      // The agents list is sorted prestige DESC, so all[0] is the new VP.
+      try {
+        const all = await db.getAllAgents();
+        if (all.length > 0) {
+          const winner = all[0];
+          const event: GameEvent = {
+            id: crypto.randomUUID(),
+            tick,
+            timestamp: new Date(),
+            type: "game_end",
+            agentId: winner.id,
+            description: `🏆 Q1 closed — ${winner.name} promoted to VP with ${winner.prestige} prestige.`,
+            prestigeChange: 0,
+          };
+          await db.saveEvent(event);
+          this.broadcast({ type: "game_event", data: event });
+        }
+      } catch (err) {
+        console.error("[alarm] failed to emit game_end event:", err);
+      }
+
       // Last act before close: send the finale email.
       try {
         await this.sendFinaleEmails();
