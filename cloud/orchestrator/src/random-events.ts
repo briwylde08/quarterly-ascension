@@ -28,6 +28,9 @@ export interface RandomEventsState {
    *  this, the lowest-balance agent gets pinned with -30 prestige + under
    *  review every weekly tick (death spiral). */
   recentAudits: Map<string, number>;
+  /** Set of random-event ids that fired in the previous tick. Skipped when
+   *  rolling this tick — prevents the same chaos two cycles in a row. */
+  lastFiredEvents: Set<string>;
 }
 
 export function createRandomEventsState(): RandomEventsState {
@@ -36,6 +39,7 @@ export function createRandomEventsState(): RandomEventsState {
     lastWeeklyTick: 0,
     lastEmployeeMonthTick: 0,
     recentAudits: new Map(),
+    lastFiredEvents: new Set(),
   };
 }
 
@@ -81,22 +85,35 @@ export async function processRandomEvents(
     events.push(...(await newInitiative(deps, tick)));
   }
 
-  // Random per-tick rolls
+  // Random per-tick rolls. Skip any event that fired last tick — prevents
+  // back-to-back Budget Cuts, double Reorg Rumors etc. Track what fires
+  // this tick into firedThisTick; replace state.lastFiredEvents at the end.
+  const fired = new Set<string>();
+  const skipped = state.lastFiredEvents;
+  const roll = (id: string, prob: number): boolean => {
+    if (skipped.has(id)) return false;
+    if (Math.random() >= prob) return false;
+    fired.add(id);
+    return true;
+  };
+
   // All-Hands skips the entire decisions phase for this tick, which is
   // disruptive — keep the probability low so 4-hour games still see most
   // ticks produce action.
-  if (Math.random() < 0.05) {
+  if (roll("all_hands", 0.05)) {
     events.push(...(await allHands(tick)));
     skipDecisions = true;
   }
-  if (Math.random() < 0.08) events.push(...(await budgetCuts(deps, tick)));
-  if (Math.random() < 0.05) events.push(...(await reorgRumors(deps, tick)));
-  if (Math.random() < 0.07) events.push(...(await viralLinkedIn(deps, tick)));
-  if (Math.random() < 0.05) events.push(...(await coffeeMachineBroken(deps, tick)));
-  if (Math.random() < 0.08) events.push(...(await printerJam(deps, tick)));
-  if (Math.random() < 0.03) events.push(...(await surprisePromotion(deps, tick)));
-  if (Math.random() < 0.06) events.push(...(await emailLeak(deps, tick)));
-  if (Math.random() < 0.04) events.push(...(await fireDrill(tick)));
+  if (roll("budget_cuts", 0.08))            events.push(...(await budgetCuts(deps, tick)));
+  if (roll("reorg_rumors", 0.05))           events.push(...(await reorgRumors(deps, tick)));
+  if (roll("viral_linkedin", 0.07))         events.push(...(await viralLinkedIn(deps, tick)));
+  if (roll("coffee_machine_broken", 0.05))  events.push(...(await coffeeMachineBroken(deps, tick)));
+  if (roll("printer_jam", 0.08))            events.push(...(await printerJam(deps, tick)));
+  if (roll("surprise_promotion", 0.03))     events.push(...(await surprisePromotion(deps, tick)));
+  if (roll("email_leak", 0.06))             events.push(...(await emailLeak(deps, tick)));
+  if (roll("fire_drill", 0.04))             events.push(...(await fireDrill(tick)));
+
+  state.lastFiredEvents = fired;
 
   return { events, skipDecisions };
 }
@@ -119,16 +136,25 @@ async function budgetCuts(deps: EventDeps, tick: number): Promise<GameEvent[]> {
   const agents = await deps.db.getAllAgents();
   if (agents.length === 0) return [];
 
+  // Pick a random subset (up to 5) instead of every agent. Burning from all
+  // 10 in parallel pushed us past the per-invocation subrequest cap on
+  // weekly ticks (when audit + bonuses + budget cuts all fire together);
+  // partial completion left the prior run with 3/10 burned and 7/10 unhit.
+  const VICTIM_CAP = 5;
+  const shuffled = [...agents].sort(() => Math.random() - 0.5);
+  const victims = shuffled.slice(0, Math.min(VICTIM_CAP, agents.length));
+
   const events: GameEvent[] = [{
     id: uuid(),
     tick,
     timestamp: new Date(),
     type: "random_event",
-    description: "BUDGET CUTS: Finance is clawing back 15% of every manager's discretionary budget. Effective immediately.",
+    description: `BUDGET CUTS: Finance is clawing back 15% from ${victims.length} randomly-selected managers' discretionary budgets. Effective immediately.`,
   }];
 
-  // Burn 15% from each agent in parallel — payments to the issuer destroy supply.
-  await Promise.all(agents.map(async (agent) => {
+  // Burn 15% from each selected agent in parallel — payments to the issuer
+  // destroy supply.
+  await Promise.all(victims.map(async (agent) => {
     try {
       const balance = await deps.stellar.getAssetBalance(agent.publicKey);
       const burn = Math.floor(balance * 0.15 * 100) / 100;

@@ -272,8 +272,10 @@
       align-items: center;
       cursor: pointer;
       transition: background 0.12s, transform 0.45s ease;
+      text-decoration: none;
+      color: inherit;
     }
-    .manager-row:hover { background: var(--info-bg); }
+    .manager-row:hover { background: var(--info-bg); text-decoration: none; }
     .manager-row .rank {
       font-size: 16px;
       font-weight: 700;
@@ -323,6 +325,10 @@
     .badge.under_review { color: var(--warning); background: var(--warning-bg); }
     .badge.technical_difficulties { color: var(--danger); background: var(--danger-bg); }
     .badge.has_deliverable { color: var(--success); background: var(--success-bg); }
+    .badge.marked          { color: #c0392b; background: #fadbd8; border-style: dashed; }
+    .badge.mandatory_motivation { color: var(--warning); background: var(--warning-bg); }
+    .badge.meeting_blocked { color: var(--text-muted); background: var(--neutral-bg); }
+    .badge[title] { cursor: help; }
     .badge.winner {
       color: #1c3a64;
       background: #fef5e7;
@@ -818,7 +824,8 @@
     // (orchestrator DO is supposed to live forever; any drop is transient).
     // ============================================================
     let tickIntervalMs = 300000;
-    let lastTickStartMs = Date.now();
+    let nextAlarmAt = null;       // server-reported timestamp; primary timer source
+    let lastTickStartMs = Date.now();  // fallback only
     let currentTick = 0;
     let currentStatus = 'setup';
     let prevPrestige = new Map();
@@ -902,7 +909,8 @@
       tickIntervalMs = data.tickIntervalMs || tickIntervalMs;
       currentTick = data.tick;
       currentStatus = data.status;
-      lastTickStartMs = Date.now() - 0; // best estimate; will recalibrate on next tick
+      nextAlarmAt = data.nextAlarmAt ?? null;
+      lastTickStartMs = Date.now(); // fallback for fresh load if nextAlarmAt is missing
       document.getElementById('cycle').textContent = data.tick;
       document.getElementById('status').textContent = humanStatus(data.status);
       document.getElementById('halted-overlay').classList.toggle('hidden', data.status !== 'halted');
@@ -1157,20 +1165,39 @@
       sorted.forEach(a => prevPrestige.set(a.id, a.prestige));
     }
 
+    // Hover-text for each status type. Surfaces the mechanic so players
+    // can read what's happening to their manager without digging through
+    // the email or asking.
+    const STATUS_TOOLTIPS = {
+      tired: 'Tired: −2 prestige/cycle decay. Removed by rest, coffee, or fancy coffee.',
+      caffeinated: 'Caffeinated: immune to Tired. Wears off after the listed cycle.',
+      inspired: 'Inspired: +5 prestige/cycle bonus.',
+      under_investigation: 'Under Investigation: target cannot retaliate against the filer for the duration.',
+      problematic: 'Problematic: −3 prestige/cycle decay. Removed by birthday cake.',
+      under_review: 'Under Review: cannot book CEO time.',
+      technical_difficulties: 'Technical Difficulties: forced to rest next cycle.',
+      has_deliverable: 'Has Deliverable: next CEO meeting awards +40 prestige.',
+      mandatory_motivation: 'Mandatory Motivation: forced to rest for the duration.',
+      meeting_blocked: 'Meeting-Blocked: cannot book CEO time.',
+      marked: 'Marked: next take_credit against you auto-succeeds (40% → 100%).',
+    };
+
     function managerRowHTML(a, i) {
       const rank = i + 1;
       const isWinner = rank === 1 && currentStatus === 'ended';
       const traits = personaTraits(a.id);
       const traitText = traits ? ('A' + traits.aggression + ' · G' + traits.greed + ' · C' + traits.caution + ' · L' + traits.loyalty) : '';
-      const effectBadges = (a.statusEffects || []).map(e =>
-        '<span class="badge ' + e.type + '">' + e.type.replace(/_/g, ' ') + '</span>'
-      ).join('');
+      const effectBadges = (a.statusEffects || []).map(e => {
+        const tip = STATUS_TOOLTIPS[e.type] || e.type;
+        return '<span class="badge ' + e.type + '" title="' + escape(tip) + '">' + e.type.replace(/_/g, ' ') + '</span>';
+      }).join('');
       const winnerBadge = isWinner
         ? '<span class="badge winner">👑 Promoted to VP</span>'
         : '';
       const badges = winnerBadge + effectBadges;
       const namePrefix = isWinner ? '👑 ' : '';
-      return '<div class="manager-row rank-' + rank + (isWinner ? ' winner' : '') + '" data-agent-id="' + a.id + '">'
+      const profileHref = '/agent.html?id=' + encodeURIComponent(a.id);
+      return '<a href="' + profileHref + '" class="manager-row rank-' + rank + (isWinner ? ' winner' : '') + '" data-agent-id="' + a.id + '" title="View ' + escape(a.name) + '\'s profile">'
         + '<div class="rank">' + rank + '</div>'
         + '<div class="manager-identity">'
         +   '<div class="name">' + namePrefix + escape(a.name) + '</div>'
@@ -1182,7 +1209,7 @@
         +   '<div class="prestige">' + a.prestige + '</div>'
         +   '<div class="balance' + ((a.balance != null && a.balance < 50) ? ' low' : '') + '">$' + (a.balance != null ? Number(a.balance).toFixed(0) : '–') + '</div>'
         + '</div>'
-        + '</div>';
+        + '</a>';
     }
 
     // Hardcoded persona traits for inline display (must match agents/personas.ts).
@@ -1248,13 +1275,12 @@
       try {
         const r = await fetch(ORCHESTRATOR_BASE + '/api/state');
         const data = await r.json();
-        // Resume detection: if we were halted and are now running, reset the
-        // countdown so it counts from the new tick interval, not from a stale
-        // pre-pause baseline.
         if ((currentStatus === 'halted' || currentStatus === 'setup' || currentStatus === 'ended') && data.status === 'running') {
           lastTickStartMs = Date.now();
         }
         currentStatus = data.status;
+        currentTick = data.tick;
+        nextAlarmAt = data.nextAlarmAt ?? null;
         document.getElementById('cycle').textContent = data.tick;
         document.getElementById('status').textContent = humanStatus(data.status);
         document.getElementById('halted-overlay').classList.toggle('hidden', data.status !== 'halted');
@@ -1283,8 +1309,18 @@
         el.textContent = 'Awaiting kickoff';
         return;
       }
-      const elapsed = Date.now() - lastTickStartMs;
-      const remaining = Math.max(0, tickIntervalMs - elapsed);
+      // Server-driven timer: nextAlarmAt is a ms-since-epoch timestamp set by
+      // the DO via state.storage.setAlarm(...). Refreshing the page reads it
+      // afresh from /api/state, so the countdown stays consistent across
+      // tabs and reloads. Falls back to lastTickStartMs only if the server
+      // didn't surface a value.
+      let remaining;
+      if (typeof nextAlarmAt === 'number' && nextAlarmAt > 0) {
+        remaining = Math.max(0, nextAlarmAt - Date.now());
+      } else {
+        const elapsed = Date.now() - lastTickStartMs;
+        remaining = Math.max(0, tickIntervalMs - elapsed);
+      }
       const sec = Math.floor(remaining / 1000);
       const m = Math.floor(sec / 60);
       const s = sec % 60;

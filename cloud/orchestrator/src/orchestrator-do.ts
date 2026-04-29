@@ -429,6 +429,35 @@ export class GameOrchestrator {
       const trimmedName = name.trim().slice(0, 80);
       const trimmedEmail = email.trim().toLowerCase().slice(0, 200);
 
+      // Block claims while a game is running/halted/ended. New adoptions only
+      // open during "setup" — between rounds.
+      const claimStatus = await db.getGameStatus();
+      if (claimStatus !== "setup") {
+        return Response.json(
+          {
+            error: `Claims are only open between rounds (current status: ${claimStatus}). Try again at the start of the next game.`,
+            status: claimStatus,
+          },
+          { status: 400 }
+        );
+      }
+
+      // One-claim-per-human: reject if this email is already on another agent.
+      const existingClaim = await this.env.DB
+        .prepare("SELECT id, name FROM agents WHERE LOWER(claimed_by) = ? AND id != ?")
+        .bind(trimmedEmail, agentId)
+        .first<{ id: string; name: string }>();
+      if (existingClaim) {
+        return Response.json(
+          {
+            error: `You've already adopted ${existingClaim.name}. Release them first if you want to switch managers.`,
+            existingAgentId: existingClaim.id,
+            existingAgentName: existingClaim.name,
+          },
+          { status: 409 }
+        );
+      }
+
       // Atomic: only set if not already claimed.
       const updateRes = await this.env.DB
         .prepare(
@@ -568,13 +597,18 @@ export class GameOrchestrator {
     }
 
     if (path === "/state") {
-      const [agents, status, tick, recentEvents, ticker, stats] = await Promise.all([
+      const [agents, status, tick, recentEvents, ticker, stats, nextAlarmAt] = await Promise.all([
         db.getAllAgents(),
         db.getGameStatus(),
         db.getCurrentTick(),
         db.getRecentEvents(20),
         db.getRecentTickerEntries(15),
         db.getTickerStats(),
+        // DO storage tracks the next scheduled alarm time as a ms-since-epoch
+        // number (or null if no alarm). Surfacing it lets every dashboard
+        // tab show the same countdown without local-clock drift / refresh
+        // resetting it.
+        this.state.storage.getAlarm(),
       ]);
 
       const agentsWithBalances = await Promise.all(
@@ -595,6 +629,8 @@ export class GameOrchestrator {
         tick,
         tickIntervalMs: parseInt(this.env.TICK_INTERVAL_MS, 10),
         maxTicks: parseInt(this.env.MAX_TICKS, 10),
+        nextAlarmAt,
+        serverTime: Date.now(),
         agents: agentsWithBalances,
         recentEvents,
         ticker,

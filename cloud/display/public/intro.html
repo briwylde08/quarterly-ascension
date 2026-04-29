@@ -126,6 +126,21 @@
       color: var(--navy);
       font-variant-numeric: tabular-nums;
     }
+    .game-state-banner {
+      background: #fef5e7;
+      border: 1px solid #f1c40f;
+      border-left: 4px solid #f1c40f;
+      padding: 14px 18px;
+      margin-bottom: 18px;
+      font-size: 14px;
+      color: var(--navy);
+      line-height: 1.5;
+      box-shadow: var(--shadow);
+    }
+    .game-state-banner.running { background: #d4f4dd; border-color: var(--success); border-left-color: var(--success); color: #186a3b; }
+    .game-state-banner.halted  { background: #ecf0f1; border-color: var(--border-2); border-left-color: var(--text-muted); color: var(--text); }
+    .game-state-banner.ended   { background: #fef5e7; border-color: #f1c40f; border-left-color: #f1c40f; }
+    .game-state-banner b { font-weight: 700; }
     .agent-grid {
       display: grid;
       grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
@@ -283,6 +298,7 @@
   </section>
 
   <section class="grid-section">
+    <div id="game-state-banner" class="game-state-banner" hidden></div>
     <h2>
       <span>Available Managers</span>
       <span class="claim-progress" id="claim-progress" hidden>
@@ -320,6 +336,26 @@
       const data = await res.json();
       const grid = document.getElementById('agent-grid');
       grid.innerHTML = '';
+
+      // Game-state banner. New claims are only accepted during "setup", so
+      // surface the current state prominently if we're in any other phase.
+      const banner = document.getElementById('game-state-banner');
+      const status = data.status || 'setup';
+      if (status === 'running') {
+        banner.className = 'game-state-banner running';
+        banner.innerHTML = `🎮 <b>Game in Progress</b> (cycle ${data.tick}). Adoptions reopen between rounds — when this game ends, the roster resets and slots open back up.`;
+        banner.hidden = false;
+      } else if (status === 'halted') {
+        banner.className = 'game-state-banner halted';
+        banner.innerHTML = `⏸ <b>Game halted</b> at cycle ${data.tick}. Adoptions reopen after the game resumes and ends, OR after a reset.`;
+        banner.hidden = false;
+      } else if (status === 'ended') {
+        banner.className = 'game-state-banner ended';
+        banner.innerHTML = `🏁 <b>Game ended.</b> The roster will reset shortly (post-game cleanup is automatic). Refresh in a few minutes to adopt for the next round.`;
+        banner.hidden = false;
+      } else {
+        banner.hidden = true;
+      }
 
       // Claim progress strip — engagement only, doesn't gate the game.
       const total = data.agents.length;

@@ -47,7 +47,7 @@ const ALL_ACTIONS = [
   { type: "send_motivation", description: "Send rival to mandatory motivation (target forced to rest for 2 ticks)", cost: 25, requiresTarget: true },
 
   // Earning paths (Phase 5)
-  { type: "whistleblower_bounty", description: "Report target to HR ($10 cost). If target had hostile actions in last 3 ticks → +30 prestige + $25 bounty. If false → -10 prestige; target +5 sympathy.", cost: 10, requiresTarget: true },
+  { type: "whistleblower_bounty", description: "Report target to HR ($10 cost). If target had hostile actions in last 3 ticks → +30 prestige + $25 bounty. If false → -10 prestige; target gets +5 wrongful-report bonus.", cost: 10, requiresTarget: true },
   { type: "mentorship", description: "Mentor target ($15 cost; non-self target). Self +5 prestige + $30 stipend; target +10 prestige. Wholesome alternative to take_credit.", cost: 15, requiresTarget: true },
   { type: "coffee_chat", description: "Casual coffee with target ($5; non-self). Both gain +3 prestige. No alliance proposed. Low-stakes networking.", cost: 5, requiresTarget: true },
 ];

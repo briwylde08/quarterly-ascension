@@ -101,9 +101,16 @@ export class Db {
   }
 
   async updateAgentStatusEffects(id: string, effects: StatusEffect[]): Promise<void> {
+    // Dedupe by type, keeping the LAST entry per type (latest write wins).
+    // Without this, sequential applications (coffee_machine_broken + fatigue,
+    // multiple sabotage_plans, etc.) accumulate duplicate same-type effects
+    // and the leaderboard shows "tired" twice on the same agent.
+    const seen = new Map<string, StatusEffect>();
+    for (const e of effects) seen.set(e.type, e);
+    const deduped = Array.from(seen.values());
     await this.db
       .prepare("UPDATE agents SET status_effects = ? WHERE id = ?")
-      .bind(JSON.stringify(effects), id)
+      .bind(JSON.stringify(deduped), id)
       .run();
   }
 

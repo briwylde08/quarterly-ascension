@@ -683,11 +683,11 @@ async function executePaidAction(
           outcome = `Whistleblower bounty paid — ${action.target} flagged for ${recentHostile.length} hostile action(s) in the last 3 cycles. HR sent $25.`;
           if (payHash) outcome += ` (tx: ${payHash.slice(0, 8)}…)`;
         } else {
-          // Bad-faith report. Costs prestige; target gets sympathy bump.
+          // Bad-faith report. Costs prestige; target gets a wrongful-report bonus.
           prestigeChange = -10;
           await db.updateAgentPrestige(agent.id, prestigeChange);
           await db.updateAgentPrestige(action.target, 5);
-          outcome = `False whistleblower report — HR found nothing on ${action.target}. -10 prestige; ${action.target} gets +5 sympathy.`;
+          outcome = `Whistleblower report against ${action.target} unsubstantiated — HR found nothing. You: -10 prestige. ${action.target}: +5 prestige (wrongful-report bonus).`;
         }
       }
       break;
