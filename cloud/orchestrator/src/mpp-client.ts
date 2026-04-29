@@ -225,12 +225,12 @@ export class MppClient {
 export function buildServiceUrls(npcBase: string): Record<string, { url: string; name: string; price: number }> {
   const npc = (name: string, path: string) => npcBase.replace("__npc__", name) + path;
   return {
-    buy_coffee:           { url: npc("coffee-cart",          "/buy"),                  name: "Coffee Cart",          price: 8 },
-    buy_fancy_coffee:     { url: npc("coffee-cart",          "/buy-fancy"),            name: "Coffee Cart",          price: 15 },
+    buy_coffee:           { url: npc("coffee-cart",          "/buy"),                  name: "Coffee Cart",          price: 5 },
+    buy_fancy_coffee:     { url: npc("coffee-cart",          "/buy-fancy"),            name: "Coffee Cart",          price: 10 },
     file_complaint:       { url: npc("hr-dept",              "/file-complaint"),       name: "HR Department",        price: 22 },
     sensitivity_training: { url: npc("hr-dept",              "/sensitivity-training"), name: "HR Department",        price: 30 },
     check_hr_status:      { url: npc("hr-dept",              "/check-status"),         name: "HR Department",        price: 5 },
-    strategy_report:      { url: npc("consultant",           "/strategy-report"),      name: "The Consultant",       price: 35 },
+    strategy_report:      { url: npc("consultant",           "/strategy-report"),      name: "The Consultant",       price: 25 },
     competitive_intel:    { url: npc("consultant",           "/competitive-intel"),    name: "The Consultant",       price: 25 },
     sabotage_plan:        { url: npc("consultant",           "/sabotage-plan"),        name: "The Consultant",       price: 40 },
     fix_laptop:           { url: npc("it-guy",               "/fix-laptop"),           name: "IT Guy",               price: 12 },

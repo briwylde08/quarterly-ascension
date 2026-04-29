@@ -182,12 +182,16 @@ export async function processTick(deps: TickDeps): Promise<void> {
 
 async function applyFatigue(deps: TickDeps, tick: number): Promise<void> {
   const { db, emit } = deps;
+  // Window widened from 4 → 6 cycles. The 4-cycle threshold caused a
+  // synchronized wall around tick 5 (everyone hit fatigue at once because
+  // every agent's history starts at tick 1). 6 desyncs them and gives the
+  // game a chance to spread the tired status organically.
+  const FATIGUE_WINDOW = 6;
   const agents = await db.getAllAgents();
   for (const agent of agents) {
-    // Already tired or caffeinated? skip.
     if (agent.statusEffects.some((e) => e.type === "tired" || e.type === "caffeinated")) continue;
-    const recent = await db.getRecentActionLogsForAgent(agent.id, 4);
-    if (recent.length < 4) continue;
+    const recent = await db.getRecentActionLogsForAgent(agent.id, FATIGUE_WINDOW);
+    if (recent.length < FATIGUE_WINDOW) continue;
     const allNonRest = recent.every((r) => r.action_type !== "rest");
     if (!allNonRest) continue;
     await db.updateAgentStatusEffects(agent.id, [
@@ -200,7 +204,7 @@ async function applyFatigue(deps: TickDeps, tick: number): Promise<void> {
       timestamp: new Date(),
       type: "status_effect",
       agentId: agent.id,
-      description: `${agent.name} hit the wall (4 cycles without rest) — now Tired (-2 prestige/cycle for 3 cycles, removed by coffee).`,
+      description: `${agent.name} hit the wall (${FATIGUE_WINDOW} cycles without rest) — now Tired (-2 prestige/cycle for 3 cycles, removed by coffee).`,
     });
   }
 }
@@ -434,10 +438,16 @@ async function executePaidAction(
 
     case "sensitivity_training":
       if ("target" in action) {
-        outcome = `Sent ${action.target} to sensitivity training`;
         const target = await db.getAgent(action.target);
         if (target) {
-          await db.updateAgentPrestige(action.target, -20);
+          // Well-allied targets (3+ alliances) absorb half the prestige hit.
+          // Coalition-builders are politically harder to torpedo.
+          const wellAllied = target.allies.length >= 3;
+          const hit = wellAllied ? -10 : -20;
+          outcome = wellAllied
+            ? `Sent ${action.target} to sensitivity training; their alliances softened the blow (${hit} prestige instead of -20)`
+            : `Sent ${action.target} to sensitivity training (${hit} prestige)`;
+          await db.updateAgentPrestige(action.target, hit);
           await db.updateAgentStatusEffects(action.target, [
             ...target.statusEffects,
             { type: "problematic", expiresAtTick: tick + 4, source: agent.id },
@@ -482,23 +492,25 @@ async function executePaidAction(
 
     case "sabotage_plan":
       if ("target" in action) {
-        // Buff: stronger prestige hit (-3 → -10) plus a "marked" debuff that
-        // makes any take_credit against the target auto-succeed for 2 ticks.
-        // Turns sabotage_plan into a setup-then-execute play instead of an
-        // overpriced info dump.
+        // Stronger prestige hit + 2-tick "marked" debuff. Well-allied targets
+        // halve the prestige damage.
         const recent = await db.getRecentActionLogsForAgent(action.target, 3);
         const summary = recent.length > 0
           ? recent.map((r) => `t${r.tick}:${r.action_type}`).join(", ")
           : "no recent activity";
-        await db.updateAgentPrestige(action.target, -10);
         const target = await db.getAgent(action.target);
+        const wellAllied = target ? target.allies.length >= 3 : false;
+        const hit = wellAllied ? -5 : -10;
+        await db.updateAgentPrestige(action.target, hit);
         if (target) {
           await db.updateAgentStatusEffects(action.target, [
             ...target.statusEffects.filter((e) => e.type !== "marked"),
             { type: "marked", expiresAtTick: tick + 2, source: agent.id },
           ]);
         }
-        outcome = `Sabotage dossier on ${action.target}: -10 prestige + marked for 2 cycles (next take_credit against them auto-succeeds). Recent moves: ${summary}`;
+        outcome = wellAllied
+          ? `Sabotage dossier on ${action.target}: ${hit} prestige (alliance bloc absorbed half the hit) + marked for 2 cycles. Recent moves: ${summary}`
+          : `Sabotage dossier on ${action.target}: ${hit} prestige + marked for 2 cycles (next take_credit against them auto-succeeds). Recent moves: ${summary}`;
       }
       break;
 
@@ -575,8 +587,13 @@ async function executePaidAction(
 
     case "poison_meeting":
       if ("target" in action) {
-        await db.updateAgentPrestige(action.target, -10);
-        outcome = `Sabotaged ${action.target}'s catering. They lose -10 prestige in the post-meeting fallout.`;
+        const target = await db.getAgent(action.target);
+        const wellAllied = target ? target.allies.length >= 3 : false;
+        const hit = wellAllied ? -5 : -10;
+        await db.updateAgentPrestige(action.target, hit);
+        outcome = wellAllied
+          ? `Sabotaged ${action.target}'s catering — but their allies covered the optics. ${hit} prestige instead of -10.`
+          : `Sabotaged ${action.target}'s catering. They lose ${hit} prestige in the post-meeting fallout.`;
       }
       break;
 
@@ -683,11 +700,13 @@ async function executePaidAction(
           outcome = `Whistleblower bounty paid — ${action.target} flagged for ${recentHostile.length} hostile action(s) in the last 3 cycles. HR sent $25.`;
           if (payHash) outcome += ` (tx: ${payHash.slice(0, 8)}…)`;
         } else {
-          // Bad-faith report. Costs prestige; target gets a wrongful-report bonus.
-          prestigeChange = -10;
+          // Bad-faith report. Small prestige hit (was -10; lowered to -3 so
+          // the bounty is worth attempting more often). Target still gets +5
+          // wrongful-report bonus for the inconvenience.
+          prestigeChange = -3;
           await db.updateAgentPrestige(agent.id, prestigeChange);
           await db.updateAgentPrestige(action.target, 5);
-          outcome = `Whistleblower report against ${action.target} unsubstantiated — HR found nothing. You: -10 prestige. ${action.target}: +5 prestige (wrongful-report bonus).`;
+          outcome = `Whistleblower report against ${action.target} unsubstantiated — HR found nothing. You: -3 prestige. ${action.target}: +5 prestige (wrongful-report bonus).`;
         }
       }
       break;

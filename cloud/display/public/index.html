@@ -563,6 +563,18 @@
       box-shadow: 0 4px 12px rgba(0,0,0,0.25);
     }
     .halted-overlay .resume-cta:hover { background: #f8d35a; }
+    .halt-dismiss {
+      margin-top: 12px;
+      background: transparent;
+      border: 1px solid rgba(255,255,255,0.35);
+      color: rgba(255,255,255,0.85);
+      font-family: inherit;
+      font-size: 11px;
+      padding: 7px 14px;
+      letter-spacing: 0.4px;
+      cursor: pointer;
+    }
+    .halt-dismiss:hover { background: rgba(255,255,255,0.10); color: #fff; }
 
     /* === End-of-game winner overlay ================================ */
     .ended-overlay {
@@ -671,6 +683,136 @@
     }
     .ended-dismiss:hover { background: var(--navy-2); }
 
+    /* === Manager character-summary modal ============================ */
+    .manager-modal {
+      position: fixed;
+      inset: 0;
+      z-index: 1200;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .manager-modal.hidden { display: none; }
+    .manager-modal-backdrop {
+      position: absolute;
+      inset: 0;
+      background: rgba(28, 58, 100, 0.55);
+      backdrop-filter: blur(2px);
+    }
+    .manager-modal-card {
+      position: relative;
+      background: var(--panel);
+      width: min(540px, 92vw);
+      max-height: 88vh;
+      overflow-y: auto;
+      box-shadow: 0 20px 60px rgba(0,0,0,0.35);
+      border-top: 4px solid #f1c40f;
+      animation: modalRise 0.22s ease-out;
+    }
+    @keyframes modalRise {
+      0%   { transform: translateY(20px) scale(0.96); opacity: 0; }
+      100% { transform: translateY(0) scale(1); opacity: 1; }
+    }
+    .manager-modal-close {
+      position: absolute;
+      top: 8px;
+      right: 12px;
+      background: transparent;
+      border: 0;
+      font-size: 28px;
+      line-height: 1;
+      color: var(--text-muted);
+      cursor: pointer;
+      padding: 4px 10px;
+      z-index: 2;
+    }
+    .manager-modal-close:hover { color: var(--navy); }
+    .manager-modal-body { padding: 24px 28px 22px; }
+    .manager-modal-loading { padding: 40px 0; text-align: center; color: var(--text-faint); }
+    .mm-header { display: flex; gap: 16px; margin-bottom: 14px; }
+    .mm-portrait {
+      width: 96px;
+      height: 96px;
+      flex-shrink: 0;
+      border: 1px solid var(--border);
+      box-shadow: var(--shadow);
+      overflow: hidden;
+      background: #ecf0f1;
+    }
+    .mm-portrait img { width: 100%; height: 100%; object-fit: cover; object-position: center 22%; display: block; }
+    .mm-name { font-size: 22px; font-weight: 700; color: var(--navy); line-height: 1.1; }
+    .mm-title { font-size: 13px; color: var(--text-muted); margin-top: 2px; }
+    .mm-claim {
+      margin-top: 8px;
+      font-size: 12px;
+      padding: 4px 10px;
+      display: inline-block;
+      border-radius: 2px;
+      background: #fadbd8;
+      color: var(--danger);
+      letter-spacing: 0.4px;
+      font-weight: 600;
+      text-transform: uppercase;
+    }
+    .mm-claim.unclaimed {
+      background: #d4f4dd;
+      color: var(--success);
+    }
+    .mm-stats {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 10px;
+      padding: 12px 0;
+      border-top: 1px solid var(--border);
+      border-bottom: 1px solid var(--border);
+      margin: 6px 0 14px;
+    }
+    .mm-stat { text-align: center; }
+    .mm-stat-label {
+      font-size: 10px;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      letter-spacing: 1px;
+    }
+    .mm-stat-value {
+      font-size: 18px;
+      font-weight: 700;
+      color: var(--navy);
+      font-variant-numeric: tabular-nums;
+    }
+    .mm-section-label {
+      font-size: 10px;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      margin-top: 12px;
+      margin-bottom: 4px;
+    }
+    .mm-traits {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 6px 16px;
+    }
+    .mm-trait { display: flex; align-items: center; gap: 8px; }
+    .mm-trait-name { min-width: 70px; font-size: 12px; color: var(--text); font-weight: 600; }
+    .mm-trait-bar { flex: 1; height: 6px; background: #ecf0f1; border-radius: 3px; overflow: hidden; }
+    .mm-trait-bar > div { height: 100%; background: var(--navy-2); }
+    .mm-trait.aggression .mm-trait-bar > div { background: var(--danger); }
+    .mm-trait.greed      .mm-trait-bar > div { background: var(--warning); }
+    .mm-trait.caution    .mm-trait-bar > div { background: var(--success); }
+    .mm-trait.loyalty    .mm-trait-bar > div { background: var(--navy-2); }
+    .mm-trait-value { font-size: 11px; color: var(--text-muted); min-width: 22px; text-align: right; font-variant-numeric: tabular-nums; }
+    .mm-backstory, .mm-quirk { font-size: 13px; line-height: 1.5; margin-top: 6px; }
+    .mm-quirk { font-style: italic; color: var(--text-muted); }
+    .mm-profile-link {
+      display: inline-block;
+      margin-top: 14px;
+      font-size: 12px;
+      color: var(--info);
+      text-decoration: none;
+    }
+    .mm-profile-link:hover { text-decoration: underline; }
+
     /* === Empty state ================================================ */
     .empty-state {
       padding: 32px;
@@ -685,6 +827,7 @@
     <div class="stamp">Cycle Paused</div>
     <div class="sub">Strategic Review In Progress · State Preserved</div>
     <button id="resume-cta" class="resume-cta">▶ Resume Cycle</button>
+    <button id="halt-dismiss" class="halt-dismiss" title="Hide overlay (game stays paused)">✕ Hide overlay</button>
   </div>
 
   <div id="ended-overlay" class="ended-overlay hidden">
@@ -700,6 +843,16 @@
         <div><b id="ended-rank">#1</b>Closing Rank</div>
       </div>
       <button id="ended-dismiss" class="ended-dismiss">View Final Standings</button>
+    </div>
+  </div>
+
+  <div id="manager-modal" class="manager-modal hidden" role="dialog" aria-modal="true">
+    <div class="manager-modal-backdrop" data-modal-close></div>
+    <div class="manager-modal-card" id="manager-modal-card">
+      <button class="manager-modal-close" data-modal-close aria-label="Close">×</button>
+      <div class="manager-modal-body" id="manager-modal-body">
+        <div class="manager-modal-loading">Loading…</div>
+      </div>
     </div>
   </div>
 
@@ -913,7 +1066,7 @@
       lastTickStartMs = Date.now(); // fallback for fresh load if nextAlarmAt is missing
       document.getElementById('cycle').textContent = data.tick;
       document.getElementById('status').textContent = humanStatus(data.status);
-      document.getElementById('halted-overlay').classList.toggle('hidden', data.status !== 'halted');
+      maybeShowHaltOverlay(data.status, data.tick);
 
       // Stats
       setKpis(data.stats.totalAmountMoved, data.stats.totalTransactions, data.stats.avgSettlementTime, data.agents.length);
@@ -1196,8 +1349,10 @@
         : '';
       const badges = winnerBadge + effectBadges;
       const namePrefix = isWinner ? '👑 ' : '';
-      const profileHref = '/agent.html?id=' + encodeURIComponent(a.id);
-      return '<a href="' + profileHref + '" class="manager-row rank-' + rank + (isWinner ? ' winner' : '') + '" data-agent-id="' + a.id + '" title="View ' + escape(a.name) + '\'s profile">'
+      // Row is a div, not a link — clicking opens an inline modal so the
+      // viewer stays on the dashboard. Event delegation in initManagerModal()
+      // handles clicks via data-agent-id.
+      return '<div class="manager-row rank-' + rank + (isWinner ? ' winner' : '') + '" data-agent-id="' + a.id + '" title="Click for character summary">'
         + '<div class="rank">' + rank + '</div>'
         + '<div class="manager-identity">'
         +   '<div class="name">' + namePrefix + escape(a.name) + '</div>'
@@ -1209,7 +1364,7 @@
         +   '<div class="prestige">' + a.prestige + '</div>'
         +   '<div class="balance' + ((a.balance != null && a.balance < 50) ? ' low' : '') + '">$' + (a.balance != null ? Number(a.balance).toFixed(0) : '–') + '</div>'
         + '</div>'
-        + '</a>';
+        + '</div>';
     }
 
     // Hardcoded persona traits for inline display (must match agents/personas.ts).
@@ -1283,7 +1438,7 @@
         nextAlarmAt = data.nextAlarmAt ?? null;
         document.getElementById('cycle').textContent = data.tick;
         document.getElementById('status').textContent = humanStatus(data.status);
-        document.getElementById('halted-overlay').classList.toggle('hidden', data.status !== 'halted');
+        maybeShowHaltOverlay(data.status, data.tick);
         renderLeaderboard(data.agents);
         setKpis(data.stats.totalAmountMoved, data.stats.totalTransactions, data.stats.avgSettlementTime, data.agents.length);
       } catch (e) { /* network blip; next event will retry */ }
@@ -1353,6 +1508,110 @@
       if (s === 'setup') return 'Initializing';
       return s;
     }
+
+    // ============================================================
+    // Halt-overlay dismissal: lets a viewer hide the navy overlay so
+    // they can poke at the UI while the game is paused. Stored per
+    // tick — so when the game resumes and re-halts at a different
+    // tick, the overlay reappears.
+    // ============================================================
+    function maybeShowHaltOverlay(status, tick) {
+      const overlay = document.getElementById('halted-overlay');
+      if (!overlay) return;
+      if (status !== 'halted') {
+        overlay.classList.add('hidden');
+        sessionStorage.removeItem('haltDismissedAt');
+        return;
+      }
+      const dismissedAt = sessionStorage.getItem('haltDismissedAt');
+      if (dismissedAt && parseInt(dismissedAt, 10) === tick) {
+        overlay.classList.add('hidden');
+      } else {
+        overlay.classList.remove('hidden');
+      }
+    }
+    document.getElementById('halt-dismiss')?.addEventListener('click', () => {
+      sessionStorage.setItem('haltDismissedAt', String(currentTick));
+      document.getElementById('halted-overlay').classList.add('hidden');
+    });
+
+    // ============================================================
+    // Manager character-summary modal. Click any leaderboard row to open
+    // an inline summary (no navigation away from the dashboard). Backdrop
+    // click and Esc both close it. Esc also closes the pause prompt etc.
+    // ============================================================
+    const managerModal = document.getElementById('manager-modal');
+    const managerModalBody = document.getElementById('manager-modal-body');
+
+    function openManagerModal(agentId) {
+      managerModalBody.innerHTML = '<div class="manager-modal-loading">Loading…</div>';
+      managerModal.classList.remove('hidden');
+      fetch(`${ORCHESTRATOR_BASE}/api/agent/${encodeURIComponent(agentId)}`)
+        .then((r) => r.ok ? r.json() : Promise.reject(`HTTP ${r.status}`))
+        .then((a) => {
+          managerModalBody.innerHTML = renderManagerModalBody(a);
+        })
+        .catch((err) => {
+          managerModalBody.innerHTML = `<div class="manager-modal-loading">Couldn't load (${escape(String(err))}).</div>`;
+        });
+    }
+    function closeManagerModal() {
+      managerModal.classList.add('hidden');
+    }
+    function renderManagerModalBody(a) {
+      const traits = a.traits || { aggression: 0, greed: 0, caution: 0, loyalty: 0 };
+      const photoUrl = `/images/${encodeURIComponent(a.name)}.png`;
+      const traitRow = (label, cls, val) => {
+        const v = Math.max(0, Math.min(100, val ?? 0));
+        return `<div class="mm-trait ${cls}">
+          <div class="mm-trait-name">${escape(label)}</div>
+          <div class="mm-trait-bar"><div style="width:${v}%"></div></div>
+          <div class="mm-trait-value">${v}</div>
+        </div>`;
+      };
+      const claimBadge = a.claimed
+        ? `<div class="mm-claim">Adopted by ${escape(a.claimedByName || 'a stakeholder')}</div>`
+        : `<div class="mm-claim unclaimed">Unclaimed</div>`;
+      return `
+        <div class="mm-header">
+          <div class="mm-portrait"><img src="${photoUrl}" alt="${escape(a.name)}" onerror="this.parentElement.style.display='none'"></div>
+          <div>
+            <div class="mm-name">${escape(a.name)}</div>
+            <div class="mm-title">${escape(a.title)}</div>
+            ${claimBadge}
+          </div>
+        </div>
+        <div class="mm-stats">
+          <div class="mm-stat"><div class="mm-stat-value">${a.prestige}</div><div class="mm-stat-label">Prestige</div></div>
+          <div class="mm-stat"><div class="mm-stat-value">$${Math.round(a.balance)}</div><div class="mm-stat-label">Budget</div></div>
+          <div class="mm-stat"><div class="mm-stat-value">#${a.rank}</div><div class="mm-stat-label">Rank</div></div>
+          <div class="mm-stat"><div class="mm-stat-value">${(a.allies || []).length}</div><div class="mm-stat-label">Allies</div></div>
+        </div>
+        <div class="mm-section-label">Personality</div>
+        <div class="mm-traits">
+          ${traitRow('Aggression', 'aggression', traits.aggression)}
+          ${traitRow('Greed', 'greed', traits.greed)}
+          ${traitRow('Caution', 'caution', traits.caution)}
+          ${traitRow('Loyalty', 'loyalty', traits.loyalty)}
+        </div>
+        ${a.backstory ? `<div class="mm-section-label">Backstory</div><div class="mm-backstory">${escape(a.backstory)}</div>` : ''}
+        ${a.quirk ? `<div class="mm-section-label">Quirk</div><div class="mm-quirk">"${escape(a.quirk)}"</div>` : ''}
+        <a class="mm-profile-link" href="/agent.html?id=${encodeURIComponent(a.id)}">Open full profile →</a>
+      `;
+    }
+
+    document.getElementById('leaderboard')?.addEventListener('click', (e) => {
+      const row = e.target.closest('.manager-row');
+      if (!row) return;
+      const id = row.dataset.agentId;
+      if (id) openManagerModal(id);
+    });
+    managerModal.addEventListener('click', (e) => {
+      if (e.target.matches('[data-modal-close]')) closeManagerModal();
+    });
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape' && !managerModal.classList.contains('hidden')) closeManagerModal();
+    });
 
     // ============================================================
     // End-of-game winner overlay. Triggered when status === "ended".

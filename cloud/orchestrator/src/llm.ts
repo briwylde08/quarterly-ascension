@@ -26,12 +26,12 @@ const ALL_ACTIONS = [
   { type: "reject_alliance", description: "Reject a pending alliance proposal (proposer loses 10 prestige)", cost: 0, requiresTarget: true },
   { type: "break_alliance", description: "Betray an ally (-15 prestige for you; ex-ally gets Under Investigation 1 tick — can't retaliate immediately). Calculated nuke.", cost: 0, requiresTarget: true },
 
-  { type: "buy_coffee", description: "Buy coffee (removes Tired). Tired accumulates after 4 cycles without rest.", cost: 8 },
-  { type: "buy_fancy_coffee", description: "Buy fancy coffee (Caffeinated for 2 ticks; immune to Tired)", cost: 15 },
+  { type: "buy_coffee", description: "Buy coffee (removes Tired). Tired accumulates after 6 cycles without rest.", cost: 5 },
+  { type: "buy_fancy_coffee", description: "Buy fancy coffee (Caffeinated for 2 ticks; immune to Tired)", cost: 10 },
   { type: "file_complaint", description: "File HR complaint (you +5 'diligence' prestige; target gets Under Investigation, can't retaliate against you for 1 tick)", cost: 22, requiresTarget: true },
   { type: "sensitivity_training", description: "Send rival to sensitivity training (target -20 prestige + Problematic for 4 ticks: -3 prestige/tick decay)", cost: 30, requiresTarget: true },
   { type: "check_hr_status", description: "See who has filed complaints against you", cost: 5 },
-  { type: "strategy_report", description: "Get consultant report (+35 prestige, gives Deliverable for a future +40 CEO meeting; halved to +18 after a New Initiative pivot)", cost: 35 },
+  { type: "strategy_report", description: "Get consultant report (+35 prestige, gives Deliverable for a future +40 CEO meeting; halved to +18 after a New Initiative pivot)", cost: 25 },
   { type: "competitive_intel", description: "Learn top 3 agents' last action AND spread rumors that nick the leader for -3 prestige", cost: 25 },
   { type: "sabotage_plan", description: "Build dossier on target (-10 prestige to target + 'Marked' for 2 ticks: any take_credit against them auto-succeeds). Setup play.", cost: 40, requiresTarget: true },
   { type: "fix_laptop", description: "Sabotage target's laptop (forced to rest next tick)", cost: 12, requiresTarget: true },
@@ -47,7 +47,7 @@ const ALL_ACTIONS = [
   { type: "send_motivation", description: "Send rival to mandatory motivation (target forced to rest for 2 ticks)", cost: 25, requiresTarget: true },
 
   // Earning paths (Phase 5)
-  { type: "whistleblower_bounty", description: "Report target to HR ($10 cost). If target had hostile actions in last 3 ticks → +30 prestige + $25 bounty. If false → -10 prestige; target gets +5 wrongful-report bonus.", cost: 10, requiresTarget: true },
+  { type: "whistleblower_bounty", description: "Report target to HR ($10 cost). If target had hostile actions in last 3 ticks → +30 prestige + $25 bounty. If false → -3 prestige; target gets +5 wrongful-report bonus.", cost: 10, requiresTarget: true },
   { type: "mentorship", description: "Mentor target ($15 cost; non-self target). Self +5 prestige + $30 stipend; target +10 prestige. Wholesome alternative to take_credit.", cost: 15, requiresTarget: true },
   { type: "coffee_chat", description: "Casual coffee with target ($5; non-self). Both gain +3 prestige. No alliance proposed. Low-stakes networking.", cost: 5, requiresTarget: true },
 ];
@@ -85,17 +85,24 @@ function buildContextPrompt(ctx: DecisionContext): string {
   ]);
   const otherAgents = allAgents
     .filter((a) => a.id !== agent.id)
-    .map((a) => ({
-      id: a.id,
-      name: a.name,
-      title: a.title,
-      prestige: a.prestige,
-      isAlly: agent.allies.includes(a.id),
-      isRival: false,
-      publicTags: a.statusEffects
+    .map((a) => {
+      const tags = a.statusEffects
         .filter((s) => PUBLIC_STATUSES.has(s.type))
-        .map((s) => s.type.toUpperCase().replace(/_/g, " ")),
-    }));
+        .map((s) => s.type.toUpperCase().replace(/_/g, " "));
+      // Well-allied = 3+ alliances. Hostile actions against this agent are
+      // dampened (sensitivity_training, sabotage_plan, poison_meeting all
+      // halve their prestige hit). Surface so the LLM can route around.
+      if (a.allies.length >= 3) tags.push("WELL-ALLIED");
+      return {
+        id: a.id,
+        name: a.name,
+        title: a.title,
+        prestige: a.prestige,
+        isAlly: agent.allies.includes(a.id),
+        isRival: false,
+        publicTags: tags,
+      };
+    });
 
   const availableActions = ALL_ACTIONS.filter((action) => {
     if (action.cost > balance) return false;

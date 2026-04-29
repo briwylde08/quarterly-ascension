@@ -18,7 +18,7 @@ const NAME = "Coffee Cart";
 
 const ENDPOINTS = {
   "/buy": {
-    price: 8,
+    price: 5,
     payload: {
       item: "coffee",
       effect: "productivity_boost",
@@ -28,7 +28,7 @@ const ENDPOINTS = {
     },
   },
   "/buy-fancy": {
-    price: 15,
+    price: 10,
     payload: {
       item: "fancy_coffee",
       effect: "caffeinated",

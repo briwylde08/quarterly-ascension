@@ -18,6 +18,7 @@ import type { GameEvent } from "./types.js";
 import type { Db } from "./db.js";
 import type { Stellar } from "./stellar.js";
 import type { RewardSources } from "./tick.js";
+import { getPersona } from "./personas.js";
 
 export interface RandomEventsState {
   triggeredOnce: Set<string>;
@@ -395,19 +396,28 @@ async function mandatoryFun(deps: EventDeps, tick: number): Promise<GameEvent[]>
     tick,
     timestamp: new Date(),
     type: "random_event",
-    description: "MANDATORY FUN: Team building event! Everyone receives random prestige changes.",
+    description: "MANDATORY FUN: Team building event! Reactions vary by personality.",
   }];
 
+  // Roll modulated by loyalty: high-loyalty agents (the team players) skew
+  // positive; low-loyalty agents (the cynics) skew negative. Same range
+  // overall (~30 points) but the center shifts up to ±10 points based on
+  // (loyalty - 50) / 5.
   for (const agent of agents) {
-    const prestigeChange = Math.floor(Math.random() * 31) - 10;
+    const persona = getPersona(agent.personaId);
+    const loyalty = persona?.traits.loyalty ?? 50;
+    const shift = Math.round((loyalty - 50) / 5); // -10 to +10
+    const baseRoll = Math.floor(Math.random() * 31) - 10; // -10 to +20
+    const prestigeChange = baseRoll + shift;
     await deps.db.updateAgentPrestige(agent.id, prestigeChange);
+    const reaction = prestigeChange > 5 ? "thrived at" : prestigeChange >= 0 ? "enjoyed" : prestigeChange > -5 ? "endured" : "actively hated";
     events.push({
       id: uuid(),
       tick,
       timestamp: new Date(),
       type: "random_event",
       agentId: agent.id,
-      description: `${agent.name} ${prestigeChange >= 0 ? "enjoyed" : "endured"} mandatory fun (${prestigeChange >= 0 ? "+" : ""}${prestigeChange})`,
+      description: `${agent.name} ${reaction} mandatory fun (${prestigeChange >= 0 ? "+" : ""}${prestigeChange})`,
       prestigeChange,
     });
   }
@@ -455,12 +465,28 @@ async function audit(deps: EventDeps, state: RandomEventsState, tick: number): P
 
   state.recentAudits.set(victim.id, tick);
 
-  await deps.db.updateAgentPrestige(victim.id, -30);
+  // Penalty modulated by caution. High-caution agents (Linda, Brenda, Ron,
+  // Diane) ran tighter books — smaller penalty. Low-caution agents (Kevin,
+  // Trevor, Chad) get hammered. Range: -15 to -45 around the -30 baseline.
+  const persona = getPersona(victim.personaId);
+  const caution = persona?.traits.caution ?? 50;
+  // (caution - 50) / 50 spans -1 to +1; multiply by 15 to add ±15 to the
+  // base -30 (so high caution → -15, low caution → -45). Negative because
+  // we want higher caution to *reduce* the penalty magnitude.
+  const cautionAdjust = Math.round(((caution - 50) / 50) * 15);
+  const penalty = -30 + cautionAdjust;
+  await deps.db.updateAgentPrestige(victim.id, penalty);
   const agentData = (await deps.db.getAgent(victim.id))!;
   await deps.db.updateAgentStatusEffects(victim.id, [
     ...agentData.statusEffects,
     { type: "under_review" as const, expiresAtTick: tick + 4 },
   ]);
+
+  const flavor = caution >= 70
+    ? "their spreadsheets were already audit-ready"
+    : caution <= 30
+      ? "their bookkeeping was a war crime"
+      : "their records held up to standard scrutiny";
 
   return [{
     id: uuid(),
@@ -468,7 +494,7 @@ async function audit(deps: EventDeps, state: RandomEventsState, tick: number): P
     timestamp: new Date(),
     type: "random_event",
     agentId: victim.id,
-    description: `AUDIT: ${victim.name} is under review for excessive spending! -30 prestige`,
+    description: `AUDIT: ${victim.name} is under review for excessive spending — ${flavor} (${penalty} prestige).`,
     prestigeChange: -30,
   }];
 }
