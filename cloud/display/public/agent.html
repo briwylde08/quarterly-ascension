@@ -4,6 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>MegaCorp · Manager Profile</title>
+  <link rel="icon" type="image/svg+xml" href="/favicon.svg">
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
     :root {
@@ -121,6 +122,69 @@
       border-left: 3px solid var(--warning);
       font-size: 13px;
     }
+
+    .coach-box {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-top: 3px solid #f1c40f;
+      box-shadow: var(--shadow);
+      padding: 18px 20px;
+      font-size: 13px;
+    }
+    .coach-box h3 { font-size: 12px; text-transform: uppercase; letter-spacing: 1px; color: var(--navy); margin-bottom: 8px; }
+    .coach-box .coach-state { font-size: 12px; color: var(--text-muted); margin-bottom: 14px; line-height: 1.5; }
+    .coach-box .coach-state.open { color: var(--success); }
+    .coach-box .coach-state.locked { color: var(--text-muted); }
+    .coach-box .current-directive {
+      background: #fef5e7;
+      padding: 10px 12px;
+      border-left: 3px solid #f1c40f;
+      font-style: italic;
+      color: #1c3a64;
+      margin-bottom: 14px;
+      font-size: 13px;
+      line-height: 1.5;
+    }
+    .coach-box textarea {
+      width: 100%;
+      padding: 10px 12px;
+      border: 1px solid var(--border-2);
+      border-radius: 2px;
+      font-family: inherit;
+      font-size: 13px;
+      resize: vertical;
+      min-height: 80px;
+      box-sizing: border-box;
+    }
+    .coach-box textarea:focus { outline: 2px solid var(--navy-2); border-color: var(--navy-2); }
+    .coach-box .coach-counter {
+      font-size: 11px;
+      color: var(--text-faint);
+      text-align: right;
+      margin-top: 4px;
+    }
+    .coach-box .coach-buttons {
+      display: flex;
+      gap: 8px;
+      margin-top: 12px;
+    }
+    .coach-box button {
+      flex: 1;
+      padding: 9px;
+      border: 0;
+      font-family: inherit;
+      font-size: 12px;
+      font-weight: 600;
+      letter-spacing: 0.5px;
+      text-transform: uppercase;
+      cursor: pointer;
+    }
+    .coach-box .coach-save { background: var(--navy); color: #fff; }
+    .coach-box .coach-save:hover { background: var(--navy-2); }
+    .coach-box .coach-clear { background: #ecf0f1; color: var(--text); border: 1px solid var(--border-2); }
+    .coach-box .coach-clear:hover { background: #d5dbdb; }
+    .coach-box button:disabled { opacity: 0.5; cursor: not-allowed; }
+    .coach-msg { margin-top: 10px; font-size: 12px; line-height: 1.4; }
   </style>
 </head>
 <body>
@@ -142,6 +206,7 @@
 
     <aside id="side-col" style="display:flex;flex-direction:column;gap:16px;">
       <div id="claim-area"></div>
+      <div id="coach-area"></div>
       <section class="panel">
         <div class="panel-head">Recent Activity</div>
         <div class="activity-list" id="activity-list"></div>
@@ -162,6 +227,12 @@
 
     const params = new URLSearchParams(location.search);
     const agentId = params.get('id');
+    // The email query param (set by the progress-email coaching link) lets
+    // the API surface the directive + ownership flag for THIS visitor.
+    // Must be declared BEFORE the call to load() — otherwise the call hits
+    // a temporal dead zone when load()'s body reads coachEmail.
+    const coachEmail = params.get('email')?.trim().toLowerCase() || '';
+
     if (!agentId) {
       document.getElementById('profile-body').innerHTML =
         '<p>Missing agent id. <a href="/intro.html">← go back</a></p>';
@@ -170,7 +241,10 @@
     }
 
     async function load() {
-      const res = await fetch(`${ORCHESTRATOR_BASE}/api/agent/${encodeURIComponent(agentId)}`);
+      const url = coachEmail
+        ? `${ORCHESTRATOR_BASE}/api/agent/${encodeURIComponent(agentId)}?email=${encodeURIComponent(coachEmail)}`
+        : `${ORCHESTRATOR_BASE}/api/agent/${encodeURIComponent(agentId)}`;
+      const res = await fetch(url);
       if (res.status === 404) {
         document.getElementById('profile-body').innerHTML =
           '<p>No such manager. <a href="/intro.html">← back to roster</a></p>';
@@ -185,6 +259,11 @@
       renderProfile(a);
       renderActivity(a.recentActions || []);
       renderClaim(a);
+      renderCoach(a);
+      // If we landed via the email link, jump to the coach section.
+      if (location.hash === '#coach') {
+        document.getElementById('coach-area')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }
     }
 
     function renderProfile(a) {
@@ -392,6 +471,100 @@
           btn.textContent = `Claim ${a.name}`;
         }
       });
+    }
+
+    // ============================================================
+    // Coaching: stakeholder directive editor.
+    // Visible only when:
+    //   - the agent is claimed by someone (?)
+    //   - the visitor's ?email= matches the claim record (verified server-side
+    //     via /api/agent/:id?email=)
+    // The textarea is editable only inside the coaching window
+    // (current_tick ∈ {12, 24, 36} during running/halted state).
+    // ============================================================
+    function renderCoach(a) {
+      const area = document.getElementById('coach-area');
+      if (!a.claimed) { area.innerHTML = ''; return; }
+
+      // No email param at all → don't show the section. The coaching link
+      // in the email always carries it.
+      if (!a.directiveOwner) { area.innerHTML = ''; return; }
+
+      const w = a.coachingWindow || { open: false, currentTick: 0, windowTicks: [], nextWindowTick: null };
+      const dirText = a.directive || '';
+      const stateText = w.open
+        ? `Coaching window open — current cycle is ${w.currentTick}. Closes when cycle ${w.currentTick + 1} starts (~5 min).`
+        : a.gameStatus === 'ended'
+          ? `Game has ended. Directives are cleared at end-of-game.`
+          : a.gameStatus === 'setup'
+            ? `Game hasn't started. Coaching unlocks at cycles ${w.windowTicks.join(', ')}.`
+            : w.nextWindowTick
+              ? `Coaching window closed. Re-opens at cycle ${w.nextWindowTick}, when the next progress email lands.`
+              : `No more coaching windows this game (final email at cycle ${w.windowTicks[w.windowTicks.length - 1]} already passed).`;
+      const stateClass = w.open ? 'open' : 'locked';
+
+      area.innerHTML = `
+        <div class="coach-box">
+          <h3>⏱ Coach ${escape(a.name.split(' ')[0])}</h3>
+          <div class="coach-state ${stateClass}">${escape(stateText)}</div>
+          ${dirText ? `<div class="current-directive">"${escape(dirText)}"</div>` : ''}
+          ${w.open ? `
+            <textarea id="coach-input" maxlength="250" placeholder="e.g. Stop attacking everyone. Build alliances and bring birthday cake."></textarea>
+            <div class="coach-counter"><span id="coach-len">0</span>/250</div>
+            <div class="coach-buttons">
+              <button class="coach-save" id="coach-save" type="button">Save Directive</button>
+              ${dirText ? `<button class="coach-clear" id="coach-clear" type="button">Clear</button>` : ''}
+            </div>
+            <div class="coach-msg" id="coach-msg"></div>
+          ` : `
+            ${!dirText ? '<div class="coach-state">No directive set this game.</div>' : ''}
+          `}
+        </div>`;
+
+      if (w.open) {
+        const input = document.getElementById('coach-input');
+        const counter = document.getElementById('coach-len');
+        if (dirText) input.value = dirText;
+        counter.textContent = String(input.value.length);
+        input.addEventListener('input', () => { counter.textContent = String(input.value.length); });
+
+        const msg = document.getElementById('coach-msg');
+        document.getElementById('coach-save').addEventListener('click', async () => {
+          const directive = input.value.trim();
+          if (!directive) { msg.style.color = 'var(--danger)'; msg.textContent = 'Directive is empty.'; return; }
+          await sendCoach({ method: 'POST', body: { agentId: a.id, email: coachEmail, directive } });
+        });
+        const clearBtn = document.getElementById('coach-clear');
+        clearBtn?.addEventListener('click', async () => {
+          if (!confirm('Clear the current directive? Your manager goes back to base personality.')) return;
+          await sendCoach({ method: 'DELETE', body: { agentId: a.id, email: coachEmail } });
+        });
+      }
+    }
+
+    async function sendCoach({ method, body }) {
+      const msg = document.getElementById('coach-msg');
+      msg.style.color = 'var(--text-muted)';
+      msg.textContent = method === 'DELETE' ? 'Clearing…' : 'Saving…';
+      try {
+        const r = await fetch(`${ORCHESTRATOR_BASE}/api/directive`, {
+          method,
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(body),
+        });
+        const data = await r.json();
+        if (r.ok) {
+          msg.style.color = 'var(--success)';
+          msg.textContent = method === 'DELETE' ? 'Cleared. Reloading…' : 'Saved. Reloading…';
+          setTimeout(() => location.reload(), 800);
+        } else {
+          msg.style.color = 'var(--danger)';
+          msg.textContent = data.error || `Request failed (${r.status})`;
+        }
+      } catch (err) {
+        msg.style.color = 'var(--danger)';
+        msg.textContent = 'Network error: ' + err.message;
+      }
     }
   </script>
 </body>

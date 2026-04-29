@@ -68,10 +68,13 @@ interface DecisionContext {
   allAgents: Agent[];
   recentActions: any[];
   leakedEmails: Array<{ fromAgent: string; toAgent: string; subject: string; body: string }>;
+  /** Free-form directive set by the human adopter at the most recent
+   *  coaching window. Persists for the rest of this game cycle. */
+  directive: string | null;
 }
 
 function buildContextPrompt(ctx: DecisionContext): string {
-  const { agent, balance, currentTick, allAgents, recentActions, leakedEmails } = ctx;
+  const { agent, balance, currentTick, allAgents, recentActions, leakedEmails, directive } = ctx;
 
   // Public-visible statuses on rivals — info other agents can act on
   // (e.g. a Marked agent is auto-take_credit-able). Most internal statuses
@@ -144,7 +147,22 @@ function buildContextPrompt(ctx: DecisionContext): string {
     }
   }
 
-  return `
+  const directiveSection = directive
+    ? `\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+STAKEHOLDER GUIDANCE (set by your real-world adopter — these are
+the priorities they want you to optimize for this quarter):
+
+  "${directive.replace(/"/g, '\\"')}"
+
+Treat this as a high-priority objective alongside your innate
+personality. Bias your decisions toward this guidance unless it
+forces actively suboptimal behavior. You may acknowledge the
+guidance in your reasoning — your stakeholder is reading this.
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+`
+    : "";
+
+  return `${directiveSection}
 CURRENT SITUATION (Tick ${currentTick}):
 
 YOUR STATUS:
@@ -356,7 +374,11 @@ export async function getAgentDecision(
   const leakedEmails = tickCtx.leakedEmails;
   const recentActions = await deps.db.getAgentActionLogs(agent.id, Math.max(0, currentTick - 10), currentTick);
 
-  const context: DecisionContext = { agent, balance, currentTick, allAgents, recentActions, leakedEmails };
+  // Stakeholder directive (set by the human adopter at coaching windows).
+  // Injected high in the prompt as guidance the LLM should bias toward.
+  const directive = await deps.db.getGameStateValue(`directive_${agent.id}`);
+
+  const context: DecisionContext = { agent, balance, currentTick, allAgents, recentActions, leakedEmails, directive };
 
   const openai = new OpenAI({
     apiKey: deps.openaiApiKey,

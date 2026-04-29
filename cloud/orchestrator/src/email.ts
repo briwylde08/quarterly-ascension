@@ -305,6 +305,7 @@ export interface ProgressSummaryInput {
   rank: number;
   total: number;
   claimerName: string;
+  claimerEmail: string;           // used to build the coaching deep-link
   cycle: number;
   cycleLabel: string;             // e.g. "Q1 Cycle 24 (mid-quarter)"
   actions: Array<{ tick: number; action_type: string; outcome: string; reasoning: string | null; prestige_change: number | null }>;
@@ -315,7 +316,7 @@ export interface ProgressSummaryInput {
 }
 
 export function progressSummaryEmail(opts: ProgressSummaryInput): SendEmailInput {
-  const { agent, balance, rank, total, claimerName, cycle, cycleLabel, actions, inboundEvents, prestigeStart, budgetStart, notableQuotes } = opts;
+  const { agent, balance, rank, total, claimerName, claimerEmail, cycle, cycleLabel, actions, inboundEvents, prestigeStart, budgetStart, notableQuotes } = opts;
 
   const prestigeDelta = agent.prestige - prestigeStart;
   const budgetDelta = balance - budgetStart;
@@ -361,6 +362,7 @@ export function progressSummaryEmail(opts: ProgressSummaryInput): SendEmailInput
 
   const outlook = generateOutlook(agent, prestigeDelta, budgetDelta, balance, rank, total);
 
+  const coachUrl = `https://quarterly-ascension.pages.dev/agent.html?id=${agent.id}&email=${encodeURIComponent(claimerEmail)}#coach`;
   const text = [
     `${cycleLabel} Performance Summary — ${agent.name}`,
     `${"━".repeat(60)}`,
@@ -378,6 +380,9 @@ export function progressSummaryEmail(opts: ProgressSummaryInput): SendEmailInput
     ``,
     `NEXT PERIOD OUTLOOK:`,
     outlook,
+    ``,
+    `⏱ COACHING WINDOW (open for ~5 minutes):`,
+    `   ${coachUrl}`,
     ``,
     `Live dashboard: https://quarterly-ascension.pages.dev/`,
     `Profile: https://quarterly-ascension.pages.dev/agent.html?id=${agent.id}`,
@@ -412,8 +417,15 @@ export function progressSummaryEmail(opts: ProgressSummaryInput): SendEmailInput
     ${escapeHtml(outlook)}
   </div>
 
+  <div style="background:#fef5e7;border:1px solid #f1c40f;padding:14px 18px;margin-top:18px;font-size:13px;line-height:1.5;">
+    <b style="color:#1c3a64;">⏱ Want to course-correct?</b>
+    You can give ${escapeHtml(agent.name.split(" ")[0])} a strategic directive — but only until the next cycle starts (~5 minutes). After that the coaching window closes until the next quarter.
+    <br><br>
+    <a href="https://quarterly-ascension.pages.dev/agent.html?id=${agent.id}&email=${encodeURIComponent(claimerEmail)}#coach" style="background:#1c3a64;color:#ffffff;padding:10px 18px;text-decoration:none;font-size:13px;letter-spacing:0.5px;">Coach ${escapeHtml(agent.name.split(" ")[0])} →</a>
+  </div>
+
   <p style="margin-top:22px;">
-    <a href="https://quarterly-ascension.pages.dev/agent.html?id=${agent.id}" style="background:#1c3a64;color:#ffffff;padding:10px 18px;text-decoration:none;font-size:13px;letter-spacing:0.5px;">View profile</a>
+    <a href="https://quarterly-ascension.pages.dev/agent.html?id=${agent.id}" style="background:#7a8b99;color:#ffffff;padding:8px 16px;text-decoration:none;font-size:12px;letter-spacing:0.5px;">View profile</a>
     &nbsp;
     <a href="https://quarterly-ascension.pages.dev/" style="color:#2471a3;font-size:13px;">Watch live →</a>
   </p>

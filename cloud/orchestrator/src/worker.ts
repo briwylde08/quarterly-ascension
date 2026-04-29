@@ -29,6 +29,11 @@ export interface Env {
 
   // Phase 6 — claim flow + emails.
   RESEND_API_KEY: string;
+
+  // Asset issuer's secret. Used by /admin/normalize to mint DLBR to agents
+  // who are below the configured starting balance. Only the orchestrator
+  // ever signs from this account; agents themselves don't have access.
+  ASSET_ISSUER_SECRET: string;
 }
 
 export default {

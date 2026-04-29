@@ -4,6 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>MegaCorp · Q1 FY2026 Performance Dashboard</title>
+  <link rel="icon" type="image/svg+xml" href="/favicon.svg">
   <style>
     /* ====================================================================
        MegaCorp Q1 FY2026 Performance Dashboard
@@ -167,6 +168,7 @@
     .pause-btn:hover { background: rgba(255,255,255,0.20); }
     .pause-btn:active { transform: translateY(1px); }
     .pause-btn.resume { background: rgba(241,196,15,0.20); border-color: rgba(241,196,15,0.50); }
+    .pause-btn.start  { background: rgba(39,174,96,0.25); border-color: rgba(39,174,96,0.55); }
     .meta-item.countdown .meta-value.tick { animation: countdownTick 1s ease-out; }
     @keyframes countdownTick {
       0% { transform: scale(1.05); color: #ffffff; }
@@ -1249,7 +1251,7 @@
         // Resume detection: if we were halted and are now running, reset the
         // countdown so it counts from the new tick interval, not from a stale
         // pre-pause baseline.
-        if (currentStatus === 'halted' && data.status === 'running') {
+        if ((currentStatus === 'halted' || currentStatus === 'setup' || currentStatus === 'ended') && data.status === 'running') {
           lastTickStartMs = Date.now();
         }
         currentStatus = data.status;
@@ -1275,6 +1277,10 @@
       }
       if (currentStatus === 'ended') {
         el.textContent = '—';
+        return;
+      }
+      if (currentStatus === 'setup') {
+        el.textContent = 'Awaiting kickoff';
         return;
       }
       const elapsed = Date.now() - lastTickStartMs;
@@ -1384,14 +1390,27 @@
     // current game status from the most recent /api/state read.
     // ============================================================
     const pauseBtn = document.getElementById('pause-btn');
+    // Pause button label tracks game status so it triple-duties:
+    //   setup    → ▶ Start Game   (calls /admin/start)
+    //   running  → ⏸ Pause        (calls /admin/halt)
+    //   halted   → ▶ Resume       (calls /admin/resume)
+    //   ended    → hidden (post-game cleanup runs automatically in ~5 min)
     function syncPauseLabel(status) {
       if (!pauseBtn) return;
+      pauseBtn.classList.remove('resume', 'start');
       if (status === 'halted') {
         pauseBtn.textContent = '▶ Resume';
         pauseBtn.classList.add('resume');
+        pauseBtn.style.display = '';
+      } else if (status === 'setup') {
+        pauseBtn.textContent = '▶ Start Game';
+        pauseBtn.classList.add('start');
+        pauseBtn.style.display = '';
+      } else if (status === 'ended') {
+        pauseBtn.style.display = 'none';
       } else {
         pauseBtn.textContent = '⏸ Pause';
-        pauseBtn.classList.remove('resume');
+        pauseBtn.style.display = '';
       }
     }
     function getAdminSecret() {
@@ -1401,10 +1420,9 @@
       if (s) sessionStorage.setItem('adminSecret', s);
       return s;
     }
-    async function callPauseResume(intent) {
+    async function callAdmin(path, errLabel) {
       const secret = getAdminSecret();
       if (!secret) return;
-      const path = intent === 'resume' ? '/admin/resume' : '/admin/halt';
       try {
         const r = await fetch(ORCHESTRATOR_BASE + path, {
           method: 'POST',
@@ -1415,18 +1433,26 @@
           alert('Admin secret rejected. Try again.');
         } else if (!r.ok) {
           const t = await r.text();
-          alert('Halt/resume failed: ' + r.status + ' ' + t.slice(0, 200));
+          alert(`${errLabel} failed: ${r.status} ${t.slice(0, 200)}`);
         }
         refreshFromApi();
       } catch (e) {
         alert('Network error: ' + e.message);
       }
     }
+    async function callPauseResume(intent) {
+      const path = intent === 'resume' ? '/admin/resume'
+                  : intent === 'start' ? '/admin/start'
+                  : '/admin/halt';
+      await callAdmin(path, intent === 'start' ? 'Start' : 'Halt/resume');
+    }
 
     pauseBtn?.addEventListener('click', async () => {
-      const isPaused = pauseBtn.classList.contains('resume');
+      const intent = pauseBtn.classList.contains('start') ? 'start'
+                   : pauseBtn.classList.contains('resume') ? 'resume'
+                   : 'halt';
       pauseBtn.disabled = true;
-      try { await callPauseResume(isPaused ? 'resume' : 'halt'); }
+      try { await callPauseResume(intent); }
       finally { pauseBtn.disabled = false; }
     });
 

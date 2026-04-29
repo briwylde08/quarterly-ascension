@@ -200,6 +200,9 @@ export class GameOrchestrator {
     // Refuses to run while status === "running"; halt first.
     if (path === "/reset" && request.method === "POST") {
       const wipeClaims = url.searchParams.get("wipe_claims") === "true";
+      const normalize = url.searchParams.get("normalize") === "true";
+      const targetParam = url.searchParams.get("target");
+      const target = targetParam ? parseFloat(targetParam) : 200;
       const current = await db.getGameStatus();
       if (current === "running") {
         return Response.json(
@@ -207,52 +210,78 @@ export class GameOrchestrator {
           { status: 400 }
         );
       }
-
-      await this.state.storage.deleteAlarm();
-
-      const D = this.env.DB;
-      await D.prepare("DELETE FROM events").run();
-      await D.prepare("DELETE FROM ticker").run();
-      await D.prepare("DELETE FROM action_logs").run();
-      await D.prepare("DELETE FROM leaked_emails").run();
-      // Drop everything in game_state except claim-irrelevant flags;
-      // setGameStatus / setCurrentTick rewrite those next.
-      await D.prepare("DELETE FROM game_state").run();
-
-      const claimsClause = wipeClaims
-        ? ", claimed_by = NULL, claimed_by_name = NULL"
-        : "";
-      await D.prepare(
-        `UPDATE agents SET prestige = 0, status_effects = '[]', allies = '[]', pending_alliance = NULL${claimsClause}`
-      ).run();
-
-      await db.setGameStatus("setup");
-      await db.setCurrentTick(0);
-
-      // In-memory state lives on the DO instance, not D1. Reset it explicitly
-      // so the one-shot triggeredOnce flags fire again next run.
-      this.randomEventsState = createRandomEventsState();
-      this.tickInFlight = false;
-
-      // Tell live dashboards their world just changed.
-      this.broadcast({
-        type: "game_event",
-        data: {
-          id: crypto.randomUUID(),
-          tick: 0,
-          timestamp: new Date().toISOString(),
-          type: "game_resumed",
-          description: "Game reset by admin. Cycle 0. Status: setup.",
-        },
-      });
-
+      const result = await this.performReset({ wipeClaims, normalizeBalances: normalize, target, broadcastNotice: "Game reset by admin. Cycle 0. Status: setup." });
       return Response.json({
         ok: true,
         status: "setup",
         tick: 0,
         wipedClaims: wipeClaims,
+        normalized: normalize,
+        normalize: result,
         next: "POST /admin/start to begin a fresh game",
       });
+    }
+
+    // Bring every agent's DLBR balance to a target. Burns from agents who
+    // are above (in parallel — distinct source accounts), then mints from
+    // the issuer to agents who are below (sequential — single source means
+    // shared sequence number). Body: {"target": 200}
+    if (path === "/normalize" && request.method === "POST") {
+      const status = await db.getGameStatus();
+      if (status === "running") {
+        return Response.json(
+          { error: "Halt the game before normalizing balances." },
+          { status: 400 }
+        );
+      }
+      if (!this.env.ASSET_ISSUER_SECRET) {
+        return Response.json(
+          { error: "ASSET_ISSUER_SECRET not configured on the orchestrator" },
+          { status: 500 }
+        );
+      }
+
+      const body = await request.json().catch(() => ({})) as { target?: number };
+      const target = typeof body.target === "number" && body.target > 0 ? body.target : 200;
+      const stellar = this.makeStellar();
+      const agents = await db.getAllAgents();
+
+      // Snapshot balances in parallel.
+      const snapshot = await Promise.all(
+        agents.map(async (a) => ({ agent: a, balance: await stellar.getAssetBalance(a.publicKey) }))
+      );
+
+      const burns: Array<{ name: string; amount: number; txHash?: string; error?: string }> = [];
+      const mints: Array<{ name: string; amount: number; txHash?: string; error?: string }> = [];
+
+      // Burns: distinct source accounts → parallelize.
+      await Promise.all(
+        snapshot
+          .filter((e) => target - e.balance < -0.01)
+          .map(async (e) => {
+            const amount = Math.round((e.balance - target) * 100) / 100;
+            try {
+              const txHash = await stellar.burn(e.agent.secretKey, amount);
+              burns.push({ name: e.agent.name, amount, txHash });
+            } catch (err) {
+              burns.push({ name: e.agent.name, amount, error: String(err) });
+            }
+          })
+      );
+
+      // Mints: shared source (issuer), must serialize.
+      for (const e of snapshot) {
+        const amount = Math.round((target - e.balance) * 100) / 100;
+        if (amount <= 0.01) continue;
+        try {
+          const txHash = await stellar.sendAsset(this.env.ASSET_ISSUER_SECRET, e.agent.publicKey, amount);
+          mints.push({ name: e.agent.name, amount, txHash });
+        } catch (err) {
+          mints.push({ name: e.agent.name, amount, error: String(err) });
+        }
+      }
+
+      return Response.json({ ok: true, target, burns, mints, agents: snapshot.length });
     }
 
     // Test-fire scheduled emails out-of-cycle. Body: {"kind":"progress"|"finale","tick":<n>}
@@ -323,6 +352,26 @@ export class GameOrchestrator {
       const recentActions = await db.getRecentActionLogsForAgent(agent.id, 12);
       const balance = await stellar.getAssetBalance(agent.publicKey);
       const gameStatus = await db.getGameStatus();
+      const currentTick = await db.getCurrentTick();
+
+      // Coaching window: editable only at exact email-trigger ticks while
+      // the game is running or halted. Outside that window or after end-of-
+      // game, the directive is read-only.
+      const COACHING_TICKS = [12, 24, 36];
+      const windowOpen =
+        (gameStatus === "running" || gameStatus === "halted") &&
+        COACHING_TICKS.includes(currentTick);
+      const nextWindowTick = COACHING_TICKS.find((t) => t > currentTick) ?? null;
+
+      // Directive is private — only surface it (and the live editor flag)
+      // when the requester proves ownership by passing ?email=.
+      let directive: string | null = null;
+      let directiveOwner = false;
+      const requesterEmail = url.searchParams.get("email")?.trim().toLowerCase();
+      if (requesterEmail && agent.claimedBy && agent.claimedBy.toLowerCase() === requesterEmail) {
+        directiveOwner = true;
+        directive = (await db.getGameStateValue(`directive_${agent.id}`)) || null;
+      }
 
       return Response.json({
         id: agent.id,
@@ -341,6 +390,15 @@ export class GameOrchestrator {
         claimed: !!agent.claimedBy,
         claimedByName: agent.claimedByName,
         gameStatus,
+        currentTick,
+        coachingWindow: {
+          open: windowOpen,
+          currentTick,
+          windowTicks: COACHING_TICKS,
+          nextWindowTick,
+        },
+        directive,
+        directiveOwner,
         explorerUrl: stellar.getExplorerAccountUrl(agent.publicKey),
         recentActions: recentActions.map((r) => ({
           tick: r.tick,
@@ -453,6 +511,62 @@ export class GameOrchestrator {
       return Response.json({ ok: true, agentId, releasedFrom: releasedFromName });
     }
 
+    // Set or clear an agent's stakeholder directive. Window-gated to ticks
+    // 12/24/36 only (when the progress-summary email is sent). Email auth
+    // matches the claim record. The directive itself is stored in
+    // game_state and consumed by the LLM context-builder.
+    if (path === "/directive" && (request.method === "POST" || request.method === "DELETE")) {
+      let body: { agentId?: string; email?: string; directive?: string };
+      try {
+        body = await request.json();
+      } catch {
+        return Response.json({ error: "invalid JSON body" }, { status: 400 });
+      }
+      const { agentId, email } = body;
+      if (!agentId || !email) {
+        return Response.json({ error: "agentId and email both required" }, { status: 400 });
+      }
+
+      const directiveAgent = await db.getAgent(agentId);
+      if (!directiveAgent) return Response.json({ error: "agent not found" }, { status: 404 });
+      if (!directiveAgent.claimedBy) {
+        return Response.json({ error: "agent is not claimed" }, { status: 400 });
+      }
+      if (directiveAgent.claimedBy.toLowerCase() !== email.trim().toLowerCase()) {
+        return Response.json({ error: "email does not match the claim record" }, { status: 403 });
+      }
+
+      const status = await db.getGameStatus();
+      const currentTick = await db.getCurrentTick();
+      const COACHING_TICKS = [12, 24, 36];
+      const windowOpen =
+        (status === "running" || status === "halted") &&
+        COACHING_TICKS.includes(currentTick);
+      if (!windowOpen) {
+        return Response.json(
+          {
+            error: `Coaching window is closed. You can only set a directive at ticks ${COACHING_TICKS.join(", ")} (when the progress-summary email is sent).`,
+            currentTick,
+            status,
+          },
+          { status: 400 }
+        );
+      }
+
+      const key = `directive_${agentId}`;
+      if (request.method === "DELETE") {
+        await this.env.DB.prepare("DELETE FROM game_state WHERE key = ?").bind(key).run();
+        return Response.json({ ok: true, cleared: true });
+      }
+
+      const text = (body.directive ?? "").trim().slice(0, 250);
+      if (text.length === 0) {
+        return Response.json({ error: "directive is empty (DELETE to clear instead)" }, { status: 400 });
+      }
+      await db.setGameStateValue(key, text);
+      return Response.json({ ok: true, directive: text });
+    }
+
     if (path === "/state") {
       const [agents, status, tick, recentEvents, ticker, stats] = await Promise.all([
         db.getAllAgents(),
@@ -508,8 +622,26 @@ export class GameOrchestrator {
   async alarm(): Promise<void> {
     const db = new Db(this.env.DB);
     const status = await db.getGameStatus();
+
+    // Post-game cleanup: when the game ended, we scheduled an alarm for
+    // ~5 min later to do the full slate-wipe. If we're firing now and
+    // status is still "ended", that's the cleanup alarm; do it.
+    if (status === "ended") {
+      try {
+        await this.performReset({
+          wipeClaims: true,
+          normalizeBalances: true,
+          target: 200,
+          broadcastNotice: "Post-game cleanup complete. New round ready — all managers adoptable.",
+        });
+      } catch (err) {
+        console.error("[alarm] post-game cleanup failed:", err);
+      }
+      return;
+    }
+
     if (status !== "running") {
-      // Game was halted/ended between alarm scheduling and firing — drop.
+      // Game halted between alarm scheduling and firing — drop.
       return;
     }
 
@@ -517,6 +649,14 @@ export class GameOrchestrator {
     const maxTicks = parseInt(this.env.MAX_TICKS, 10);
     if (tick >= maxTicks) {
       await db.setGameStatus("ended");
+
+      // Clear stakeholder directives — they only apply within a game cycle.
+      // Each new game starts fresh; persona traits are the only baseline.
+      try {
+        await this.env.DB.prepare("DELETE FROM game_state WHERE key LIKE 'directive_%'").run();
+      } catch (err) {
+        console.error("[alarm] failed to clear directives on end-of-game:", err);
+      }
 
       // Emit a game_end event so live dashboards can show the winner overlay.
       // The agents list is sorted prestige DESC, so all[0] is the new VP.
@@ -546,6 +686,13 @@ export class GameOrchestrator {
       } catch (err) {
         console.error("[alarm] finale email batch failed:", err);
       }
+
+      // Schedule the post-game cleanup alarm. 5 minutes lets viewers see
+      // the winner overlay + final standings, and lets email recipients
+      // open finale emails before everything resets.
+      const cleanupDelay = 5 * 60 * 1000;
+      await this.state.storage.setAlarm(Date.now() + cleanupDelay);
+      console.log(`[alarm] game ended at tick ${tick}; cleanup scheduled in ${cleanupDelay / 1000}s`);
       return;
     }
 
@@ -615,6 +762,7 @@ export class GameOrchestrator {
           rank,
           total: all.length,
           claimerName: agent.claimedByName ?? "MegaCorp Stakeholder",
+          claimerEmail: agent.claimedBy ?? "",
           cycle: tick,
           cycleLabel,
           actions: actions.map((a) => ({
@@ -728,6 +876,104 @@ export class GameOrchestrator {
     } finally {
       this.tickInFlight = false;
     }
+  }
+
+  /**
+   * Full reset of the game state. Used by /admin/reset (HTTP) and by the
+   * post-game cleanup alarm. Wipes all dynamic D1 tables, resets agent
+   * stats, optionally wipes claims, optionally normalizes on-chain DLBR
+   * balances. Status leaves at "setup", tick at 0.
+   */
+  private async performReset(opts: {
+    wipeClaims: boolean;
+    normalizeBalances: boolean;
+    target?: number;
+    broadcastNotice?: string;
+  }): Promise<{ burns: number; mints: number; failures: number } | null> {
+    const D = this.env.DB;
+    const db = new Db(D);
+
+    await this.state.storage.deleteAlarm();
+
+    await D.prepare("DELETE FROM events").run();
+    await D.prepare("DELETE FROM ticker").run();
+    await D.prepare("DELETE FROM action_logs").run();
+    await D.prepare("DELETE FROM leaked_emails").run();
+    // Drop all game_state — setGameStatus / setCurrentTick rewrite the two
+    // we still need; everything else (directives, new_initiative_active)
+    // is meant to be cleared between games.
+    await D.prepare("DELETE FROM game_state").run();
+
+    const claimsClause = opts.wipeClaims ? ", claimed_by = NULL, claimed_by_name = NULL" : "";
+    await D.prepare(
+      `UPDATE agents SET prestige = 0, status_effects = '[]', allies = '[]', pending_alliance = NULL${claimsClause}`
+    ).run();
+
+    let normResult: { burns: number; mints: number; failures: number } | null = null;
+    if (opts.normalizeBalances) {
+      if (!this.env.ASSET_ISSUER_SECRET) {
+        console.warn("[reset] normalizeBalances requested but ASSET_ISSUER_SECRET not configured");
+      } else {
+        const target = opts.target ?? 200;
+        const stellar = this.makeStellar();
+        const agents = await db.getAllAgents();
+        const snapshot = await Promise.all(
+          agents.map(async (a) => ({ agent: a, balance: await stellar.getAssetBalance(a.publicKey) }))
+        );
+        let burns = 0, mints = 0, failures = 0;
+        // Burns: parallel (different source accounts)
+        await Promise.all(
+          snapshot
+            .filter((e) => target - e.balance < -0.01)
+            .map(async (e) => {
+              const amount = Math.round((e.balance - target) * 100) / 100;
+              try {
+                await stellar.burn(e.agent.secretKey, amount);
+                burns++;
+              } catch (err) {
+                console.error(`[reset] burn failed for ${e.agent.name}:`, err);
+                failures++;
+              }
+            })
+        );
+        // Mints: sequential (single source = issuer; sequence number)
+        for (const e of snapshot) {
+          const amount = Math.round((target - e.balance) * 100) / 100;
+          if (amount <= 0.01) continue;
+          try {
+            await stellar.sendAsset(this.env.ASSET_ISSUER_SECRET, e.agent.publicKey, amount);
+            mints++;
+          } catch (err) {
+            console.error(`[reset] mint failed for ${e.agent.name}:`, err);
+            failures++;
+          }
+        }
+        normResult = { burns, mints, failures };
+      }
+    }
+
+    await db.setGameStatus("setup");
+    await db.setCurrentTick(0);
+
+    // In-memory state lives on the DO instance, not D1. Reset explicitly so
+    // one-shot triggeredOnce flags fire again next run.
+    this.randomEventsState = createRandomEventsState();
+    this.tickInFlight = false;
+
+    if (opts.broadcastNotice) {
+      this.broadcast({
+        type: "game_event",
+        data: {
+          id: crypto.randomUUID(),
+          tick: 0,
+          timestamp: new Date().toISOString(),
+          type: "game_resumed",
+          description: opts.broadcastNotice,
+        },
+      });
+    }
+
+    return normResult;
   }
 
   private makeStellar(): Stellar {
