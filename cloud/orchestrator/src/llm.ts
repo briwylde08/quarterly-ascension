@@ -16,6 +16,44 @@ export interface LlmDeps {
   cfAigToken?: string;
 }
 
+export interface GossipMoment {
+  tick: number;
+  description: string;
+  prestigeChange?: number | null;
+}
+
+const GOSSIP_SYSTEM_PROMPT = `You're Dana — the office gossip at MegaCorp. Fifteen years here, knows everyone's deal, has opinions about everyone. Right now you're catching up your work bestie about what's gone down in the last few cycles.
+
+Voice: chatty, casual, slightly catty, affectionate-snarky. Use phrases like "did you SEE", "between us", "honestly", "bless their heart", "you'll never guess what." Don't read a list — make it a conversation. Refer to managers by first name only. 3-5 sentences total. End on a juicy hook ("...and don't even get me started on Marcus") if there's more to tell.
+
+Don't mention prestige numbers literally — translate them ("got absolutely cooked", "had a moment", "is having a quarter"). Don't moralize. The bestie knows the office; you don't have to explain mechanics.`;
+
+export async function generateGossip(
+  deps: LlmDeps,
+  moments: GossipMoment[],
+  currentTick: number,
+): Promise<string> {
+  if (moments.length === 0) return "Honestly? Dead cycle. Nothing to report. Get me coffee and I'll dig.";
+  const openai = new OpenAI({
+    apiKey: deps.openaiApiKey,
+    baseURL: deps.openaiBaseUrl,
+    defaultHeaders: deps.cfAigToken ? { "cf-aig-authorization": `Bearer ${deps.cfAigToken}` } : undefined,
+  });
+  const lines = moments
+    .map((m) => `- Cycle ${m.tick}: ${m.description}${m.prestigeChange ? ` (${m.prestigeChange > 0 ? "+" : ""}${m.prestigeChange} prestige)` : ""}`)
+    .join("\n");
+  const userPrompt = `Current cycle: ${currentTick}. Recent activity:\n\n${lines}\n\nGive me the dish.`;
+  const response = await openai.chat.completions.create({
+    model: "openai/gpt-5.4-mini",
+    max_completion_tokens: 400,
+    messages: [
+      { role: "system", content: GOSSIP_SYSTEM_PROMPT },
+      { role: "user", content: userPrompt },
+    ],
+  });
+  return (response.choices[0]?.message?.content || "").trim();
+}
+
 const ALL_ACTIONS = [
   { type: "work", description: "Do actual work (+5 prestige, free)", cost: 0 },
   { type: "rest", description: "Rest and recover (removes Tired debuff, free)", cost: 0 },
@@ -50,6 +88,9 @@ const ALL_ACTIONS = [
   { type: "whistleblower_bounty", description: "Report target to HR ($10 cost). If target had hostile actions in last 3 ticks → +30 prestige + $25 bounty. If false → -3 prestige; target gets +5 wrongful-report bonus.", cost: 10, requiresTarget: true },
   { type: "mentorship", description: "Mentor target ($15 cost; non-self target). Self +5 prestige + $30 stipend; target +10 prestige. Wholesome alternative to take_credit.", cost: 15, requiresTarget: true },
   { type: "coffee_chat", description: "Casual coffee with target ($5; non-self). Both gain +3 prestige. No alliance proposed. Low-stakes networking.", cost: 5, requiresTarget: true },
+
+  // Comeback path — only surfaces when you're truly cooked.
+  { type: "hail_mary_idea", description: "Pitch a wild idea at the next all-hands (free). Lottery: 30% +50 prestige (CEO loved it), 50% +5 (polite nodding), 20% -5 (sounded unhinged). One use per game.", cost: 0 },
 ];
 
 export interface TickCtx {
@@ -71,10 +112,12 @@ interface DecisionContext {
   /** Free-form directive set by the human adopter at the most recent
    *  coaching window. Persists for the rest of this game cycle. */
   directive: string | null;
+  /** True once this agent has used their one-shot hail_mary_idea this game. */
+  hailMaryUsed: boolean;
 }
 
 function buildContextPrompt(ctx: DecisionContext): string {
-  const { agent, balance, currentTick, allAgents, recentActions, leakedEmails, directive } = ctx;
+  const { agent, balance, currentTick, allAgents, recentActions, leakedEmails, directive, hailMaryUsed } = ctx;
 
   // Public-visible statuses on rivals — info other agents can act on
   // (e.g. a Marked agent is auto-take_credit-able). Most internal statuses
@@ -109,6 +152,9 @@ function buildContextPrompt(ctx: DecisionContext): string {
     if (action.type === "accept_alliance" && !agent.pendingAlliance) return false;
     if (action.type === "reject_alliance" && !agent.pendingAlliance) return false;
     if (action.type === "break_alliance" && agent.allies.length === 0) return false;
+    // Hail Mary only surfaces when the agent is truly cornered: low prestige
+    // AND low cash AND hasn't already burned the one-shot this game.
+    if (action.type === "hail_mary_idea" && (agent.prestige > 10 || balance >= 5 || hailMaryUsed)) return false;
     return true;
   });
 
@@ -156,15 +202,17 @@ function buildContextPrompt(ctx: DecisionContext): string {
 
   const directiveSection = directive
     ? `\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-STAKEHOLDER GUIDANCE (set by your real-world adopter — these are
-the priorities they want you to optimize for this quarter):
+STAKEHOLDER NOTE (from your real-world adopter):
 
   "${directive.replace(/"/g, '\\"')}"
 
-Treat this as a high-priority objective alongside your innate
-personality. Bias your decisions toward this guidance unless it
-forces actively suboptimal behavior. You may acknowledge the
-guidance in your reasoning — your stakeholder is reading this.
+This is one input among many — alongside your personality, current
+standing, budget, allies, and what's actually working. If pursuing
+this guidance is costing you significant prestige, breaking your
+alliances, or repeatedly failing (e.g. several missed take_credits
+in a row, or attacks landing for less than they cost), your
+stakeholder would rather you adapt than mechanically obey. You're
+a corporate manager, not a robot. Show judgment.
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 `
     : "";
@@ -201,41 +249,38 @@ Choose ONE action based on your personality. Consider:
 3. Your relationships (allies, rivals)
 4. Your quirk
 5. Any status effects affecting you
+6. Don't pile redundant statuses: if a manager above is already tagged
+   with a status (e.g. MANDATORY MOTIVATION, MARKED, TIRED, MEETING
+   BLOCKED, PROBLEMATIC, TECHNICAL DIFFICULTIES), an action that imposes
+   that same status on them is wasted spend — pick a different target
+   or a different action.
 
 ${agent.statusEffects.some((s) => s.type === "technical_difficulties") ? "WARNING: You have Technical Difficulties - you MUST choose 'rest' this turn!" : ""}
 
-Respond with:
-1. Brief reasoning (2-3 sentences, in character)
-2. Your chosen action as JSON
+Respond with ONLY a single JSON object — no prose, no code fences — matching this shape:
+{
+  "reasoning": "<2-3 sentences, in character>",
+  "action": {"type": "<one of the action types above>", "target": "<id, only if the action requires a target>"}
+}
 
-Example response:
-"Per my spreadsheet analysis, investing in a consultant report will yield the highest ROI this quarter. The data clearly supports this decision."
-
-ACTION: {"type": "strategy_report"}
-
-Or with a target:
-"Kevin has been undermining my initiatives. Time to take this to HR."
-
-ACTION: {"type": "file_complaint", "target": "kevin"}
+Examples:
+{"reasoning": "Per my spreadsheet analysis, investing in a consultant report will yield the highest ROI this quarter.", "action": {"type": "strategy_report"}}
+{"reasoning": "Kevin has been undermining my initiatives. Time to take this to HR.", "action": {"type": "file_complaint", "target": "kevin"}}
 `;
 }
 
 function parseAction(response: string, agent: Agent): { action: Action; reasoning: string } {
-  const actionMatch = response.match(/ACTION:\s*(\{[^}]+\})/i);
-  const reasoning = response.split(/ACTION:/i)[0].trim();
-
-  if (!actionMatch) {
-    console.warn(`Could not parse action for ${agent.name}, defaulting to work`);
-    return { action: { type: "work" }, reasoning: reasoning || "I'll just do my job." };
-  }
-
   try {
-    const parsed = JSON.parse(actionMatch[1]);
-    return { action: parsed as Action, reasoning };
-  } catch {
-    console.warn(`Invalid JSON for ${agent.name}, defaulting to work`);
-    return { action: { type: "work" }, reasoning: reasoning || "I'll just do my job." };
-  }
+    const parsed = JSON.parse(response);
+    if (parsed?.action?.type) {
+      return {
+        action: parsed.action as Action,
+        reasoning: typeof parsed.reasoning === "string" ? parsed.reasoning : "",
+      };
+    }
+  } catch { /* fall through */ }
+  console.warn(`Could not parse action for ${agent.name}, defaulting to work`);
+  return { action: { type: "work" }, reasoning: "I'll just do my job." };
 }
 
 function humanizeActionType(type: string): string {
@@ -384,8 +429,9 @@ export async function getAgentDecision(
   // Stakeholder directive (set by the human adopter at coaching windows).
   // Injected high in the prompt as guidance the LLM should bias toward.
   const directive = await deps.db.getGameStateValue(`directive_${agent.id}`);
+  const hailMaryUsed = (await deps.db.getGameStateValue(`hail_mary_used_${agent.id}`)) === "yes";
 
-  const context: DecisionContext = { agent, balance, currentTick, allAgents, recentActions, leakedEmails, directive };
+  const context: DecisionContext = { agent, balance, currentTick, allAgents, recentActions, leakedEmails, directive, hailMaryUsed };
 
   const openai = new OpenAI({
     apiKey: deps.openaiApiKey,
@@ -400,8 +446,9 @@ export async function getAgentDecision(
 
   try {
     const response = await openai.chat.completions.create({
-      model: "openai/gpt-5.5",
+      model: "openai/gpt-5.4-mini",
       max_completion_tokens: 2000,
+      response_format: { type: "json_object" },
       messages: [
         { role: "system", content: systemPrompt },
         { role: "user", content: userPrompt },

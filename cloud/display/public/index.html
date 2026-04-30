@@ -164,7 +164,10 @@
       border-radius: 3px;
       cursor: pointer;
       transition: background 0.15s ease;
+      text-decoration: none;
+      display: inline-block;
     }
+    a.pause-btn:hover { color: var(--navy-text); text-decoration: none; }
     .pause-btn:hover { background: rgba(255,255,255,0.20); }
     .pause-btn:active { transform: translateY(1px); }
     .pause-btn.resume { background: rgba(241,196,15,0.20); border-color: rgba(241,196,15,0.50); }
@@ -373,6 +376,46 @@
       overflow-y: auto;
       max-height: calc(100vh - 280px);
       padding: 0;
+    }
+    .stream-filter {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 11px;
+      color: var(--text-muted);
+      letter-spacing: 0.4px;
+      text-transform: none;
+    }
+    .stream-filter select {
+      font-family: inherit;
+      font-size: 11px;
+      color: var(--text);
+      background: var(--panel);
+      border: 1px solid var(--border);
+      padding: 2px 6px;
+      border-radius: 2px;
+      cursor: pointer;
+    }
+    .stream-filter select:focus {
+      outline: 1px solid var(--navy);
+      outline-offset: 0;
+    }
+    .feed-entry.hidden-by-filter { display: none; }
+
+    /* Big-moment treatment: |Δprestige| ≥ 20 or random events. */
+    .feed-entry.big-moment {
+      border-left: 3px solid #f1c40f;
+      background: linear-gradient(90deg, #fffbe6 0%, transparent 30%);
+    }
+    .feed-entry.big-moment .feed-head .big-pill {
+      background: #f1c40f;
+      color: #1c3a64;
+      font-size: 9px;
+      font-weight: 700;
+      letter-spacing: 0.8px;
+      padding: 1px 6px;
+      border-radius: 2px;
+      margin-right: 4px;
     }
     .feed-entry {
       padding: 12px 16px;
@@ -728,6 +771,46 @@
     }
     .manager-modal-close:hover { color: var(--navy); }
     .manager-modal-body { padding: 24px 28px 22px; }
+
+    /* === Gossip modal ============================================== */
+    .gossip-card {
+      width: min(480px, 92vw);
+      border-top-color: #f1c40f;
+      background: #fffbe6;
+    }
+    .gossip-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: baseline;
+      margin-bottom: 14px;
+      padding-bottom: 10px;
+      border-bottom: 1px dashed var(--border-2);
+    }
+    .gossip-title {
+      font-size: 14px;
+      font-weight: 700;
+      color: var(--navy);
+      letter-spacing: 0.4px;
+    }
+    .gossip-meta {
+      font-size: 11px;
+      color: var(--text-muted);
+      letter-spacing: 0.4px;
+    }
+    .gossip-text {
+      font-size: 14px;
+      line-height: 1.65;
+      color: var(--text);
+      font-style: italic;
+      white-space: pre-wrap;
+    }
+    .gossip-footer {
+      margin-top: 16px;
+      font-size: 11px;
+      color: var(--text-faint);
+      text-align: right;
+      letter-spacing: 0.4px;
+    }
     .manager-modal-loading { padding: 40px 0; text-align: center; color: var(--text-faint); }
     .mm-header { display: flex; gap: 16px; margin-bottom: 14px; }
     .mm-portrait {
@@ -856,8 +939,23 @@
     </div>
   </div>
 
+  <div id="gossip-modal" class="manager-modal hidden" role="dialog" aria-modal="true">
+    <div class="manager-modal-backdrop" data-gossip-close></div>
+    <div class="manager-modal-card gossip-card">
+      <button class="manager-modal-close" data-gossip-close aria-label="Close">×</button>
+      <div class="manager-modal-body">
+        <div class="gossip-header">
+          <span class="gossip-title">💧 At the water cooler</span>
+          <span class="gossip-meta" id="gossip-meta">—</span>
+        </div>
+        <div class="gossip-text" id="gossip-text">Loading…</div>
+        <div class="gossip-footer">— Dana, your work bestie</div>
+      </div>
+    </div>
+  </div>
+
   <div class="intro-bar">
-    <span>New here? <a href="/intro.html">Adopt one of these managers</a> and get quarterly emails about their corporate descent.</span>
+    <span>New here? <a href="/intro.html">Adopt one of these middle-managers</a> to play during the next game.</span>
   </div>
 
   <header class="exec-banner" id="banner">
@@ -882,6 +980,8 @@
         <span class="meta-label">Next Sync-up</span>
         <span class="meta-value" id="countdown">—</span>
       </div>
+      <a id="handbook-btn" class="pause-btn" href="/handbook.html" title="Action catalog, status effects, public tags, and game mechanics">📖 Handbook</a>
+      <button id="gossip-btn" class="pause-btn" title="The latest office gossip — refreshed every 4 cycles">💧 Water Cooler</button>
       <button id="pause-btn" class="pause-btn" title="Pause / resume the simulation (admin)">⏸ Pause</button>
     </div>
   </header>
@@ -923,7 +1023,12 @@
     <section class="panel">
       <div class="panel-head">
         <span>Manager Activity Stream</span>
-        <span class="panel-meta">Live · in-character justifications &amp; on-chain settlement</span>
+        <span class="stream-filter">
+          Filter:
+          <select id="stream-filter">
+            <option value="">All managers</option>
+          </select>
+        </span>
       </div>
       <div class="stream" id="stream">
         <div class="empty-state">Waiting for the first cycle to begin…</div>
@@ -978,9 +1083,11 @@
     // ============================================================
     let tickIntervalMs = 300000;
     let nextAlarmAt = null;       // server-reported timestamp; primary timer source
+    let clockSkewMs = 0;          // localClock - serverClock; used to keep countdowns aligned across machines
     let lastTickStartMs = Date.now();  // fallback only
     let currentTick = 0;
     let currentStatus = 'setup';
+    let currentStreamFilter = '';   // empty string = "All managers"; otherwise an agent id
     let prevPrestige = new Map();
     let bootstrapped = false;
     const wsQueue = [];
@@ -1063,6 +1170,7 @@
       currentTick = data.tick;
       currentStatus = data.status;
       nextAlarmAt = data.nextAlarmAt ?? null;
+      if (typeof data.serverTime === 'number') clockSkewMs = Date.now() - data.serverTime;
       lastTickStartMs = Date.now(); // fallback for fresh load if nextAlarmAt is missing
       document.getElementById('cycle').textContent = data.tick;
       document.getElementById('status').textContent = humanStatus(data.status);
@@ -1074,6 +1182,7 @@
       // Leaderboard
       data.agents.forEach(a => prevPrestige.set(a.id, a.prestige));
       renderLeaderboard(data.agents);
+      populateStreamFilter(data.agents);
 
       // Feed: replay events + ticker, sorted by tick desc / time desc
       const stream = document.getElementById('stream');
@@ -1171,7 +1280,9 @@
       div.className = 'feed-entry paid';
       if (t.txHash) div.dataset.txHash = t.txHash;
       div.dataset.entryId = t.id;
+      if (t.fromAgent) div.dataset.agentId = t.fromAgent;
       div.innerHTML = paidFeedInnerHTML(t, /*outcome*/ null);
+      applyFilterToRow(div);
       return div;
     }
 
@@ -1180,8 +1291,20 @@
       div.className = 'feed-entry free';
       if (e.txHash) div.dataset.txHash = e.txHash;
       div.dataset.eventId = e.id;
+      if (e.agentId) div.dataset.agentId = e.agentId;
+      if (e.targetId) div.dataset.targetId = e.targetId;
       div.innerHTML = freeFeedInnerHTML(e);
+      if (isBigMoment(e)) div.classList.add('big-moment');
+      applyFilterToRow(div);
       return div;
+    }
+
+    // Big moments: |Δprestige| ≥ 20 or any random event.
+    function isBigMoment(e) {
+      if (!e) return false;
+      if (e.type === 'random_event') return true;
+      const p = Number(e.prestigeChange ?? 0);
+      return Math.abs(p) >= 20;
     }
 
     function updatePaidFeedRow(row, t) {
@@ -1209,6 +1332,26 @@
         o.className = 'feed-outcome';
         o.textContent = stripActorPrefix(event.description);
         row.appendChild(o);
+      }
+      // Surface the prestige delta on paid actions too — by default the ticker
+      // entry doesn't carry it, so we attach it now that the event has arrived.
+      if (event.prestigeChange && !row.querySelector('.feed-prestige')) {
+        const p = document.createElement('div');
+        p.className = 'feed-outcome feed-prestige';
+        p.textContent = 'Prestige adjustment: ' + (event.prestigeChange > 0 ? '+' : '') + event.prestigeChange;
+        row.appendChild(p);
+      }
+      // Mark big-moment now that the event payload (with prestigeChange/type)
+      // has caught up to the originally-paid row.
+      if (isBigMoment(event) && !row.classList.contains('big-moment')) {
+        row.classList.add('big-moment');
+        const head = row.querySelector('.feed-head');
+        if (head && !head.querySelector('.big-pill')) {
+          const pill = document.createElement('span');
+          pill.className = 'big-pill';
+          pill.textContent = '★ BIG MOMENT';
+          head.insertBefore(pill, head.querySelector('.badge-type'));
+        }
       }
     }
 
@@ -1258,10 +1401,12 @@
       const prestigeHtml = e.prestigeChange
         ? '<div class="feed-outcome">Prestige adjustment: ' + (e.prestigeChange > 0 ? '+' : '') + e.prestigeChange + '</div>'
         : '';
+      const bigPill = isBigMoment(e) ? '<span class="big-pill">★ BIG MOMENT</span>' : '';
       return ''
         + '<div class="feed-head">'
         +   '<span class="cycle">Cycle ' + (e.tick != null ? e.tick : currentTick) + '</span>'
         +   '<span>' + time + '</span>'
+        +   bigPill
         +   '<span class="badge-type ' + type + '">' + label + '</span>'
         + '</div>'
         + '<div class="feed-action">' + escape(e.description) + '</div>'
@@ -1436,6 +1581,7 @@
         currentStatus = data.status;
         currentTick = data.tick;
         nextAlarmAt = data.nextAlarmAt ?? null;
+        if (typeof data.serverTime === 'number') clockSkewMs = Date.now() - data.serverTime;
         document.getElementById('cycle').textContent = data.tick;
         document.getElementById('status').textContent = humanStatus(data.status);
         maybeShowHaltOverlay(data.status, data.tick);
@@ -1471,7 +1617,9 @@
       // didn't surface a value.
       let remaining;
       if (typeof nextAlarmAt === 'number' && nextAlarmAt > 0) {
-        remaining = Math.max(0, nextAlarmAt - Date.now());
+        // Subtract clockSkewMs so we compute against the server's clock, not local —
+        // otherwise two browsers with drifted system clocks see different countdowns.
+        remaining = Math.max(0, nextAlarmAt - (Date.now() - clockSkewMs));
       } else {
         const elapsed = Date.now() - lastTickStartMs;
         remaining = Math.max(0, tickIntervalMs - elapsed);
@@ -1482,6 +1630,70 @@
       el.textContent = m + ':' + (s < 10 ? '0' + s : s);
       el.classList.remove('tick'); void el.offsetWidth; el.classList.add('tick');
     }, 1000);
+
+    // ============================================================
+    // Gossip modal
+    // ============================================================
+    async function openGossipModal() {
+      const modal = document.getElementById('gossip-modal');
+      const textEl = document.getElementById('gossip-text');
+      const metaEl = document.getElementById('gossip-meta');
+      modal.classList.remove('hidden');
+      textEl.textContent = 'Loading…';
+      metaEl.textContent = '—';
+      try {
+        const r = await fetch(ORCHESTRATOR_BASE + '/api/gossip');
+        const data = await r.json();
+        if (!data.text) {
+          textEl.textContent = "Slow week so far. The narrator's still nursing her coffee. Check back in a few cycles.";
+          metaEl.textContent = '';
+          return;
+        }
+        textEl.textContent = data.text;
+        metaEl.textContent = data.tick != null ? `as of cycle ${data.tick}` : '';
+      } catch (err) {
+        textEl.textContent = 'Could not reach the gossip channel. Try again in a moment.';
+        metaEl.textContent = '';
+      }
+    }
+    function closeGossipModal() {
+      document.getElementById('gossip-modal').classList.add('hidden');
+    }
+    document.getElementById('gossip-btn').addEventListener('click', openGossipModal);
+    document.querySelectorAll('[data-gossip-close]').forEach(el => el.addEventListener('click', closeGossipModal));
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape' && !document.getElementById('gossip-modal').classList.contains('hidden')) {
+        closeGossipModal();
+      }
+    });
+
+    // ============================================================
+    // Activity stream filter
+    // ============================================================
+    function populateStreamFilter(agents) {
+      const sel = document.getElementById('stream-filter');
+      if (!sel) return;
+      const previous = sel.value;
+      const sorted = [...agents].sort((a, b) => a.name.localeCompare(b.name));
+      sel.innerHTML = '<option value="">All managers</option>'
+        + sorted.map(a => `<option value="${escape(a.id)}">${escape(a.name)}</option>`).join('');
+      // Preserve selection across refreshes if still valid.
+      if (previous && sorted.some(a => a.id === previous)) sel.value = previous;
+    }
+    function applyFilterToRow(row) {
+      if (!currentStreamFilter) { row.classList.remove('hidden-by-filter'); return; }
+      const matches = row.dataset.agentId === currentStreamFilter
+        || row.dataset.targetId === currentStreamFilter;
+      row.classList.toggle('hidden-by-filter', !matches);
+    }
+    function applyFilterToAll() {
+      const stream = document.getElementById('stream');
+      for (const row of stream.querySelectorAll('.feed-entry')) applyFilterToRow(row);
+    }
+    document.getElementById('stream-filter').addEventListener('change', (e) => {
+      currentStreamFilter = e.target.value;
+      applyFilterToAll();
+    });
 
     // ============================================================
     // Helpers

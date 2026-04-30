@@ -381,7 +381,7 @@ export function progressSummaryEmail(opts: ProgressSummaryInput): SendEmailInput
     `NEXT PERIOD OUTLOOK:`,
     outlook,
     ``,
-    `⏱ COACHING WINDOW (open for ~5 minutes):`,
+    `⏱ COACHING — one directive credit for next quarter, set it any time before the next email:`,
     `   ${coachUrl}`,
     ``,
     `Live dashboard: https://quarterly-ascension.pages.dev/`,
@@ -419,7 +419,7 @@ export function progressSummaryEmail(opts: ProgressSummaryInput): SendEmailInput
 
   <div style="background:#fef5e7;border:1px solid #f1c40f;padding:14px 18px;margin-top:18px;font-size:13px;line-height:1.5;">
     <b style="color:#1c3a64;">⏱ Want to course-correct?</b>
-    You can give ${escapeHtml(agent.name.split(" ")[0])} a strategic directive — but only until the next cycle starts (~5 minutes). After that the coaching window closes until the next quarter.
+    You have one directive credit for next quarter — give ${escapeHtml(agent.name.split(" ")[0])} a strategic note any time before the next progress email lands. One coach per quarter.
     <br><br>
     <a href="https://quarterly-ascension.pages.dev/agent.html?id=${agent.id}&email=${encodeURIComponent(claimerEmail)}#coach" style="background:#1c3a64;color:#ffffff;padding:10px 18px;text-decoration:none;font-size:13px;letter-spacing:0.5px;">Coach ${escapeHtml(agent.name.split(" ")[0])} →</a>
   </div>

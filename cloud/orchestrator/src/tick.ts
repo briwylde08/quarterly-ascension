@@ -221,15 +221,15 @@ async function applyPassiveStatusDecay(deps: TickDeps, tick: number): Promise<vo
 
     if (agent.statusEffects.some((s) => s.type === "inspired" && s.expiresAtTick > tick)) {
       net += 5;
-      reasons.push("Inspired (+5)");
+      reasons.push("Inspired");
     }
     if (agent.statusEffects.some((s) => s.type === "tired")) {
       net -= 2;
-      reasons.push("Tired (-2)");
+      reasons.push("Tired");
     }
     if (agent.statusEffects.some((s) => s.type === "problematic")) {
       net -= 3;
-      reasons.push("Problematic (-3)");
+      reasons.push("Problematic");
     }
 
     if (net !== 0) {
@@ -276,6 +276,25 @@ async function executeAction(
         break;
       }
 
+      case "hail_mary_idea": {
+        // Comeback play. Eligibility was already checked in availableActions
+        // (prestige ≤ 10, balance < $5, not already used). Lottery roll.
+        const roll = Math.random();
+        if (roll < 0.30) {
+          prestigeChange = 50;
+          outcome = "Pitched a wild idea at the all-hands — the CEO loved it (+50 prestige)";
+        } else if (roll < 0.80) {
+          prestigeChange = 5;
+          outcome = "Pitched a wild idea — polite nodding, mild interest (+5 prestige)";
+        } else {
+          prestigeChange = -5;
+          outcome = "Pitched a wild idea — sounded unhinged, the room went quiet (-5 prestige)";
+        }
+        await db.updateAgentPrestige(agent.id, prestigeChange);
+        await db.setGameStateValue(`hail_mary_used_${agent.id}`, "yes");
+        break;
+      }
+
       case "schmooze":
         if ("target" in action) {
           outcome = await handleSchmooze(deps, agent, action.target);
@@ -291,9 +310,22 @@ async function executeAction(
           const success = targetIsMarked || Math.random() < 0.4;
           if (success) {
             prestigeChange = 30;
-            outcome = targetIsMarked
-              ? `Successfully took credit for ${action.target}'s work (the sabotage dossier made it stick)`
-              : `Successfully took credit for ${action.target}'s work`;
+            if (targetIsMarked) {
+              const flavors = [
+                "the sabotage dossier made it stick",
+                "the dossier did the heavy lifting — receipts vs. receipts, theirs lost",
+                "their reputation was already a smoking crater, so nobody pushed back",
+                "the prep work paid off; legal didn't even blink",
+                "with the dossier in the chat, no one wanted to be the one to defend them",
+                "the room had already decided whose deck it was",
+                "you presented; they got tagged in the post-mortem",
+                "their pre-existing PIP energy did most of the work",
+              ];
+              const flavor = flavors[Math.floor(Math.random() * flavors.length)];
+              outcome = `Successfully took credit for ${action.target}'s work (${flavor})`;
+            } else {
+              outcome = `Successfully took credit for ${action.target}'s work`;
+            }
           } else {
             prestigeChange = -20;
             outcome = `Failed to take credit - ${action.target} had receipts`;

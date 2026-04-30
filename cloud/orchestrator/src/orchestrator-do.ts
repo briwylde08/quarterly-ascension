@@ -12,13 +12,29 @@ import { MppClient } from "./mpp-client.js";
 import { processTick, type TickDeps } from "./tick.js";
 import { createRandomEventsState, type RandomEventsState } from "./random-events.js";
 import type { Agent, GameEvent, TickerEntry } from "./types.js";
-import type { LlmDeps } from "./llm.js";
+import type { LlmDeps, GossipMoment } from "./llm.js";
+import { generateGossip } from "./llm.js";
 import { getPersona } from "./personas.js";
 import { sendEmail, claimConfirmationEmail, progressSummaryEmail, finaleEmail } from "./email.js";
 
 interface BroadcastMessage {
   type: "game_event" | "ticker_update";
   data: unknown;
+}
+
+// Coaching is structured as three quarter-long windows. The owner gets one
+// directive credit per quarter and can spend it any time within the range.
+// Q1 (ticks 1-11) is a warm-up — no coaching. After tick 12 (when the Q1
+// progress email lands), the Q2 credit opens and stays open until tick 24,
+// when the Q3 credit takes over, and so on through tick 47.
+const COACHING_QUARTERS = [
+  { quarter: 2, openTick: 12, closeTick: 24 },
+  { quarter: 3, openTick: 24, closeTick: 36 },
+  { quarter: 4, openTick: 36, closeTick: 48 },
+];
+
+function getCoachingQuarter(tick: number): typeof COACHING_QUARTERS[number] | null {
+  return COACHING_QUARTERS.find((q) => tick >= q.openTick && tick < q.closeTick) ?? null;
 }
 
 export class GameOrchestrator {
@@ -222,6 +238,45 @@ export class GameOrchestrator {
       });
     }
 
+    // Dump the full game record as JSON — actions, events, and a stripped
+    // agent roster (no secret keys, no owner emails). Designed for end-of-game
+    // analysis: pull this before the post-game cleanup alarm wipes the tables.
+    if (path === "/snapshot" && request.method === "GET") {
+      const [actionsRes, eventsRes, agentsRes, statusVal, tickVal] = await Promise.all([
+        this.env.DB.prepare("SELECT id, tick, agent_id, action_type, action_data, reasoning, outcome, prestige_change, tx_hash, created_at FROM action_logs ORDER BY tick ASC, id ASC").all(),
+        this.env.DB.prepare("SELECT id, tick, timestamp, type, agent_id, target_id, description, prestige_change, tx_hash, settlement_time, reasoning FROM events ORDER BY tick ASC, timestamp ASC").all(),
+        this.env.DB.prepare("SELECT id, persona_id, name, title, prestige, status_effects, allies, pending_alliance, claimed_by_name FROM agents").all(),
+        db.getGameStatus(),
+        db.getCurrentTick(),
+      ]);
+      return Response.json({
+        snapshotAt: new Date().toISOString(),
+        status: statusVal,
+        tick: tickVal,
+        agents: agentsRes.results,
+        actions: actionsRes.results,
+        events: eventsRes.results,
+        counts: {
+          agents: agentsRes.results.length,
+          actions: actionsRes.results.length,
+          events: eventsRes.results.length,
+        },
+      });
+    }
+
+    // Cancel the post-game cleanup alarm. Use during testing when you want
+    // the game record to stick around past the 5-minute auto-wipe window.
+    // Once cancelled, the cleanup must be triggered manually via /admin/reset.
+    if (path === "/cancel-cleanup" && request.method === "POST") {
+      const pending = await this.state.storage.getAlarm();
+      await this.state.storage.deleteAlarm();
+      return Response.json({
+        ok: true,
+        cancelledAlarmAt: pending,
+        note: "Post-game cleanup will not fire automatically. Call /admin/reset when done.",
+      });
+    }
+
     // Bring every agent's DLBR balance to a target. Burns from agents who
     // are above (in parallel — distinct source accounts), then mints from
     // the issuer to agents who are below (sequential — single source means
@@ -354,14 +409,17 @@ export class GameOrchestrator {
       const gameStatus = await db.getGameStatus();
       const currentTick = await db.getCurrentTick();
 
-      // Coaching window: editable only at exact email-trigger ticks while
-      // the game is running or halted. Outside that window or after end-of-
-      // game, the directive is read-only.
-      const COACHING_TICKS = [12, 24, 36];
-      const windowOpen =
-        (gameStatus === "running" || gameStatus === "halted") &&
-        COACHING_TICKS.includes(currentTick);
-      const nextWindowTick = COACHING_TICKS.find((t) => t > currentTick) ?? null;
+      // Coaching: each owner gets one directive credit per quarter (Q2, Q3,
+      // Q4). The credit is spendable any time within the quarter, but only
+      // once. Game must be running or halted; ended/setup are read-only.
+      const quarterInfo = getCoachingQuarter(currentTick);
+      let creditUsed = false;
+      let windowOpen = false;
+      if (quarterInfo) {
+        creditUsed = (await db.getGameStateValue(`coaching_used_${agent.id}_q${quarterInfo.quarter}`)) === "yes";
+        windowOpen = !creditUsed && (gameStatus === "running" || gameStatus === "halted");
+      }
+      const nextQuarter = COACHING_QUARTERS.find((q) => q.openTick > currentTick) ?? null;
 
       // Directive is private — only surface it (and the live editor flag)
       // when the requester proves ownership by passing ?email=.
@@ -394,8 +452,10 @@ export class GameOrchestrator {
         coachingWindow: {
           open: windowOpen,
           currentTick,
-          windowTicks: COACHING_TICKS,
-          nextWindowTick,
+          currentQuarter: quarterInfo?.quarter ?? null,
+          quarterCloseTick: quarterInfo?.closeTick ?? null,
+          creditUsed,
+          nextWindowTick: nextQuarter?.openTick ?? null,
         },
         directive,
         directiveOwner,
@@ -540,10 +600,12 @@ export class GameOrchestrator {
       return Response.json({ ok: true, agentId, releasedFrom: releasedFromName });
     }
 
-    // Set or clear an agent's stakeholder directive. Window-gated to ticks
-    // 12/24/36 only (when the progress-summary email is sent). Email auth
-    // matches the claim record. The directive itself is stored in
-    // game_state and consumed by the LLM context-builder.
+    // Set or clear an agent's stakeholder directive. Each owner has one
+    // directive credit per quarter (Q2-Q4); POST consumes the credit. DELETE
+    // clears the directive but doesn't restore the credit (so you can't
+    // launder repeated edits through clear-and-reset). Email auth matches
+    // the claim record. The directive itself is stored in game_state and
+    // consumed by the LLM context-builder.
     if (path === "/directive" && (request.method === "POST" || request.method === "DELETE")) {
       let body: { agentId?: string; email?: string; directive?: string };
       try {
@@ -567,14 +629,35 @@ export class GameOrchestrator {
 
       const status = await db.getGameStatus();
       const currentTick = await db.getCurrentTick();
-      const COACHING_TICKS = [12, 24, 36];
-      const windowOpen =
-        (status === "running" || status === "halted") &&
-        COACHING_TICKS.includes(currentTick);
-      if (!windowOpen) {
+      if (status !== "running" && status !== "halted") {
+        return Response.json(
+          { error: `Coaching unavailable: game is ${status}.`, currentTick, status },
+          { status: 400 }
+        );
+      }
+      const quarterInfo = getCoachingQuarter(currentTick);
+      if (!quarterInfo) {
+        const next = COACHING_QUARTERS.find((q) => q.openTick > currentTick);
+        const msg = next
+          ? `No coaching credit yet — opens at cycle ${next.openTick}.`
+          : `No more coaching credits this game.`;
+        return Response.json({ error: msg, currentTick, status }, { status: 400 });
+      }
+
+      const key = `directive_${agentId}`;
+      const usedKey = `coaching_used_${agentId}_q${quarterInfo.quarter}`;
+
+      if (request.method === "DELETE") {
+        // Clearing is always allowed; doesn't restore the credit.
+        await this.env.DB.prepare("DELETE FROM game_state WHERE key = ?").bind(key).run();
+        return Response.json({ ok: true, cleared: true });
+      }
+
+      const creditAlreadyUsed = (await db.getGameStateValue(usedKey)) === "yes";
+      if (creditAlreadyUsed) {
         return Response.json(
           {
-            error: `Coaching window is closed. You can only set a directive at ticks ${COACHING_TICKS.join(", ")} (when the progress-summary email is sent).`,
+            error: `You've already used your coaching credit for this quarter (closes at cycle ${quarterInfo.closeTick}). Next credit opens then.`,
             currentTick,
             status,
           },
@@ -582,18 +665,28 @@ export class GameOrchestrator {
         );
       }
 
-      const key = `directive_${agentId}`;
-      if (request.method === "DELETE") {
-        await this.env.DB.prepare("DELETE FROM game_state WHERE key = ?").bind(key).run();
-        return Response.json({ ok: true, cleared: true });
-      }
-
       const text = (body.directive ?? "").trim().slice(0, 250);
       if (text.length === 0) {
         return Response.json({ error: "directive is empty (DELETE to clear instead)" }, { status: 400 });
       }
       await db.setGameStateValue(key, text);
+      await db.setGameStateValue(usedKey, "yes");
       return Response.json({ ok: true, directive: text });
+    }
+
+    // Latest gossip narrative — refreshed every 4 ticks by the alarm handler.
+    // Public read; used by the dashboard's "Gossip with your work bestie" panel.
+    if (path === "/gossip" && request.method === "GET") {
+      const [text, tickStr, generatedAt] = await Promise.all([
+        db.getGameStateValue("latest_gossip"),
+        db.getGameStateValue("latest_gossip_tick"),
+        db.getGameStateValue("latest_gossip_at"),
+      ]);
+      return Response.json({
+        text: text || null,
+        tick: tickStr ? parseInt(tickStr, 10) || null : null,
+        generatedAt: generatedAt || null,
+      });
     }
 
     if (path === "/state") {
@@ -744,6 +837,17 @@ export class GameOrchestrator {
         else await this.sendProgressEmails(newTick);
       } catch (err) {
         console.error(`[alarm] scheduled email batch at tick ${newTick} failed:`, err);
+      }
+    }
+
+    // Refresh the gossip narrative every 4 ticks. Cached in game_state and
+    // served by /api/gossip; cheap (one mini call), but failure shouldn't
+    // break the tick loop.
+    if (newTick > 0 && newTick % 4 === 0) {
+      try {
+        await this.runGossipPass(newTick);
+      } catch (err) {
+        console.error(`[gossip] refresh at tick ${newTick} failed:`, err);
       }
     }
 
@@ -911,6 +1015,50 @@ export class GameOrchestrator {
       console.error("[tick] FAILED:", err);
     } finally {
       this.tickInFlight = false;
+    }
+  }
+
+  /**
+   * Pull "big moments" from the last 4 ticks and ask the gossip narrator to
+   * summarize. Cached in game_state for /api/gossip.
+   */
+  private async runGossipPass(currentTick: number): Promise<void> {
+    const db = new Db(this.env.DB);
+    const tickStart = Math.max(0, currentTick - 4);
+
+    const rows = await this.env.DB.prepare(
+      `SELECT tick, description, prestige_change, type FROM events
+       WHERE tick > ? AND tick <= ?
+         AND (type = 'random_event'
+              OR type LIKE 'alliance_%'
+              OR ABS(COALESCE(prestige_change, 0)) >= 15)
+       ORDER BY tick ASC, timestamp ASC`,
+    ).bind(tickStart, currentTick).all<{ tick: number; description: string; prestige_change: number | null; type: string }>();
+
+    const all = rows.results ?? [];
+    if (all.length === 0) return;
+
+    // Cap to top 12 by prestige magnitude (random/alliance events get a default
+    // weight so they're not dropped), then re-sort chronologically for the LLM.
+    const moments: GossipMoment[] = [...all]
+      .sort((a, b) => Math.abs(b.prestige_change ?? 50) - Math.abs(a.prestige_change ?? 50))
+      .slice(0, 12)
+      .sort((a, b) => a.tick - b.tick)
+      .map((r) => ({ tick: r.tick, description: r.description, prestigeChange: r.prestige_change }));
+
+    const llm: LlmDeps = {
+      db,
+      stellar: this.makeStellar(),
+      openaiBaseUrl: this.env.OPENAI_BASE_URL,
+      openaiApiKey: this.env.OPENAI_API_KEY,
+      cfAigToken: this.env.CF_AIG_TOKEN,
+    };
+
+    const gossip = await generateGossip(llm, moments, currentTick);
+    if (gossip) {
+      await db.setGameStateValue("latest_gossip", gossip);
+      await db.setGameStateValue("latest_gossip_tick", String(currentTick));
+      await db.setGameStateValue("latest_gossip_at", new Date().toISOString());
     }
   }
 

@@ -485,11 +485,11 @@
     // ============================================================
     // Coaching: stakeholder directive editor.
     // Visible only when:
-    //   - the agent is claimed by someone (?)
+    //   - the agent is claimed by someone
     //   - the visitor's ?email= matches the claim record (verified server-side
     //     via /api/agent/:id?email=)
-    // The textarea is editable only inside the coaching window
-    // (current_tick ∈ {12, 24, 36} during running/halted state).
+    // Each owner gets one directive credit per quarter (Q2/Q3/Q4) — spendable
+    // any time within that quarter, but only once.
     // ============================================================
     function renderCoach(a) {
       const area = document.getElementById('coach-area');
@@ -499,17 +499,19 @@
       // in the email always carries it.
       if (!a.directiveOwner) { area.innerHTML = ''; return; }
 
-      const w = a.coachingWindow || { open: false, currentTick: 0, windowTicks: [], nextWindowTick: null };
+      const w = a.coachingWindow || { open: false, currentTick: 0, currentQuarter: null, quarterCloseTick: null, creditUsed: false, nextWindowTick: null };
       const dirText = a.directive || '';
       const stateText = w.open
-        ? `Coaching window open — current cycle is ${w.currentTick}. Closes when cycle ${w.currentTick + 1} starts (~5 min).`
+        ? `Coaching credit available for Q${w.currentQuarter} (cycles ${w.currentTick}–${w.quarterCloseTick - 1}). One directive per quarter — set it whenever.`
         : a.gameStatus === 'ended'
           ? `Game has ended. Directives are cleared at end-of-game.`
           : a.gameStatus === 'setup'
-            ? `Game hasn't started. Coaching unlocks at cycles ${w.windowTicks.join(', ')}.`
-            : w.nextWindowTick
-              ? `Coaching window closed. Re-opens at cycle ${w.nextWindowTick}, when the next progress email lands.`
-              : `No more coaching windows this game (final email at cycle ${w.windowTicks[w.windowTicks.length - 1]} already passed).`;
+            ? `Game hasn't started. Q2 coaching unlocks at cycle 12 (when the first progress email lands).`
+            : w.creditUsed && w.currentQuarter
+              ? `Coaching credit for Q${w.currentQuarter} already spent. Next credit opens at cycle ${w.quarterCloseTick}.`
+              : w.nextWindowTick
+                ? `No coaching credit yet. Q2 opens at cycle ${w.nextWindowTick}.`
+                : `No more coaching credits this game.`;
       const stateClass = w.open ? 'open' : 'locked';
 
       area.innerHTML = `
