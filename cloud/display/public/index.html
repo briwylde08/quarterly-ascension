@@ -79,8 +79,17 @@
       grid-template-columns: auto 1fr auto;
       gap: 20px;
       align-items: center;
-      border-bottom: 3px solid #f1c40f;
       transition: background 0.6s ease;
+    }
+    .exec-subheader {
+      background: var(--navy-2);
+      color: rgba(255,255,255,0.85);
+      padding: 4px 24px;
+      font-size: 11px;
+      letter-spacing: 1.2px;
+      text-transform: uppercase;
+      text-align: center;
+      border-bottom: 3px solid #f1c40f;
     }
     .exec-banner.tick-pulse { animation: tickHeader 1.4s ease-out; }
     @keyframes tickHeader {
@@ -784,6 +793,7 @@
       align-items: baseline;
       margin-bottom: 14px;
       padding-bottom: 10px;
+      padding-right: 32px;
       border-bottom: 1px dashed var(--border-2);
     }
     .gossip-title {
@@ -811,6 +821,51 @@
       text-align: right;
       letter-spacing: 0.4px;
     }
+
+    /* === Alliances modal ============================================ */
+    .alliances-card { width: min(520px, 92vw); border-top-color: var(--info); }
+    .alliances-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: baseline;
+      margin-bottom: 14px;
+      padding-bottom: 10px;
+      padding-right: 32px;
+      border-bottom: 1px solid var(--border);
+    }
+    .alliances-title { font-size: 14px; font-weight: 700; color: var(--navy); letter-spacing: 0.4px; }
+    .alliances-meta { font-size: 11px; color: var(--text-muted); letter-spacing: 0.4px; }
+    .alliances-section { margin-bottom: 18px; }
+    .alliances-section:last-child { margin-bottom: 0; }
+    .alliances-section-title {
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: 0.7px;
+      color: var(--navy);
+      margin-bottom: 8px;
+      padding-bottom: 4px;
+      border-bottom: 1px dashed var(--border-2);
+      display: flex;
+      justify-content: space-between;
+    }
+    .alliances-section-meta { font-weight: 400; color: var(--text-muted); text-transform: none; letter-spacing: 0.3px; }
+    .alliances-list { font-size: 13px; }
+    .alliances-list .pair-row {
+      padding: 6px 0;
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .alliances-list .pair-row:last-child { border-bottom: 0; }
+    .alliances-list .pair-name { font-weight: 600; color: var(--navy); }
+    .alliances-list .pair-rel {
+      font-family: Consolas, "SF Mono", Menlo, monospace;
+      font-size: 12px;
+      color: var(--text-muted);
+    }
+    .alliances-list .pair-count { font-size: 11px; color: var(--danger); margin-left: auto; }
+    .alliances-list .empty { color: var(--text-faint); font-style: italic; padding: 8px 0; }
     .manager-modal-loading { padding: 40px 0; text-align: center; color: var(--text-faint); }
     .mm-header { display: flex; gap: 16px; margin-bottom: 14px; }
     .mm-portrait {
@@ -954,8 +1009,29 @@
     </div>
   </div>
 
+  <div id="alliances-modal" class="manager-modal hidden" role="dialog" aria-modal="true">
+    <div class="manager-modal-backdrop" data-alliances-close></div>
+    <div class="manager-modal-card alliances-card">
+      <button class="manager-modal-close" data-alliances-close aria-label="Close">×</button>
+      <div class="manager-modal-body">
+        <div class="alliances-header">
+          <span class="alliances-title">🤝 Office Politics</span>
+          <span class="alliances-meta" id="alliances-meta">—</span>
+        </div>
+        <div class="alliances-section">
+          <h4 class="alliances-section-title">Current Alliances</h4>
+          <div id="alliances-list" class="alliances-list">Loading…</div>
+        </div>
+        <div class="alliances-section">
+          <h4 class="alliances-section-title">Active Rivalries <span class="alliances-section-meta" id="rivalries-meta"></span></h4>
+          <div id="rivalries-list" class="alliances-list">Loading…</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <div class="intro-bar">
-    <span>New here? <a href="/intro.html">Adopt one of these middle-managers</a> to play during the next game.</span>
+    <span>New here? <a href="/intro.html">Adopt one of these mid-level managers</a> to play during the next game.</span>
   </div>
 
   <header class="exec-banner" id="banner">
@@ -963,10 +1039,7 @@
       <div class="brand-mark">MegaCorp Inc.</div>
       <div class="brand-tagline">Synergy &amp; Strategic Operations Division</div>
     </div>
-    <div>
-      <div class="doc-title">Q1 FY2026 Performance Dashboard</div>
-      <div class="doc-classification">Confidential · Internal Distribution Only</div>
-    </div>
+    <div></div>
     <div class="header-meta">
       <div class="meta-item">
         <span class="meta-label">Cycle</span>
@@ -982,9 +1055,11 @@
       </div>
       <a id="handbook-btn" class="pause-btn" href="/handbook.html" title="Action catalog, status effects, public tags, and game mechanics">📖 Handbook</a>
       <button id="gossip-btn" class="pause-btn" title="The latest office gossip — refreshed every 4 cycles">💧 Water Cooler</button>
+      <button id="alliances-btn" class="pause-btn" title="Current alliances and active rivalries">🤝 Alliances</button>
       <button id="pause-btn" class="pause-btn" title="Pause / resume the simulation (admin)">⏸ Pause</button>
     </div>
   </header>
+  <div class="exec-subheader">Q1 FY2026 Performance Dashboard</div>
 
   <section class="kpi-strip">
     <div class="kpi-tile" id="kpi-settlements">
@@ -1268,8 +1343,10 @@
       if (empty) empty.remove();
       stream.insertBefore(row, stream.firstChild);
       if (replay) row.style.animation = 'none';
-      // Cap to 60 entries.
-      while (stream.children.length > 60) stream.removeChild(stream.lastChild);
+      // Cap to 1000 entries — enough to preserve a full game's history so the
+      // per-manager filter can scope across the whole run, not just the most
+      // recent few ticks.
+      while (stream.children.length > 1000) stream.removeChild(stream.lastChild);
     }
 
     // ============================================================
@@ -1664,6 +1741,55 @@
     document.addEventListener('keydown', (e) => {
       if (e.key === 'Escape' && !document.getElementById('gossip-modal').classList.contains('hidden')) {
         closeGossipModal();
+      }
+    });
+
+    // ============================================================
+    // Alliances + Rivalries modal
+    // ============================================================
+    async function openAlliancesModal() {
+      const modal = document.getElementById('alliances-modal');
+      const allianceList = document.getElementById('alliances-list');
+      const rivalryList = document.getElementById('rivalries-list');
+      const meta = document.getElementById('alliances-meta');
+      const rivMeta = document.getElementById('rivalries-meta');
+      modal.classList.remove('hidden');
+      allianceList.innerHTML = '<div class="empty">Loading…</div>';
+      rivalryList.innerHTML = '<div class="empty">Loading…</div>';
+      meta.textContent = '';
+      rivMeta.textContent = '';
+      try {
+        const r = await fetch(ORCHESTRATOR_BASE + '/api/relationships');
+        const data = await r.json();
+        meta.textContent = `as of cycle ${data.currentTick}`;
+        if (!data.alliances.length) {
+          allianceList.innerHTML = '<div class="empty">No alliances formed yet.</div>';
+        } else {
+          allianceList.innerHTML = data.alliances.map(p =>
+            `<div class="pair-row"><span class="pair-name">${escape(p.aName)}</span><span class="pair-rel">↔</span><span class="pair-name">${escape(p.bName)}</span></div>`
+          ).join('');
+        }
+        rivMeta.textContent = `(2+ attacks in last ${data.rivalryWindowTicks} cycles)`;
+        if (!data.rivalries.length) {
+          rivalryList.innerHTML = '<div class="empty">No active rivalries — everyone\'s playing nice.</div>';
+        } else {
+          rivalryList.innerHTML = data.rivalries.map(r =>
+            `<div class="pair-row"><span class="pair-name">${escape(r.attackerName)}</span><span class="pair-rel">→</span><span class="pair-name">${escape(r.victimName)}</span><span class="pair-count">${r.count} attacks</span></div>`
+          ).join('');
+        }
+      } catch (err) {
+        allianceList.innerHTML = '<div class="empty">Could not reach the orchestrator.</div>';
+        rivalryList.innerHTML = '';
+      }
+    }
+    function closeAlliancesModal() {
+      document.getElementById('alliances-modal').classList.add('hidden');
+    }
+    document.getElementById('alliances-btn').addEventListener('click', openAlliancesModal);
+    document.querySelectorAll('[data-alliances-close]').forEach(el => el.addEventListener('click', closeAlliancesModal));
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape' && !document.getElementById('alliances-modal').classList.contains('hidden')) {
+        closeAlliancesModal();
       }
     });
 

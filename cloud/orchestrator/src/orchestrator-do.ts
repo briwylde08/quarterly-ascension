@@ -674,6 +674,71 @@ export class GameOrchestrator {
       return Response.json({ ok: true, directive: text });
     }
 
+    // Office politics: current alliances + recent rivalries (anyone who's
+    // attacked another agent 2+ times in the last 12 ticks). Used by the
+    // dashboard's "Current Alliances" panel.
+    if (path === "/relationships" && request.method === "GET") {
+      const HOSTILE_ACTIONS = [
+        "take_credit", "sabotage_plan", "sensitivity_training", "poison_meeting",
+        "send_motivation", "file_complaint", "calendar_conflict", "schedule_conflict",
+        "fix_laptop", "whistleblower_bounty",
+      ];
+      const RIVALRY_LOOKBACK = 12;
+      const RIVALRY_THRESHOLD = 2;
+
+      const [agents, currentTick] = await Promise.all([db.getAllAgents(), db.getCurrentTick()]);
+
+      // Alliances: dedupe by canonical pair key (alphabetical).
+      const seen = new Set<string>();
+      const alliances: Array<{ a: string; aName: string; b: string; bName: string }> = [];
+      const nameById = new Map(agents.map((a) => [a.id, a.name]));
+      for (const a of agents) {
+        for (const allyId of a.allies) {
+          const key = [a.id, allyId].sort().join("|");
+          if (seen.has(key)) continue;
+          seen.add(key);
+          const [first, second] = key.split("|");
+          alliances.push({
+            a: first,
+            aName: nameById.get(first) ?? first,
+            b: second,
+            bName: nameById.get(second) ?? second,
+          });
+        }
+      }
+
+      // Rivalries: group hostile actions by attacker→victim in the last
+      // RIVALRY_LOOKBACK ticks; surface pairs with ≥ RIVALRY_THRESHOLD hits.
+      const placeholders = HOSTILE_ACTIONS.map(() => "?").join(",");
+      const sql = `SELECT agent_id as attacker, json_extract(action_data, '$.target') as victim, COUNT(*) as cnt
+                   FROM action_logs
+                   WHERE tick > ?
+                     AND action_type IN (${placeholders})
+                     AND json_extract(action_data, '$.target') IS NOT NULL
+                   GROUP BY attacker, victim
+                   HAVING cnt >= ?
+                   ORDER BY cnt DESC, attacker ASC`;
+      const rivalryRows = await this.env.DB
+        .prepare(sql)
+        .bind(currentTick - RIVALRY_LOOKBACK, ...HOSTILE_ACTIONS, RIVALRY_THRESHOLD)
+        .all<{ attacker: string; victim: string; cnt: number }>();
+      const rivalries = (rivalryRows.results ?? []).map((r) => ({
+        attacker: r.attacker,
+        attackerName: nameById.get(r.attacker) ?? r.attacker,
+        victim: r.victim,
+        victimName: nameById.get(r.victim) ?? r.victim,
+        count: r.cnt,
+      }));
+
+      return Response.json({
+        currentTick,
+        alliances,
+        rivalries,
+        rivalryWindowTicks: RIVALRY_LOOKBACK,
+        rivalryThreshold: RIVALRY_THRESHOLD,
+      });
+    }
+
     // Latest gossip narrative — refreshed every 4 ticks by the alarm handler.
     // Public read; used by the dashboard's "Gossip with your work bestie" panel.
     if (path === "/gossip" && request.method === "GET") {
@@ -694,8 +759,8 @@ export class GameOrchestrator {
         db.getAllAgents(),
         db.getGameStatus(),
         db.getCurrentTick(),
-        db.getRecentEvents(20),
-        db.getRecentTickerEntries(15),
+        db.getRecentEvents(300),
+        db.getRecentTickerEntries(200),
         db.getTickerStats(),
         // DO storage tracks the next scheduled alarm time as a ms-since-epoch
         // number (or null if no alarm). Surfacing it lets every dashboard
@@ -752,20 +817,12 @@ export class GameOrchestrator {
     const db = new Db(this.env.DB);
     const status = await db.getGameStatus();
 
-    // Post-game cleanup: when the game ended, we scheduled an alarm for
-    // ~5 min later to do the full slate-wipe. If we're firing now and
-    // status is still "ended", that's the cleanup alarm; do it.
+    // Game has ended — never auto-wipe. Final standings + action_logs +
+    // events stay in D1 for post-game analysis until someone explicitly
+    // calls /admin/reset. If an alarm somehow fires while we're in this
+    // state (shouldn't happen — we don't schedule one), just no-op.
     if (status === "ended") {
-      try {
-        await this.performReset({
-          wipeClaims: true,
-          normalizeBalances: true,
-          target: 200,
-          broadcastNotice: "Post-game cleanup complete. New round ready — all managers adoptable.",
-        });
-      } catch (err) {
-        console.error("[alarm] post-game cleanup failed:", err);
-      }
+      console.log("[alarm] fired while ended; ignoring (no auto-cleanup).");
       return;
     }
 
@@ -785,6 +842,15 @@ export class GameOrchestrator {
         await this.env.DB.prepare("DELETE FROM game_state WHERE key LIKE 'directive_%'").run();
       } catch (err) {
         console.error("[alarm] failed to clear directives on end-of-game:", err);
+      }
+
+      // Clear adoption claims so the next game's intro page shows everyone as
+      // available. action_logs / events are preserved for post-game analysis;
+      // only the owner pointers are released.
+      try {
+        await this.env.DB.prepare("UPDATE agents SET claimed_by = NULL, claimed_by_name = NULL").run();
+      } catch (err) {
+        console.error("[alarm] failed to clear claims on end-of-game:", err);
       }
 
       // Emit a game_end event so live dashboards can show the winner overlay.
@@ -816,12 +882,10 @@ export class GameOrchestrator {
         console.error("[alarm] finale email batch failed:", err);
       }
 
-      // Schedule the post-game cleanup alarm. 5 minutes lets viewers see
-      // the winner overlay + final standings, and lets email recipients
-      // open finale emails before everything resets.
-      const cleanupDelay = 5 * 60 * 1000;
-      await this.state.storage.setAlarm(Date.now() + cleanupDelay);
-      console.log(`[alarm] game ended at tick ${tick}; cleanup scheduled in ${cleanupDelay / 1000}s`);
+      // Don't schedule a cleanup alarm. Final standings, action_logs, and
+      // events stay in D1 until someone explicitly calls /admin/reset, so
+      // we can always pull /admin/snapshot for post-game analysis.
+      console.log(`[alarm] game ended at tick ${tick}; data preserved until /admin/reset`);
       return;
     }
 

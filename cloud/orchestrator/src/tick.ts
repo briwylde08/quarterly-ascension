@@ -204,7 +204,7 @@ async function applyFatigue(deps: TickDeps, tick: number): Promise<void> {
       timestamp: new Date(),
       type: "status_effect",
       agentId: agent.id,
-      description: `${agent.name} hit the wall (${FATIGUE_WINDOW} cycles without rest) — now Tired (-2 prestige/cycle for 3 cycles, removed by coffee).`,
+      description: `${agent.name} hit the wall (${FATIGUE_WINDOW} cycles without rest) — now Tired (-2 prestige/cycle for 3 cycles, removed by rest, coffee, or fancy coffee).`,
     });
   }
 }
@@ -255,7 +255,7 @@ async function executeAction(
   reasoning: string,
   tick: number
 ): Promise<void> {
-  const { db, emit } = deps;
+  const { db, emit, stellar, rewards } = deps;
 
   let outcome = "";
   let prestigeChange = 0;
@@ -265,9 +265,38 @@ async function executeAction(
     switch (action.type) {
       case "work":
         prestigeChange = 5;
-        outcome = "Did actual work";
         await db.updateAgentPrestige(agent.id, prestigeChange);
+        outcome = "Did actual work (+5 prestige, +$3 base salary)";
+        try {
+          await stellar.sendAsset(rewards.hrDeptSecret, agent.publicKey, 3);
+        } catch (err) {
+          console.error(`[work-stipend] HR payout to ${agent.name} failed:`, err);
+          outcome = "Did actual work (+5 prestige; salary pending)";
+        }
         break;
+
+      case "expense_report": {
+        // Free earning path. Always pays $10 from HR; 20% audit chance hits
+        // prestige. Rounds out the deflationary economy without giving the
+        // leader a prestige edge (which is why this isn't on `work`).
+        const audited = Math.random() < 0.20;
+        if (audited) {
+          prestigeChange = -5;
+          await db.updateAgentPrestige(agent.id, prestigeChange);
+        }
+        try {
+          await stellar.sendAsset(rewards.hrDeptSecret, agent.publicKey, 10);
+          outcome = audited
+            ? "Filed expense report (+$10 reimbursed) — flagged by Finance for review (-5 prestige)"
+            : "Filed expense report (+$10 reimbursed)";
+        } catch (err) {
+          console.error(`[expense-report] HR payout to ${agent.name} failed:`, err);
+          outcome = audited
+            ? "Filed expense report — Finance flagged it (-5 prestige); reimbursement pending"
+            : "Filed expense report — reimbursement pending";
+        }
+        break;
+      }
 
       case "rest": {
         outcome = "Rested";

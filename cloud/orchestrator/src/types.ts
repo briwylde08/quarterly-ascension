@@ -77,7 +77,8 @@ export type Action =
   | { type: "whistleblower_bounty"; target: string }
   | { type: "mentorship"; target: string }
   | { type: "coffee_chat"; target: string }
-  | { type: "hail_mary_idea" };
+  | { type: "hail_mary_idea" }
+  | { type: "expense_report" };
 
 export interface GameEvent {
   id: string;

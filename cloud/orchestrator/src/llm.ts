@@ -55,7 +55,8 @@ export async function generateGossip(
 }
 
 const ALL_ACTIONS = [
-  { type: "work", description: "Do actual work (+5 prestige, free)", cost: 0 },
+  { type: "work", description: "Do actual work (+5 prestige, +$3 base salary, free)", cost: 0 },
+  { type: "expense_report", description: "File an expense report (+$10 reimbursed; 20% chance Finance flags it for -5 prestige). Free, no skill required.", cost: 0 },
   { type: "rest", description: "Rest and recover (removes Tired debuff, free)", cost: 0 },
   { type: "schmooze", description: "Build relationship with another manager (may form alliance)", cost: 0, requiresTarget: true },
   { type: "take_credit", description: "Attempt to claim credit for someone's work (40% success: +30 prestige, 60% fail: -20 prestige)", cost: 0, requiresTarget: true },
@@ -217,11 +218,25 @@ a corporate manager, not a robot. Show judgment.
 `
     : "";
 
-  return `${directiveSection}
+  // allAgents arrives pre-sorted prestige DESC, so allAgents[0] is the leader
+  // and findIndex+1 is this agent's rank.
+  const rank = allAgents.findIndex((a) => a.id === agent.id) + 1;
+  const leader = allAgents[0];
+  const gapToLeader = leader.prestige - agent.prestige;
+  let positionalNudge = "";
+  if (rank === 1) {
+    positionalNudge = `\nSTRATEGIC POSITION:\nYou're the current leader. Defend your lead — don't get cute. Build deliverables, keep your alliances warm, and avoid handing the mid-pack a reason to focus-fire on you.\n`;
+  } else if (rank >= 2 && rank <= 5) {
+    positionalNudge = `\nSTRATEGIC POSITION:\nYou're in striking distance (Rank ${rank} of ${allAgents.length}). The leader is ${leader.name} at ${leader.prestige} prestige — ${gapToLeader} ahead of you. To win the VP slot you'll need to close that gap. Concentrated pressure on the leader (sabotage_plan + take_credit, sensitivity_training, schedule_conflict on a Deliverable holder) is usually the fastest path. Coordinate with allies if you have them.\n`;
+  } else {
+    positionalNudge = `\nSTRATEGIC POSITION:\nYou're in the bottom half (Rank ${rank} of ${allAgents.length}, ${gapToLeader} behind the leader). Picking fights at the top from here usually backfires — you'll burn budget for marginal damage and the leader will still be ahead. Focus on rebuilding your own position: work, alliances, deliverables, and earning paths (mentorship, coffee_chat). Climb steadily before you punch up.\n`;
+  }
+
+  return `${directiveSection}${positionalNudge}
 CURRENT SITUATION (Tick ${currentTick}):
 
 YOUR STATUS:
-- Prestige: ${agent.prestige} (Rank #${allAgents.findIndex((a) => a.id === agent.id) + 1} of ${allAgents.length})
+- Prestige: ${agent.prestige} (Rank #${rank} of ${allAgents.length})
 - Budget: $${balance.toFixed(2)} DLBR
 - Status Effects: ${statusDescriptions.length > 0 ? statusDescriptions.join(", ") : "None"}
 - Allies: ${agent.allies.length > 0 ? agent.allies.map((id) => allAgents.find((a) => a.id === id)?.name).join(", ") : "None"}
