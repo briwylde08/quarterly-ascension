@@ -235,17 +235,18 @@ function buildContextPrompt(ctx: DecisionContext): string {
 
   const directiveSection = directive
     ? `\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-STAKEHOLDER NOTE (from your real-world adopter):
+COACH DIRECTIVE (from your real-world claimer; live, may update tick-to-tick):
 
   "${directive.replace(/"/g, '\\"')}"
 
-This is one input among many — alongside your personality, current
-standing, budget, allies, and what's actually working. If pursuing
-this guidance is costing you significant prestige, breaking your
-alliances, or repeatedly failing (e.g. several missed take_credits
-in a row, or attacks landing for less than they cost), your
-stakeholder would rather you adapt than mechanically obey. You're
-a corporate manager, not a robot. Show judgment.
+This is a strong steer. Take it seriously. BUT — your persona traits
+shape *how* you execute. If the directive conflicts with who you are
+(e.g. a cautious manager told to "go aggressive," or a loyal one told
+to "betray everyone"), your character might comply imperfectly,
+half-heartedly, or pick an adjacent action that fits your nature
+better. Be true to yourself. Either way, your reasoning quote MUST
+explicitly reference the directive — say what your coach asked and
+how your action relates. The audience is watching this play out.
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 `
     : "";

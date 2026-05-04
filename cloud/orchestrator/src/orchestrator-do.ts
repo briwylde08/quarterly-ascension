@@ -25,16 +25,79 @@ interface BroadcastMessage {
 // Coaching is structured as three quarter-long windows. The owner gets one
 // directive credit per quarter and can spend it any time within the range.
 // Q1 (ticks 1-11) is a warm-up — no coaching. After tick 12 (when the Q1
-// progress email lands), the Q2 credit opens and stays open until tick 24,
-// when the Q3 credit takes over, and so on through tick 47.
-const COACHING_QUARTERS = [
-  { quarter: 2, openTick: 12, closeTick: 24 },
-  { quarter: 3, openTick: 24, closeTick: 36 },
-  { quarter: 4, openTick: 36, closeTick: 48 },
-];
+// Retreat mode: coaching is always open. Claimers may submit a directive
+// at any tick; submissions persist until overwritten or cleared. No
+// quarter gates, no credit limits.
 
-function getCoachingQuarter(tick: number): typeof COACHING_QUARTERS[number] | null {
-  return COACHING_QUARTERS.find((q) => tick >= q.openTick && tick < q.closeTick) ?? null;
+const DIRECTIVE_MAX_LENGTH = 280;
+const PASSWORD_MIN_LENGTH = 4;
+const PASSWORD_MAX_LENGTH = 128;
+const PBKDF2_ITERATIONS = 100_000;
+const PBKDF2_SALT_BYTES = 16;
+const PBKDF2_HASH_BYTES = 32;
+
+function bytesToBase64(bytes: Uint8Array): string {
+  let binary = "";
+  for (let i = 0; i < bytes.length; i++) binary += String.fromCharCode(bytes[i]);
+  return btoa(binary);
+}
+
+function base64ToBytes(b64: string): Uint8Array {
+  const binary = atob(b64);
+  const bytes = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+  return bytes;
+}
+
+/** PBKDF2-SHA256 password hash. Stored as JSON: {salt, hash, iterations}. */
+async function hashPassword(password: string): Promise<string> {
+  const salt = crypto.getRandomValues(new Uint8Array(PBKDF2_SALT_BYTES));
+  const keyMaterial = await crypto.subtle.importKey(
+    "raw",
+    new TextEncoder().encode(password),
+    { name: "PBKDF2" },
+    false,
+    ["deriveBits"]
+  );
+  const hashBuf = await crypto.subtle.deriveBits(
+    { name: "PBKDF2", salt, iterations: PBKDF2_ITERATIONS, hash: "SHA-256" },
+    keyMaterial,
+    PBKDF2_HASH_BYTES * 8
+  );
+  return JSON.stringify({
+    salt: bytesToBase64(salt),
+    hash: bytesToBase64(new Uint8Array(hashBuf)),
+    iterations: PBKDF2_ITERATIONS,
+  });
+}
+
+/** Verify a password against a stored PBKDF2 record. Constant-time compare. */
+async function verifyPassword(password: string, storedRecord: string): Promise<boolean> {
+  let parsed: { salt: string; hash: string; iterations: number };
+  try {
+    parsed = JSON.parse(storedRecord);
+  } catch {
+    return false;
+  }
+  const salt = base64ToBytes(parsed.salt);
+  const expected = base64ToBytes(parsed.hash);
+  const keyMaterial = await crypto.subtle.importKey(
+    "raw",
+    new TextEncoder().encode(password),
+    { name: "PBKDF2" },
+    false,
+    ["deriveBits"]
+  );
+  const hashBuf = await crypto.subtle.deriveBits(
+    { name: "PBKDF2", salt, iterations: parsed.iterations, hash: "SHA-256" },
+    keyMaterial,
+    expected.length * 8
+  );
+  const actual = new Uint8Array(hashBuf);
+  if (actual.length !== expected.length) return false;
+  let diff = 0;
+  for (let i = 0; i < actual.length; i++) diff |= actual[i] ^ expected[i];
+  return diff === 0;
 }
 
 export class GameOrchestrator {
@@ -411,27 +474,14 @@ export class GameOrchestrator {
       const gameStatus = await db.getGameStatus();
       const currentTick = await db.getCurrentTick();
 
-      // Coaching: each owner gets one directive credit per quarter (Q2, Q3,
-      // Q4). The credit is spendable any time within the quarter, but only
-      // once. Game must be running or halted; ended/setup are read-only.
-      const quarterInfo = getCoachingQuarter(currentTick);
-      let creditUsed = false;
-      let windowOpen = false;
-      if (quarterInfo) {
-        creditUsed = (await db.getGameStateValue(`coaching_used_${agent.id}_q${quarterInfo.quarter}`)) === "yes";
-        windowOpen = !creditUsed && (gameStatus === "running" || gameStatus === "halted");
-      }
-      const nextQuarter = COACHING_QUARTERS.find((q) => q.openTick > currentTick) ?? null;
-
-      // Directive is private — only surface it (and the live editor flag)
-      // when the requester proves ownership by passing ?email=.
-      let directive: string | null = null;
-      let directiveOwner = false;
-      const requesterEmail = url.searchParams.get("email")?.trim().toLowerCase();
-      if (requesterEmail && agent.claimedBy && agent.claimedBy.toLowerCase() === requesterEmail) {
-        directiveOwner = true;
-        directive = (await db.getGameStateValue(`directive_${agent.id}`)) || null;
-      }
+      // Retreat mode: directive is public on the dashboard (the directive
+      // screen shows them verbatim) so we surface it for everyone. The
+      // `activated` flag signals to the agent.html state machine whether
+      // the slot has a password set yet.
+      const claimed = !!agent.claimedByName;
+      const activated = claimed && !!(await db.getGameStateValue(`password_${agent.id}`));
+      const directive = (await db.getGameStateValue(`directive_${agent.id}`)) || null;
+      const coachingOpen = gameStatus === "running" || gameStatus === "halted";
 
       return Response.json({
         id: agent.id,
@@ -447,20 +497,13 @@ export class GameOrchestrator {
         total,
         statusEffects: agent.statusEffects,
         allies: agent.allies,
-        claimed: !!agent.claimedBy,
+        claimed,
         claimedByName: agent.claimedByName,
+        activated,
         gameStatus,
         currentTick,
-        coachingWindow: {
-          open: windowOpen,
-          currentTick,
-          currentQuarter: quarterInfo?.quarter ?? null,
-          quarterCloseTick: quarterInfo?.closeTick ?? null,
-          creditUsed,
-          nextWindowTick: nextQuarter?.openTick ?? null,
-        },
+        coachingWindow: { open: coachingOpen, alwaysOpen: true },
         directive,
-        directiveOwner,
         explorerUrl: stellar.getExplorerAccountUrl(agent.publicKey),
         recentActions: recentActions.map((r) => ({
           tick: r.tick,
@@ -475,61 +518,51 @@ export class GameOrchestrator {
 
     // Claim flow — atomic.
     if (path === "/claim" && request.method === "POST") {
-      let body: { agentId?: string; name?: string; email?: string };
+      // Retreat-mode claim: atomic claim+activate with name + password.
+      // No email — coaching auth is password-based for the in-room show.
+      let body: { agentId?: string; name?: string; password?: string };
       try {
         body = await request.json();
       } catch {
         return Response.json({ error: "invalid JSON body" }, { status: 400 });
       }
-      const { agentId, name, email } = body;
-      if (!agentId || !name || !email) {
-        return Response.json({ error: "agentId, name, email all required" }, { status: 400 });
+      const { agentId, name, password } = body;
+      if (!agentId || !name || !password) {
+        return Response.json({ error: "agentId, name, and password are all required" }, { status: 400 });
       }
-      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
-        return Response.json({ error: "invalid email format" }, { status: 400 });
+      if (password.length < PASSWORD_MIN_LENGTH || password.length > PASSWORD_MAX_LENGTH) {
+        return Response.json(
+          { error: `password must be ${PASSWORD_MIN_LENGTH}-${PASSWORD_MAX_LENGTH} characters` },
+          { status: 400 }
+        );
       }
       const trimmedName = name.trim().slice(0, 80);
-      const trimmedEmail = email.trim().toLowerCase().slice(0, 200);
+      if (trimmedName.length === 0) {
+        return Response.json({ error: "name is required" }, { status: 400 });
+      }
 
-      // Block claims while a game is running/halted/ended. New adoptions only
-      // open during "setup" — between rounds.
       const claimStatus = await db.getGameStatus();
       if (claimStatus !== "setup") {
         return Response.json(
           {
-            error: `Claims are only open between rounds (current status: ${claimStatus}). Try again at the start of the next game.`,
+            error: `Claims are only open between rounds (current status: ${claimStatus}).`,
             status: claimStatus,
           },
           { status: 400 }
         );
       }
 
-      // One-claim-per-human: reject if this email is already on another agent.
-      const existingClaim = await this.env.DB
-        .prepare("SELECT id, name FROM agents WHERE LOWER(claimed_by) = ? AND id != ?")
-        .bind(trimmedEmail, agentId)
-        .first<{ id: string; name: string }>();
-      if (existingClaim) {
-        return Response.json(
-          {
-            error: `You've already adopted ${existingClaim.name}. Release them first if you want to switch managers.`,
-            existingAgentId: existingClaim.id,
-            existingAgentName: existingClaim.name,
-          },
-          { status: 409 }
-        );
-      }
-
-      // Atomic: only set if not already claimed.
+      // Atomic: only set claimed_by_name if currently NULL. Then store the
+      // password hash. If the claim succeeded but hashing failed, roll back
+      // to keep the slot available.
       const updateRes = await this.env.DB
         .prepare(
-          "UPDATE agents SET claimed_by = ?, claimed_by_name = ? WHERE id = ? AND claimed_by IS NULL"
+          "UPDATE agents SET claimed_by_name = ? WHERE id = ? AND claimed_by_name IS NULL"
         )
-        .bind(trimmedEmail, trimmedName, agentId)
+        .bind(trimmedName, agentId)
         .run();
       const changes = updateRes.meta?.changes ?? 0;
       if (changes === 0) {
-        // Either agent doesn't exist or it's already claimed.
         const a = await db.getAgent(agentId);
         if (!a) return Response.json({ error: "agent not found" }, { status: 404 });
         return Response.json(
@@ -538,29 +571,23 @@ export class GameOrchestrator {
         );
       }
 
-      // Send confirmation email (best-effort — don't fail the claim if email fails).
       try {
-        const claimedAgent = (await db.getAgent(agentId))!;
-        const all = await db.getAllAgents();
-        const rank = all.findIndex((a) => a.id === claimedAgent.id) + 1;
-        const balance = await stellar.getAssetBalance(claimedAgent.publicKey);
-        const tmpl = claimConfirmationEmail({
-          agent: claimedAgent,
-          balance,
-          rank,
-          total: all.length,
-          claimerName: trimmedName,
-        });
-        await sendEmail(this.env.RESEND_API_KEY, { ...tmpl, to: trimmedEmail });
+        const hash = await hashPassword(password);
+        await db.setGameStateValue(`password_${agentId}`, hash);
       } catch (err) {
-        console.error("[claim] confirmation email failed:", err);
+        console.error("[claim] password hashing failed; releasing claim:", err);
+        await this.env.DB
+          .prepare("UPDATE agents SET claimed_by_name = NULL WHERE id = ?")
+          .bind(agentId)
+          .run();
+        return Response.json({ error: "could not store password; please try again" }, { status: 500 });
       }
 
-      return Response.json({ ok: true, agentId, claimedByName: trimmedName });
+      return Response.json({ ok: true, agentId, claimedByName: trimmedName, activated: true });
     }
 
-    // Release a claim. Allowed only when the game is NOT running, and the
-    // requester proves ownership by supplying the email used at claim time.
+    // Release a claim. Allowed only when the game is NOT running. Auth via
+    // password (the same one set at claim time).
     if (path === "/release" && request.method === "POST") {
       const status = await db.getGameStatus();
       if (status === "running") {
@@ -570,27 +597,25 @@ export class GameOrchestrator {
         );
       }
 
-      let body: { agentId?: string; email?: string };
+      let body: { agentId?: string; password?: string };
       try {
         body = await request.json();
       } catch {
         return Response.json({ error: "invalid JSON body" }, { status: 400 });
       }
-      const { agentId, email } = body;
-      if (!agentId || !email) {
-        return Response.json({ error: "agentId and email both required" }, { status: 400 });
+      const { agentId, password } = body;
+      if (!agentId || !password) {
+        return Response.json({ error: "agentId and password both required" }, { status: 400 });
       }
-      const trimmedEmail = email.trim().toLowerCase();
 
       const claimedAgent = await db.getAgent(agentId);
       if (!claimedAgent) return Response.json({ error: "agent not found" }, { status: 404 });
-      if (!claimedAgent.claimedBy) {
+      if (!claimedAgent.claimedByName) {
         return Response.json({ error: "agent is not claimed" }, { status: 400 });
       }
-      if (claimedAgent.claimedBy.toLowerCase() !== trimmedEmail) {
-        // Don't leak whether the email was wrong vs the agent was claimed by
-        // someone else — same status code either way.
-        return Response.json({ error: "email does not match the claim record" }, { status: 403 });
+      const storedHash = await db.getGameStateValue(`password_${agentId}`);
+      if (!storedHash || !(await verifyPassword(password, storedHash))) {
+        return Response.json({ error: "password does not match the claim record" }, { status: 403 });
       }
 
       const releasedFromName = claimedAgent.claimedByName;
@@ -602,31 +627,29 @@ export class GameOrchestrator {
       return Response.json({ ok: true, agentId, releasedFrom: releasedFromName });
     }
 
-    // Set or clear an agent's stakeholder directive. Each owner has one
-    // directive credit per quarter (Q2-Q4); POST consumes the credit. DELETE
-    // clears the directive but doesn't restore the credit (so you can't
-    // launder repeated edits through clear-and-reset). Email auth matches
-    // the claim record. The directive itself is stored in game_state and
-    // consumed by the LLM context-builder.
+    // Retreat-mode coaching: always-open. Claimer submits a directive at
+    // any tick; it persists until overwritten or DELETE'd. Auth via password
+    // (set at claim time). Cap 280 chars.
     if (path === "/directive" && (request.method === "POST" || request.method === "DELETE")) {
-      let body: { agentId?: string; email?: string; directive?: string };
+      let body: { agentId?: string; password?: string; directive?: string };
       try {
         body = await request.json();
       } catch {
         return Response.json({ error: "invalid JSON body" }, { status: 400 });
       }
-      const { agentId, email } = body;
-      if (!agentId || !email) {
-        return Response.json({ error: "agentId and email both required" }, { status: 400 });
+      const { agentId, password } = body;
+      if (!agentId || !password) {
+        return Response.json({ error: "agentId and password both required" }, { status: 400 });
       }
 
       const directiveAgent = await db.getAgent(agentId);
       if (!directiveAgent) return Response.json({ error: "agent not found" }, { status: 404 });
-      if (!directiveAgent.claimedBy) {
+      if (!directiveAgent.claimedByName) {
         return Response.json({ error: "agent is not claimed" }, { status: 400 });
       }
-      if (directiveAgent.claimedBy.toLowerCase() !== email.trim().toLowerCase()) {
-        return Response.json({ error: "email does not match the claim record" }, { status: 403 });
+      const storedHash = await db.getGameStateValue(`password_${agentId}`);
+      if (!storedHash || !(await verifyPassword(password, storedHash))) {
+        return Response.json({ error: "password does not match the claim record" }, { status: 403 });
       }
 
       const status = await db.getGameStatus();
@@ -637,43 +660,19 @@ export class GameOrchestrator {
           { status: 400 }
         );
       }
-      const quarterInfo = getCoachingQuarter(currentTick);
-      if (!quarterInfo) {
-        const next = COACHING_QUARTERS.find((q) => q.openTick > currentTick);
-        const msg = next
-          ? `No coaching credit yet — opens at cycle ${next.openTick}.`
-          : `No more coaching credits this game.`;
-        return Response.json({ error: msg, currentTick, status }, { status: 400 });
-      }
 
       const key = `directive_${agentId}`;
-      const usedKey = `coaching_used_${agentId}_q${quarterInfo.quarter}`;
-
       if (request.method === "DELETE") {
-        // Clearing is always allowed; doesn't restore the credit.
         await this.env.DB.prepare("DELETE FROM game_state WHERE key = ?").bind(key).run();
         return Response.json({ ok: true, cleared: true });
       }
 
-      const creditAlreadyUsed = (await db.getGameStateValue(usedKey)) === "yes";
-      if (creditAlreadyUsed) {
-        return Response.json(
-          {
-            error: `You've already used your coaching credit for this quarter (closes at cycle ${quarterInfo.closeTick}). Next credit opens then.`,
-            currentTick,
-            status,
-          },
-          { status: 400 }
-        );
-      }
-
-      const text = (body.directive ?? "").trim().slice(0, 250);
+      const text = (body.directive ?? "").trim().slice(0, DIRECTIVE_MAX_LENGTH);
       if (text.length === 0) {
         return Response.json({ error: "directive is empty (DELETE to clear instead)" }, { status: 400 });
       }
       await db.setGameStateValue(key, text);
-      await db.setGameStateValue(usedKey, "yes");
-      return Response.json({ ok: true, directive: text });
+      return Response.json({ ok: true, directive: text, persistsUntilOverwritten: true });
     }
 
     // Office politics: current alliances + recent rivalries (anyone who's
