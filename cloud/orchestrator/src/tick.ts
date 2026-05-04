@@ -128,6 +128,16 @@ export async function processTick(deps: TickDeps, activeAgentId?: string): Promi
     await executeAction(deps, SERVICE_URLS, agent, action, reasoning, tick);
   }
 
+  // Phase 4b: Mysterious Influence misattribution. After the active agent
+  // acts, every other agent holding Mysterious Influence has a 10% roll
+  // to be falsely credited for the action. Pure flavor — no prestige
+  // movement — but the audience reads each "somehow involved" line as a
+  // running joke and recognizes the trope of the office cipher who gets
+  // credit for everything.
+  if (activeAgentId && decisions.length > 0) {
+    await applyMysteriousInfluenceMisattribution(deps, tick, decisions[0]);
+  }
+
   // Phase 5: passive ticks (Inspired bonus + Tired/Problematic decay)
   await applyPassiveStatusDecay(deps, tick);
 
@@ -137,6 +147,52 @@ export async function processTick(deps: TickDeps, activeAgentId?: string): Promi
   // visible paid action.
 
   console.log(`\nTick ${tick} complete.\n`);
+}
+
+const MYSTERIOUS_CREDIT_FLAVORS = [
+  (mystery: string, actor: string, action: string) =>
+    `${mystery} was somehow involved in ${actor}'s ${action}. Nobody can explain how.`,
+  (mystery: string, actor: string, action: string) =>
+    `Reports surface that ${mystery} "consulted" on ${actor}'s ${action}. Reports are unsourced.`,
+  (mystery: string, actor: string, action: string) =>
+    `${mystery}'s name appears on the post-mortem for ${actor}'s ${action}. They were not on the post-mortem.`,
+  (mystery: string, actor: string, action: string) =>
+    `${actor}'s ${action} is mysteriously credited to ${mystery} in the all-hands recap deck.`,
+  (mystery: string, actor: string) =>
+    `Three separate Slack messages confirm ${mystery} was on the kickoff invite for ${actor}'s last move. There was no kickoff.`,
+  (mystery: string) =>
+    `${mystery} just got cc'd on something that did not concern them. They replied "thanks for the loop."`,
+];
+
+/**
+ * Phase 4b: 10% chance per Mysterious Influence holder (other than the
+ * active agent) to surface a flavor event crediting them for whatever
+ * the active agent just did. Pure comedy — no prestige movement.
+ */
+async function applyMysteriousInfluenceMisattribution(
+  deps: TickDeps,
+  tick: number,
+  active: { agent: Agent; action: Action; reasoning: string }
+): Promise<void> {
+  const { db, emit } = deps;
+  const all = await db.getAllAgents();
+  const influencers = all.filter(
+    (a) => a.id !== active.agent.id && a.statusEffects.some((s) => s.type === "mysterious_influence")
+  );
+  for (const influencer of influencers) {
+    if (Math.random() >= 0.10) continue;
+    const flavor = MYSTERIOUS_CREDIT_FLAVORS[Math.floor(Math.random() * MYSTERIOUS_CREDIT_FLAVORS.length)];
+    const description = flavor(influencer.name, active.agent.name, active.action.type);
+    await emit({
+      id: uuid(),
+      tick,
+      timestamp: new Date(),
+      type: "status_effect",
+      agentId: influencer.id,
+      description,
+      prestigeChange: 0,
+    });
+  }
 }
 
 /**

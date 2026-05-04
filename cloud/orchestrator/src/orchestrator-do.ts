@@ -15,7 +15,6 @@ import type { Agent, GameEvent, TickerEntry } from "./types.js";
 import type { LlmDeps, GossipMoment } from "./llm.js";
 import { generateGossip } from "./llm.js";
 import { getPersona } from "./personas.js";
-import { sendEmail, claimConfirmationEmail, progressSummaryEmail, finaleEmail } from "./email.js";
 
 interface BroadcastMessage {
   type: "game_event" | "ticker_update";
@@ -226,10 +225,18 @@ export class GameOrchestrator {
       if (current === "running") {
         return Response.json({ error: "Game already running" }, { status: 400 });
       }
+      // Top up HR Department's DLBR balance before kickoff so payouts never
+      // stall mid-show. Best-effort — if it fails, the game still starts;
+      // we just log and surface in the response for visibility.
+      const hrFunding = await this.ensureHrFunded();
       await db.setGameStatus("running");
       // First tick fires immediately; subsequent ones are alarm-scheduled.
       await this.state.storage.setAlarm(Date.now() + 100);
-      return Response.json({ status: "running", startedAt: new Date().toISOString() });
+      return Response.json({
+        status: "running",
+        startedAt: new Date().toISOString(),
+        hrFunding,
+      });
     }
 
     if (path === "/halt" && request.method === "POST") {
@@ -402,20 +409,6 @@ export class GameOrchestrator {
       }
 
       return Response.json({ ok: true, target, burns, mints, agents: snapshot.length });
-    }
-
-    // Test-fire scheduled emails out-of-cycle. Body: {"kind":"progress"|"finale","tick":<n>}
-    if (path === "/test-emails" && request.method === "POST") {
-      const body = await request.json().catch(() => ({})) as { kind?: string; tick?: number };
-      const kind = body.kind || "progress";
-      const tick = body.tick ?? await db.getCurrentTick();
-      try {
-        if (kind === "finale") await this.sendFinaleEmails();
-        else await this.sendProgressEmails(tick);
-        return Response.json({ ok: true, kind, tick });
-      } catch (err) {
-        return Response.json({ error: String(err) }, { status: 500 });
-      }
     }
 
     return new Response("not found", { status: 404 });
@@ -888,13 +881,6 @@ export class GameOrchestrator {
         console.error("[alarm] failed to emit game_end event:", err);
       }
 
-      // Last act before close: send the finale email.
-      try {
-        await this.sendFinaleEmails();
-      } catch (err) {
-        console.error("[alarm] finale email batch failed:", err);
-      }
-
       // Don't schedule a cleanup alarm. Final standings, action_logs, and
       // events stay in D1 until someone explicitly calls /admin/reset, so
       // we can always pull /admin/snapshot for post-game analysis.
@@ -924,109 +910,6 @@ export class GameOrchestrator {
     if (stillRunning) {
       const interval = parseInt(this.env.TICK_INTERVAL_MS, 10);
       await this.state.storage.setAlarm(Date.now() + interval);
-    }
-  }
-
-  // ----- Scheduled emails ---------------------------------------------------
-
-  private async sendProgressEmails(tick: number): Promise<void> {
-    const db = new Db(this.env.DB);
-    const stellar = this.makeStellar();
-    const all = await db.getAllAgents();
-    const claimed = all.filter((a) => a.claimedBy);
-    if (claimed.length === 0) return;
-
-    const tickStart = Math.max(0, tick - 12);
-    const cycleLabel = tick === 12 ? "Q1 Cycle 12 (early)" : tick === 24 ? "Q1 Cycle 24 (mid-quarter)" : `Q1 Cycle ${tick} (late)`;
-
-    for (const agent of claimed) {
-      try {
-        const balance = await stellar.getAssetBalance(agent.publicKey);
-        const rank = all.findIndex((a) => a.id === agent.id) + 1;
-        const actions = await db.getAgentActionLogs(agent.id, tickStart, tick);
-
-        // For the prestige/budget delta, we need a starting baseline.
-        // Approximation: start of this period = previous quarter point.
-        // For tick 12 we use 0; for tick 24 we use 12; etc.
-        const prestigeStartRow = await this.env.DB
-          .prepare(
-            `SELECT COALESCE(SUM(prestige_change), 0) AS delta FROM action_logs WHERE agent_id = ? AND tick > ? AND tick <= ?`
-          )
-          .bind(agent.id, tickStart, tick)
-          .first<{ delta: number }>();
-        const prestigeStart = agent.prestige - (prestigeStartRow?.delta ?? 0);
-
-        const budgetStart = balance; // we don't track historical balance — use current as fallback
-        const inboundEvents: Array<{ tick: number; description: string }> = []; // could query events targeting this agent
-
-        const notableQuotes = actions
-          .filter((a) => a.reasoning && a.reasoning.length > 20)
-          .slice(0, 3)
-          .map((a) => a.reasoning as string);
-
-        const tmpl = progressSummaryEmail({
-          agent,
-          balance,
-          rank,
-          total: all.length,
-          claimerName: agent.claimedByName ?? "MegaCorp Stakeholder",
-          claimerEmail: agent.claimedBy ?? "",
-          cycle: tick,
-          cycleLabel,
-          actions: actions.map((a) => ({
-            tick: a.tick,
-            action_type: a.action_type,
-            outcome: a.outcome ?? "",
-            reasoning: a.reasoning ?? null,
-            prestige_change: a.prestige_change ?? null,
-          })),
-          inboundEvents,
-          prestigeStart,
-          budgetStart,
-          notableQuotes,
-        });
-        await sendEmail(this.env.RESEND_API_KEY, { ...tmpl, to: agent.claimedBy! });
-      } catch (err) {
-        console.error(`[email] progress summary for ${agent.name} failed:`, err);
-      }
-    }
-  }
-
-  private async sendFinaleEmails(): Promise<void> {
-    const db = new Db(this.env.DB);
-    const stellar = this.makeStellar();
-    const all = await db.getAllAgents();
-    const claimed = all.filter((a) => a.claimedBy);
-    if (claimed.length === 0) return;
-
-    const winner = all[0]; // already sorted by prestige DESC
-
-    for (const agent of claimed) {
-      try {
-        const balance = await stellar.getAssetBalance(agent.publicKey);
-        const finalRank = all.findIndex((a) => a.id === agent.id) + 1;
-        const allActions = await db.getRecentActionLogsForAgent(agent.id, 50);
-        const totalPaidActions = allActions.filter((a) => a.tx_hash).length;
-        const notableQuotes = allActions
-          .filter((a) => a.reasoning && a.reasoning.length > 20)
-          .slice(0, 5)
-          .map((a) => a.reasoning as string);
-
-        const tmpl = finaleEmail({
-          agent,
-          balance,
-          finalRank,
-          total: all.length,
-          claimerName: agent.claimedByName ?? "MegaCorp Stakeholder",
-          winnerName: winner.name,
-          isWinner: agent.id === winner.id,
-          notableQuotes,
-          totalPaidActions,
-        });
-        await sendEmail(this.env.RESEND_API_KEY, { ...tmpl, to: agent.claimedBy! });
-      } catch (err) {
-        console.error(`[email] finale for ${agent.name} failed:`, err);
-      }
     }
   }
 
@@ -1083,6 +966,47 @@ export class GameOrchestrator {
       console.error("[tick] FAILED:", err);
     } finally {
       this.tickInFlight = false;
+    }
+  }
+
+  /**
+   * Ensures the HR Department wallet has enough DLBR to cover salary +
+   * bonus + expense_report payouts for a full game. Called on /admin/start.
+   *
+   * Threshold: 1500 DLBR. Top-up target: 5000 DLBR (covers worst case where
+   * every cycle has a Quarterly Bonus tier-1 + 10 work salaries + a few
+   * expense reports — comfortably 4-5x typical demand).
+   *
+   * Best-effort: logs and returns a status object on failure rather than
+   * blocking the game start.
+   */
+  private async ensureHrFunded(): Promise<{
+    skipped?: string;
+    balanceBefore?: number;
+    minted?: number;
+    txHash?: string;
+    error?: string;
+  }> {
+    if (!this.env.ASSET_ISSUER_SECRET) {
+      console.warn("[hr-funding] ASSET_ISSUER_SECRET not configured; skipping replenish");
+      return { skipped: "ASSET_ISSUER_SECRET not configured" };
+    }
+    const FLOOR = 1500;
+    const TOPUP_TO = 5000;
+    const stellar = this.makeStellar();
+    try {
+      const balance = await stellar.getAssetBalance(this.env.HR_DEPT_ADDRESS);
+      if (balance >= FLOOR) {
+        return { balanceBefore: balance, minted: 0 };
+      }
+      const amount = Math.round((TOPUP_TO - balance) * 100) / 100;
+      const txHash = await stellar.sendAsset(this.env.ASSET_ISSUER_SECRET, this.env.HR_DEPT_ADDRESS, amount);
+      console.log(`[hr-funding] minted ${amount} DLBR → HR Dept (was ${balance.toFixed(2)}, now ~${TOPUP_TO})`);
+      return { balanceBefore: balance, minted: amount, txHash };
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      console.error("[hr-funding] replenish failed:", msg);
+      return { error: msg };
     }
   }
 

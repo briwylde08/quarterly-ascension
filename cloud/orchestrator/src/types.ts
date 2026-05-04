@@ -13,8 +13,12 @@ export interface Agent {
   statusEffects: StatusEffect[];
   allies: string[];       // Agent IDs
   pendingAlliance: string | null;  // Agent ID who proposed
-  claimedBy: string | null;  // Player email
-  claimedByName: string | null;  // Player name
+  /** Legacy email column from the long-form claim flow. Always NULL in
+   *  retreat mode — auth is password-based; the password hash lives in
+   *  game_state under password_<agentId>. Kept on the Agent type so the
+   *  DB row mapper stays simple. */
+  claimedBy: string | null;
+  claimedByName: string | null;  // Player name (set at /api/claim)
 }
 
 export interface StatusEffect {
@@ -179,43 +183,3 @@ export interface NpcEndpoint {
   effect: string;
 }
 
-// Email report types
-export interface HourlyReport {
-  agentId: string;
-  agentName: string;
-  playerEmail: string;
-  playerName: string;
-  tickRange: [number, number];
-  prestige: number;
-  prestigeRank: number;
-  budget: number;
-  actions: ActionSummary[];
-  rivals: string[];
-  allies: string[];
-  statusEffects: string[];
-  notableQuotes: string[];
-  complaints: ComplaintSummary[];
-  transactions: TransactionSummary[];
-}
-
-export interface ActionSummary {
-  tick: number;
-  action: string;
-  cost: number;
-  outcome: string;
-  quote: string;
-}
-
-export interface ComplaintSummary {
-  type: "filed" | "received";
-  counterparty: string;
-  tick: number;
-}
-
-export interface TransactionSummary {
-  tick: number;
-  service: string;
-  amount: number;
-  txHash: string;
-  explorerUrl: string;
-}
