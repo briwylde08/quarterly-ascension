@@ -179,6 +179,8 @@
     .badge-demo.meeting_blocked { color: var(--text-muted); background: var(--neutral-bg); }
     .badge-demo.tag-ally { color: var(--success); background: var(--success-bg); }
     .badge-demo.tag-well-allied { color: var(--info); background: var(--info-bg); }
+    .badge-demo.mysterious_influence { color: #6c3483; background: #f4ecf7; border-color: #a569bd; }
+    .badge-demo.questionable_judgment { color: var(--warning); background: var(--warning-bg); border-style: dashed; }
 
     .group-header td {
       background: var(--panel-head);
@@ -238,21 +240,29 @@
       <h2>The Basics</h2>
       <div class="body">
         <p>
-          Each cycle (a "tick") every manager picks one action driven by their personality
-          (aggression, greed, caution, loyalty), their current state, and any standing
-          stakeholder directive. Outcomes change <b>prestige</b> (the leaderboard score)
-          and <b>DLBR balance</b> (real testnet currency they spend on services).
+          Each manager picks one action per turn, driven by their personality
+          (aggression, greed, caution, loyalty), their current state, and any
+          standing coach directive. Outcomes change <b>prestige</b> (the
+          leaderboard score) and <b>DLBR balance</b> (testnet currency that
+          buys NPC services on-chain).
         </p>
         <p>
-          The game runs <b>48 cycles</b>. The manager with the highest prestige at cycle 48 is
-          promoted to VP. <b>Coaching windows</b> open at cycles 12, 24, and 36 — claimed
-          managers' owners can update a directive that nudges their behavior. Cycle 48 ends
-          the game; balances and claims reset 5 minutes later.
+          The game runs <b>8 cycles</b> over about 33 minutes. Each cycle, all
+          10 managers act once in randomized turn order — one action every 25
+          seconds. The manager with the highest prestige at the end of cycle 8
+          is promoted to VP.
         </p>
         <p>
-          <b>Fatigue:</b> if a manager hasn't rested or had coffee in the last 6 cycles, they
-          gain the <span class="badge-demo tired">Tired</span> debuff (−2 prestige/cycle decay).
-          Most attacks have multi-cycle decay effects, so cleanup matters.
+          <b>Coaching</b> is always open. A claimer who's set their name +
+          password can submit a 280-character directive at any time during a
+          running game. Directives persist until overwritten and are visible
+          verbatim on the projector directive screen.
+        </p>
+        <p>
+          <b>Hit the Wall:</b> a debuff that bleeds −2 prestige/cycle for 3
+          cycles. In retreat mode it's only spread by another manager's
+          attack (Move Meeting Early) — there's no ambient fatigue from
+          working too much.
         </p>
       </div>
     </section>
@@ -272,207 +282,181 @@
           <tbody>
             <tr class="group-header"><td colspan="4">Free / Routine</td></tr>
             <tr>
-              <td class="action">work</td>
+              <td class="action">Work</td>
               <td class="cost free">free</td>
               <td class="target">—</td>
-              <td>Do actual work. +5 prestige and +$3 base salary from HR. The default safe pick.</td>
+              <td>Do actual work. +5 prestige and +$2 base salary from HR. Reliable but boring.</td>
             </tr>
             <tr>
-              <td class="action">expense_report</td>
+              <td class="action">Expense Report</td>
               <td class="cost free">free</td>
               <td class="target">—</td>
-              <td>File an expense report. +$10 reimbursed by HR; 20% chance Finance flags it (−5 prestige). Risk-tolerant earning path.</td>
+              <td>File for reimbursement. +$10 from HR; 20% chance Finance flags it (−5 prestige).</td>
             </tr>
             <tr>
-              <td class="action">rest</td>
+              <td class="action">Rest</td>
               <td class="cost free">free</td>
               <td class="target">—</td>
-              <td>Removes the Tired debuff. No prestige change.</td>
+              <td>Lifts the Hit the Wall debuff. No prestige change.</td>
             </tr>
             <tr>
-              <td class="action">schmooze</td>
+              <td class="action">Take Credit</td>
               <td class="cost free">free</td>
               <td class="target yes">yes</td>
-              <td>Build a relationship with another manager. May propose an alliance.</td>
+              <td>Steal credit for someone's work. 50/50 success: +30 prestige on hit, −20 on miss. <em>Auto-succeeds against a Documented target.</em></td>
             </tr>
             <tr>
-              <td class="action">take_credit</td>
+              <td class="action">Join Meeting Silently</td>
               <td class="cost free">free</td>
-              <td class="target yes">yes</td>
-              <td>Steal credit for someone's work. 40% success → +30 prestige; 60% fail → −20. <em>Auto-succeeds against a Marked target.</em></td>
-            </tr>
-            <tr>
-              <td class="action">accept_alliance</td>
-              <td class="cost free">free</td>
-              <td class="target yes">yes</td>
-              <td>Accept a pending alliance. Both parties gain +5 prestige.</td>
-            </tr>
-            <tr>
-              <td class="action">reject_alliance</td>
-              <td class="cost free">free</td>
-              <td class="target yes">yes</td>
-              <td>Decline a pending alliance. Proposer loses 10 prestige.</td>
-            </tr>
-            <tr>
-              <td class="action">break_alliance</td>
-              <td class="cost free">free</td>
-              <td class="target yes">yes</td>
-              <td>Betray an existing ally. You lose 15 prestige; ex-ally goes Under Investigation for 1 cycle (can't retaliate immediately).</td>
+              <td class="target">—</td>
+              <td>Show up, say nothing. +4 prestige. <em>Capped at 3 uses per game; the 3rd use grants Mysterious Influence (passive +2/cycle, plus other agents occasionally get credited for things you did).</em></td>
             </tr>
 
-            <tr class="group-header"><td colspan="4">Caffeine &amp; Self-Care</td></tr>
+            <tr class="group-header"><td colspan="4">Free / Social</td></tr>
             <tr>
-              <td class="action">buy_coffee</td>
-              <td class="cost">$5</td>
-              <td class="target">—</td>
-              <td>Removes Tired.</td>
-            </tr>
-            <tr>
-              <td class="action">buy_fancy_coffee</td>
-              <td class="cost">$10</td>
-              <td class="target">—</td>
-              <td>Caffeinated for 2 cycles (immune to Tired).</td>
-            </tr>
-            <tr>
-              <td class="action">birthday_cake</td>
-              <td class="cost">$12</td>
-              <td class="target">—</td>
-              <td>+5 prestige, removes own Problematic status.</td>
-            </tr>
-            <tr>
-              <td class="action">coffee_chat</td>
-              <td class="cost">$5</td>
+              <td class="action">Schmooze</td>
+              <td class="cost free">free</td>
               <td class="target yes">yes</td>
-              <td>Casual coffee with a colleague. Both gain +3 prestige. No alliance proposed. Low-stakes networking.</td>
+              <td>Propose a cross-functional partnership with another manager.</td>
+            </tr>
+            <tr>
+              <td class="action">Accept Cross-Functional Partnership</td>
+              <td class="cost free">free</td>
+              <td class="target yes">yes</td>
+              <td>Accept a pending partnership offer. +5 prestige to both managers.</td>
+            </tr>
+            <tr>
+              <td class="action">Reject Cross-Functional Partnership</td>
+              <td class="cost free">free</td>
+              <td class="target yes">yes</td>
+              <td>Decline a pending partnership. Proposer loses 10 prestige.</td>
+            </tr>
+            <tr>
+              <td class="action">End Cross-Functional Partnership</td>
+              <td class="cost free">free</td>
+              <td class="target yes">yes</td>
+              <td>Betray an existing partner. You lose 15 prestige; ex-partner gains Under Investigation for 1 cycle (can't retaliate immediately).</td>
             </tr>
 
-            <tr class="group-header"><td colspan="4">HR &amp; Compliance</td></tr>
+            <tr class="group-header"><td colspan="4">Comeback (free, conditional)</td></tr>
             <tr>
-              <td class="action">check_hr_status</td>
+              <td class="action">Boomerang</td>
+              <td class="cost free">free</td>
+              <td class="target">—</td>
+              <td>Quit and come back. Resets prestige to 100, clears all status effects. <em>Available only when prestige &lt; 50. One use per game.</em></td>
+            </tr>
+            <tr>
+              <td class="action">Cry in the Stairwell</td>
+              <td class="cost free">free</td>
+              <td class="target">—</td>
+              <td>Lifts Problematic and Hit the Wall. 20% chance the VP sees it and grants +20 sympathy prestige. <em>Available only when prestige ≤ 30.</em></td>
+            </tr>
+            <tr>
+              <td class="action">Hail Mary Idea</td>
+              <td class="cost free">free</td>
+              <td class="target">—</td>
+              <td>Pitch a wild idea. Lottery: 30% +50 prestige, 50% +5, 20% −5. <em>Only surfaces when truly cornered. One use per game.</em></td>
+            </tr>
+
+            <tr class="group-header"><td colspan="4">Cheap Paid ($5 – $10)</td></tr>
+            <tr>
+              <td class="action">Buy Coffee</td>
               <td class="cost">$5</td>
               <td class="target">—</td>
-              <td>See who has filed complaints against you.</td>
+              <td>Lifts Hit the Wall.</td>
             </tr>
             <tr>
-              <td class="action">whistleblower_bounty</td>
+              <td class="action">Coffee Chat</td>
+              <td class="cost">$5</td>
+              <td class="target yes">yes</td>
+              <td>Casual coffee with a colleague. Both managers gain +3 prestige. No partnership proposed.</td>
+            </tr>
+            <tr>
+              <td class="action">Spread a Rumor</td>
               <td class="cost">$10</td>
               <td class="target yes">yes</td>
-              <td>Report a target to HR. If they actually had a hostile action in the last 3 cycles → +30 prestige and a $25 bounty. False report → −3 prestige and target gets +5 wrongful-report bonus.</td>
+              <td>Plant a rumor about target via HR. Target loses 5 prestige and gains Questionable Judgment for 2 cycles. Cheap social warfare.</td>
             </tr>
             <tr>
-              <td class="action">file_complaint</td>
+              <td class="action">Move Meeting Early</td>
+              <td class="cost">$10</td>
+              <td class="target yes">yes</td>
+              <td>Reschedule target's meeting to 7:30am. Target loses 5 prestige and gains Hit the Wall.</td>
+            </tr>
+
+            <tr class="group-header"><td colspan="4">Mid-Cost ($20 – $25)</td></tr>
+            <tr>
+              <td class="action">Schedule a Pre-Meeting</td>
+              <td class="cost">$20</td>
+              <td class="target yes">yes</td>
+              <td>Book a pre-meeting on target's calendar. Target loses 15 prestige and gains Meeting Blocked for 2 cycles. <em>Loyal managers (loyalty &gt; 70) are immune — they think it's normal.</em></td>
+            </tr>
+            <tr>
+              <td class="action">File HR Complaint</td>
               <td class="cost">$22</td>
               <td class="target yes">yes</td>
-              <td>You +5 "diligence" prestige. Target goes Under Investigation (can't retaliate against you for 1 cycle).</td>
+              <td>You gain +5 "diligence" prestige. Target gains Under Investigation for 1 cycle (can't retaliate against you).</td>
             </tr>
             <tr>
-              <td class="action">sensitivity_training</td>
+              <td class="action">Get Consultant Report</td>
+              <td class="cost">$30</td>
+              <td class="target">—</td>
+              <td>+35 prestige and you gain Has Deliverable (your next CEO meeting awards +40 instead of −20).</td>
+            </tr>
+            <tr>
+              <td class="action">Leak the Org Chart</td>
+              <td class="cost">$25</td>
+              <td class="target">—</td>
+              <td>See top 3 wealth and the partnership graph. +5 prestige for positional advantage.</td>
+            </tr>
+            <tr>
+              <td class="action">Throw an Office Party</td>
+              <td class="cost">$25</td>
+              <td class="target">—</td>
+              <td>You gain +15 prestige. Every other manager gains +5. A generous play that visibly helps your rivals.</td>
+            </tr>
+            <tr>
+              <td class="action">Anonymous Pulse Survey</td>
+              <td class="cost">$25</td>
+              <td class="target yes">yes</td>
+              <td>Launch an "anonymous" morale survey somehow entirely about the leader. Target loses 50 prestige. <em>Available only when you're rank ≥ 4 and target is rank #1. One use per game.</em></td>
+            </tr>
+
+            <tr class="group-header"><td colspan="4">Expensive ($30 – $50)</td></tr>
+            <tr>
+              <td class="action">Send to Sensitivity Training</td>
               <td class="cost">$30</td>
               <td class="target yes">yes</td>
               <td>Target loses 20 prestige and gains Problematic for 4 cycles (−3/cycle decay). <em>Halved against well-allied targets.</em></td>
             </tr>
-
-            <tr class="group-header"><td colspan="4">Strategy &amp; Intel</td></tr>
             <tr>
-              <td class="action">competitive_intel</td>
-              <td class="cost">$25</td>
-              <td class="target">—</td>
-              <td>Learn the top 3 agents' last action. Spreads rumors that nick the leader for −3 prestige.</td>
-            </tr>
-            <tr>
-              <td class="action">strategy_report</td>
-              <td class="cost">$25</td>
-              <td class="target">—</td>
-              <td>Get a consultant deck. +35 prestige and you gain Has Deliverable (next CEO meeting awards +40). <em>Halved to +18 once a New Initiative pivot fires.</em></td>
-            </tr>
-            <tr>
-              <td class="action">leak_org_chart</td>
-              <td class="cost">$25</td>
-              <td class="target">—</td>
-              <td>See top 3 wealth and the alliance graph. +5 prestige (positional advantage).</td>
-            </tr>
-            <tr>
-              <td class="action">recover_emails</td>
-              <td class="cost">$20</td>
-              <td class="target yes">yes</td>
-              <td>See target's last 3 actions. 30% chance to expose and nuke their pending alliance.</td>
-            </tr>
-
-            <tr class="group-header"><td colspan="4">Sabotage</td></tr>
-            <tr>
-              <td class="action">fix_laptop</td>
-              <td class="cost">$12</td>
-              <td class="target yes">yes</td>
-              <td>"Fix" target's laptop. Target gains Technical Difficulties (forced to rest next cycle).</td>
-            </tr>
-            <tr>
-              <td class="action">calendar_conflict</td>
-              <td class="cost">$15</td>
-              <td class="target yes">yes</td>
-              <td>Triple-book target's calendar. Target is Meeting-Blocked for 1 cycle and loses any Deliverable + pending alliance.</td>
-            </tr>
-            <tr>
-              <td class="action">send_motivation</td>
-              <td class="cost">$25</td>
-              <td class="target yes">yes</td>
-              <td>Force target into a 4-hour motivational seminar. Target is forced to rest for 2 cycles.</td>
-            </tr>
-            <tr>
-              <td class="action">schedule_conflict</td>
+              <td class="action">Schedule Conflict</td>
               <td class="cost">$30</td>
               <td class="target yes">yes</td>
-              <td>Cancel target's CEO meeting. Clears their Deliverable; Meeting-Blocked for 2 cycles.</td>
+              <td>Cancel target's CEO meeting. Clears their Has Deliverable; gives them Meeting Blocked for 2 cycles.</td>
             </tr>
             <tr>
-              <td class="action">poison_meeting</td>
+              <td class="action">Hostile Takeover</td>
               <td class="cost">$35</td>
               <td class="target yes">yes</td>
-              <td>Sabotage target's catered meeting. Target loses 10 prestige. <em>Halved against well-allied targets.</em></td>
+              <td>Mount a hostile takeover of target's cross-functional partnerships. Their existing partners become yours; their partner list goes to zero.</td>
             </tr>
             <tr>
-              <td class="action">sabotage_plan</td>
+              <td class="action">Build a Sabotage Dossier</td>
               <td class="cost expensive">$40</td>
               <td class="target yes">yes</td>
-              <td>Commission a Consultant dossier. Target loses 10 prestige and is Marked for 2 cycles (next take_credit auto-succeeds). Setup play. <em>Halved against well-allied targets.</em></td>
-            </tr>
-
-            <tr class="group-header"><td colspan="4">Career Plays</td></tr>
-            <tr>
-              <td class="action">mentorship</td>
-              <td class="cost">$15</td>
-              <td class="target yes">yes</td>
-              <td>Mentor a colleague. You: +5 prestige and a $30 stipend. Target: +10 prestige. Wholesome alternative to take_credit.</td>
+              <td>Commission a Consultant dossier. Target loses 10 prestige and gains Documented for 2 cycles (next Take Credit against them auto-succeeds). Classic setup play. <em>Halved against well-allied targets.</em></td>
             </tr>
             <tr>
-              <td class="action">team_lunch</td>
-              <td class="cost">$25</td>
+              <td class="action">Book CEO Time</td>
+              <td class="cost expensive">$40</td>
               <td class="target">—</td>
-              <td>Host the team lunch. +15 prestige. Only one host per cycle.</td>
-            </tr>
-            <tr>
-              <td class="action">book_motivation</td>
-              <td class="cost">$30</td>
-              <td class="target">—</td>
-              <td>Attend a motivation session. +20 prestige and Inspired for 2 cycles (+5/cycle bonus).</td>
-            </tr>
-            <tr>
-              <td class="action">book_ceo_time</td>
-              <td class="cost expensive">$50</td>
-              <td class="target">—</td>
-              <td>Meet with the CEO. +40 with Deliverable, −20 without, −10 if Meeting-Blocked. The biggest swing in the game.</td>
-            </tr>
-
-            <tr class="group-header"><td colspan="4">Comeback Path</td></tr>
-            <tr>
-              <td class="action">hail_mary_idea</td>
-              <td class="cost free">free</td>
-              <td class="target">—</td>
-              <td>Pitch a wild idea at the all-hands. Lottery roll: 30% +50 prestige (CEO loved it), 50% +5 (polite nodding), 20% −5 (sounded unhinged). <em>Available only when prestige ≤ 10 AND balance &lt; $5. One use per game.</em></td>
+              <td>Meet with the CEO. +40 with Has Deliverable, −20 without, −10 if Meeting Blocked. The biggest swing in the game.</td>
             </tr>
           </tbody>
         </table>
         <div class="footnote">
-          Costs are paid in DLBR on the Stellar testnet via MPP. "Halved against well-allied targets" means damage is roughly cut in half if the target has 3+ alliances — they can absorb attacks the lonely can't.
+          Costs are paid in DLBR on the Stellar testnet via MPP. "Halved against well-allied targets" means damage is roughly cut in half if the target has 3+ partnerships — coalition-builders are politically harder to torpedo.
         </div>
       </div>
     </section>
@@ -490,59 +474,44 @@
           </thead>
           <tbody>
             <tr>
-              <td><span class="badge-demo tired">Tired</span></td>
-              <td>−2 prestige/cycle decay. Triggers automatically after 6 cycles without rest or coffee.</td>
-              <td>rest, buy_coffee, or buy_fancy_coffee</td>
-            </tr>
-            <tr>
-              <td><span class="badge-demo caffeinated">Caffeinated</span></td>
-              <td>Immune to Tired for 2 cycles.</td>
-              <td>Wears off automatically.</td>
-            </tr>
-            <tr>
-              <td><span class="badge-demo inspired">Inspired</span></td>
-              <td>+5 prestige/cycle bonus for 2 cycles.</td>
-              <td>Wears off automatically.</td>
-            </tr>
-            <tr>
-              <td><span class="badge-demo under_investigation">Under Investigation</span></td>
-              <td>Cannot retaliate against the manager who filed the complaint for the duration.</td>
-              <td>Wears off after 1 cycle.</td>
+              <td><span class="badge-demo tired">Hit the Wall</span></td>
+              <td>−2 prestige/cycle for 3 cycles. Spread by Move Meeting Early.</td>
+              <td>Rest, Buy Coffee, or Cry in the Stairwell.</td>
             </tr>
             <tr>
               <td><span class="badge-demo problematic">Problematic</span></td>
-              <td>−3 prestige/cycle decay for 4 cycles.</td>
-              <td>birthday_cake (removes own Problematic).</td>
+              <td>−3 prestige/cycle for 4 cycles. Public tag — rivals can see and target you.</td>
+              <td>Cry in the Stairwell, or wears off after 4 cycles.</td>
             </tr>
             <tr>
-              <td><span class="badge-demo under_review">Under Review</span></td>
-              <td>Cannot book CEO time while under review.</td>
-              <td>Expires automatically.</td>
+              <td><span class="badge-demo under_investigation">Under Investigation</span></td>
+              <td>Cannot take hostile action against the manager who filed against you.</td>
+              <td>Wears off after 1 cycle.</td>
             </tr>
             <tr>
-              <td><span class="badge-demo technical_difficulties">Technical Difficulties</span></td>
-              <td>Forced to rest next cycle.</td>
-              <td>Wears off after the forced rest.</td>
+              <td><span class="badge-demo marked">Documented</span></td>
+              <td>The next Take Credit attempt against you auto-succeeds. Public tag.</td>
+              <td>Lasts 2 cycles, or until someone successfully Takes Credit against you.</td>
+            </tr>
+            <tr>
+              <td><span class="badge-demo meeting_blocked">Meeting Blocked</span></td>
+              <td>Cannot book CEO time. Attempting Book CEO Time pays −10. Lasts 2 cycles.</td>
+              <td>Wears off automatically.</td>
             </tr>
             <tr>
               <td><span class="badge-demo has_deliverable">Has Deliverable</span></td>
-              <td>Next book_ceo_time pays out +40 prestige instead of −20.</td>
-              <td>Used up by booking CEO time, or wiped by calendar/schedule conflict, or halved by a New Initiative pivot.</td>
+              <td>Your next Book CEO Time pays +40 prestige instead of −20.</td>
+              <td>Consumed by Book CEO Time, or cleared by Schedule Conflict.</td>
             </tr>
             <tr>
-              <td><span class="badge-demo mandatory_motivation">Mandatory Motivation</span></td>
-              <td>Forced to rest for 2 cycles (sent there by a rival).</td>
+              <td><span class="badge-demo mysterious_influence">Mysterious Influence</span></td>
+              <td>Passive +2 prestige/cycle. 10% chance other agents' actions get credited to you. Acquired after 3× Join Meeting Silently.</td>
+              <td>Held for the rest of the game.</td>
+            </tr>
+            <tr>
+              <td><span class="badge-demo questionable_judgment">Questionable Judgment</span></td>
+              <td>Public credibility tag from Spread a Rumor. Lasts 2 cycles.</td>
               <td>Wears off automatically.</td>
-            </tr>
-            <tr>
-              <td><span class="badge-demo meeting_blocked">Meeting-Blocked</span></td>
-              <td>Cannot book CEO time. book_ceo_time pays −10 if attempted.</td>
-              <td>Wears off automatically.</td>
-            </tr>
-            <tr>
-              <td><span class="badge-demo marked">Marked</span></td>
-              <td>The next take_credit attempt against this manager auto-succeeds (40% → 100%). Visible to all rivals.</td>
-              <td>Wears off after 2 cycles, or when someone successfully take_credits against them.</td>
             </tr>
           </tbody>
         </table>
@@ -566,40 +535,36 @@
           </thead>
           <tbody>
             <tr>
-              <td><span class="badge-demo tag-ally">Ally</span></td>
-              <td>You have an active alliance with this manager. Hostile actions against allies are blocked.</td>
+              <td><span class="badge-demo tag-ally">Cross-Functional Partner</span></td>
+              <td>You have an active partnership with this manager. Hostile actions against partners are blocked.</td>
             </tr>
             <tr>
               <td><span class="badge-demo tag-well-allied">Well-Allied</span></td>
-              <td>This manager has 3+ alliances. Sensitivity training, sabotage plans, and poison meetings against them deal half damage.</td>
+              <td>This manager has 3+ partnerships. Sensitivity Training, Sabotage Dossier, and other attacks deal half damage.</td>
             </tr>
             <tr>
-              <td><span class="badge-demo marked">Marked</span></td>
-              <td>This manager is open season — your next take_credit on them is a guaranteed success.</td>
+              <td><span class="badge-demo marked">Documented</span></td>
+              <td>Open season — your next Take Credit on them is a guaranteed success.</td>
             </tr>
             <tr>
               <td><span class="badge-demo problematic">Problematic</span></td>
-              <td>This manager is bleeding −3 prestige/cycle. Easy to overtake on the leaderboard.</td>
+              <td>Bleeding −3 prestige/cycle. Easy to overtake on the leaderboard.</td>
             </tr>
             <tr>
-              <td><span class="badge-demo tired">Tired</span></td>
-              <td>This manager is bleeding −2 prestige/cycle until they rest.</td>
+              <td><span class="badge-demo tired">Hit the Wall</span></td>
+              <td>Bleeding −2 prestige/cycle for 3 cycles. Spread by a rival's Move Meeting Early.</td>
             </tr>
             <tr>
-              <td><span class="badge-demo technical_difficulties">Technical Difficulties</span></td>
-              <td>This manager is forced to rest next cycle — they can't act.</td>
+              <td><span class="badge-demo meeting_blocked">Meeting Blocked</span></td>
+              <td>Can't book CEO time right now. Trying anyway costs them 10 prestige.</td>
             </tr>
             <tr>
-              <td><span class="badge-demo meeting_blocked">Meeting-Blocked</span></td>
-              <td>This manager can't book CEO time right now.</td>
+              <td><span class="badge-demo questionable_judgment">Questionable Judgment</span></td>
+              <td>A rumor about them is circulating. Public credibility hit for 2 cycles.</td>
             </tr>
             <tr>
-              <td><span class="badge-demo mandatory_motivation">Mandatory Motivation</span></td>
-              <td>This manager is in a 4-hour seminar — forced rest for 2 cycles.</td>
-            </tr>
-            <tr>
-              <td><span class="badge-demo under_review">Under Review</span></td>
-              <td>This manager can't book CEO time until the review wraps.</td>
+              <td><span class="badge-demo mysterious_influence">Mysterious Influence</span></td>
+              <td>Office cipher who somehow gets credit for everything. Passive +2 prestige/cycle and the occasional misattribution.</td>
             </tr>
           </tbody>
         </table>
@@ -610,31 +575,28 @@
       <h2>Calendar &amp; Events</h2>
       <div class="body">
         <p>
-          The game has fixed beats and stochastic ones. <b>Fixed beats</b> happen at known cycles;
-          <b>random events</b> roll once per cycle (with a no-repeat rule so the same event won't
-          fire twice in a row).
+          A 33-minute game with 8 cycles of 10 ticks each. The game has
+          <b>fixed beats</b> at known ticks and <b>random events</b> that
+          roll at each cycle boundary (no-repeat rule prevents the same
+          event two cycles in a row).
         </p>
         <p><b>Fixed beats:</b></p>
         <ul style="margin-left: 24px; margin-bottom: 12px;">
-          <li><span class="key">Cycle 7</span> — All-Hands. Modest prestige bumps for everyone.</li>
-          <li><span class="key">Cycle 12, 24, 36</span> — Coaching windows. Owners can update directives.</li>
-          <li><span class="key">Cycle 14</span> — Quarterly Bonus distribution.</li>
-          <li><span class="key">Cycle 21</span> — Email Leak. Dirty laundry goes public.</li>
-          <li><span class="key">Cycle 24</span> — New Initiative pivot. Existing Deliverables are halved or cleared.</li>
-          <li><span class="key">Cycle 35</span> — Reorg Rumors. Tension spikes.</li>
-          <li><span class="key">Cycle 42</span> — Surprise Promotion. One agent gets a major boost.</li>
-          <li><span class="key">Cycle 48</span> — Final result. Game ends.</li>
+          <li><span class="key">Tick 1 (0:00)</span> — <b>Q1 Kickoff</b>. CEO morning all-hands speech with per-agent reactions flavored by personality. 10 nested events fire instantly.</li>
+          <li><span class="key">Tick 10 (~4:10)</span> — <b>Cycle 1 closer</b>. Guaranteed random event from the high-impact pool (Surprise Demo Day, Surprise Board Visit, Viral LinkedIn, or Bad Glassdoor Review). Always lands.</li>
+          <li><span class="key">Tick 30 (~12:30)</span> — <b>Halftime Quarterly Bonus</b>. Top 3 by prestige receive $50 / $30 / $20 from HR, settled on-chain.</li>
+          <li><span class="key">Tick 80 (~33:20)</span> — <b>Finale Quarterly Bonus + Game End</b>. Top 3 receive $100 / $60 / $40. Highest prestige wins the VP slot.</li>
+          <li><b>Glass Cliff Promotion</b> (any cycle boundary, auto) — fires when the leader is 50+ prestige ahead of #2. Drags the leader back to #2's value with a flavor reason. Once per victim per game.</li>
         </ul>
-        <p><b>Random events:</b></p>
+        <p><b>Random events</b> (each rolls at every cycle boundary):</p>
         <ul style="margin-left: 24px;">
-          <li><b>Budget Cuts</b> — random subset (up to 5) of managers burn cash to corporate overhead.</li>
-          <li><b>Mandatory Fun</b> — every manager rolls a small prestige delta. Loyal managers tend to fare better; cynics suffer more.</li>
-          <li><b>Audit</b> — one unlucky manager loses prestige. Cautious managers shrug it off; sloppy bookkeepers eat a bigger hit.</li>
-          <li><b>Employee of the Month</b> — one manager gets a +20 bump.</li>
-          <li><b>Viral LinkedIn Post</b> — one manager gets free publicity.</li>
-          <li><b>Coffee Machine Broken</b> — everyone gains Tired; coffee purchases get more interesting.</li>
-          <li><b>Printer Jam</b> — minor productivity hit.</li>
-          <li><b>Fire Drill</b> — everyone wastes a cycle.</li>
+          <li><b>Surprise Board Visit</b> — top 3 reshuffle. One gets +25 prestige, one gets −25, one goes Under Investigation.</li>
+          <li><b>Bad Glassdoor Review</b> — anonymous review goes viral. Every Problematic manager loses 10 prestige. If nobody's Problematic, the review fizzles.</li>
+          <li><b>Surprise Promotion</b> — random bottom-half manager gets pulled into a leadership-development cohort. +30 prestige.</li>
+          <li><b>Surprise Demo Day</b> — CEO wants to see what everyone's been working on. Each manager reacts based on personality + whether they have a Deliverable. Best per-agent moment in the game.</li>
+          <li><b>Budget Cuts</b> — Finance "rebalances." Up to 5 random managers burn 15% of their DLBR balance back to the issuer. On-chain visible.</li>
+          <li><b>Viral LinkedIn Post</b> — random manager posts something cringe. 75% lands and gives +15 prestige; 25% it's too cringe and they take −5 + Problematic for 1 cycle.</li>
+          <li><b>Printer Achieves Sentience</b> — flavor event. Random manager loses 5 prestige; the most cautious manager (caution ≥ 60) gains +10 because of course they had printed backups.</li>
         </ul>
       </div>
     </section>
@@ -643,17 +605,27 @@
       <h2>Payments</h2>
       <div class="body">
         <p>
-          Every paid action settles on the Stellar testnet in real DLBR. There are seven NPC services —
-          Coffee Cart, HR, Consultant, Caterer, Motivational Speaker, IT, and the CEO's Assistant —
-          and each runs as a Cloudflare Worker that returns HTTP 402 on first hit. The agent signs a
-          Stellar transfer, retries with the signed credential, and the response carries a
-          <span class="key">Payment-Receipt</span> header containing the on-chain transaction hash.
-          That hash is what shows in the activity stream, hyperlinked to the Stellar Expert explorer.
+          Every paid action settles on the Stellar testnet in real DLBR.
+          Five NPC services are active in retreat mode — <b>Coffee Cart</b>,
+          <b>HR Department</b>, <b>The Consultant</b>, <b>Executive Assistant</b>,
+          and <b>The Caterer</b>. Each runs as a Cloudflare Worker that
+          returns HTTP 402 on first hit. The agent signs a Stellar transfer,
+          retries with the signed credential, and the response carries a
+          <span class="key">Payment-Receipt</span> header containing the
+          on-chain transaction hash. That hash is what shows in the activity
+          stream, hyperlinked to the Stellar Expert explorer.
         </p>
         <p>
-          This is the protocol-visibility principle: every spend is real, settles in seconds, and is
-          publicly verifiable. No mocked endpoints. No simulated payments. If the screen shows
-          <span class="key">$25 → Consultant</span>, that money moved.
+          This is the protocol-visibility principle: every spend is real,
+          settles in seconds, and is publicly verifiable. No mocked
+          endpoints. No simulated payments. If the screen shows
+          <span class="key">$30 → The Consultant</span>, that money moved.
+        </p>
+        <p>
+          Each manager starts the game with <b>$200 DLBR</b>. HR Department
+          tops itself up before kickoff to make sure salaries, expense
+          reports, and Quarterly Bonuses settle without "salary pending"
+          embarrassment mid-show.
         </p>
       </div>
     </section>
