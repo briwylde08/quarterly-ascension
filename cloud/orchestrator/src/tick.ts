@@ -627,12 +627,20 @@ async function executePaidAction(
       if ("target" in action) {
         const target = await db.getAgent(action.target);
         if (target) {
+          // Attacker gains +5 "managerial accountability" prestige — same
+          // pattern as file_complaint. Without this nobody picked the
+          // action because $30 with zero direct payoff didn't beat
+          // alternatives. Adding this also makes Problematic actually
+          // appear in games, which lets Bad Glassdoor Review and Cry in
+          // the Stairwell do their thing.
+          prestigeChange = 5;
+          await db.updateAgentPrestige(agent.id, prestigeChange);
           // Well-allied targets (3+ alliances) absorb half the prestige hit.
           const wellAllied = target.allies.length >= 3;
           const hit = wellAllied ? -10 : -20;
           outcome = wellAllied
-            ? `Sent ${action.target} to sensitivity training; their alliances softened the blow (${hit} prestige instead of -20)`
-            : `Sent ${action.target} to sensitivity training (${hit} prestige + Problematic for 4 cycles)`;
+            ? `Sent ${target.name} to sensitivity training (+5 to you for accountability); their partnerships softened the blow (${hit} prestige instead of -20)`
+            : `Sent ${target.name} to sensitivity training (+5 to you for accountability; ${hit} prestige to them + Problematic for 4 cycles)`;
           await db.updateAgentPrestige(action.target, hit);
           await db.updateAgentStatusEffects(action.target, [
             ...target.statusEffects,

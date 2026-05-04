@@ -95,7 +95,7 @@ const ALL_ACTIONS = [
   { type: "anonymous_pulse_survey", description: "Launch an 'anonymous' morale survey somehow entirely about the leader ($25). Target loses 50 prestige. Available only when YOU are rank ≥ 4 AND target is rank #1. One shot per game.", cost: 25, requiresTarget: true },
 
   // === EXPENSIVE ($30 – $50) ===
-  { type: "sensitivity_training", description: "Send rival to sensitivity training (target -20 prestige + Problematic for 4 ticks: -3 prestige/tick decay)", cost: 30, requiresTarget: true },
+  { type: "sensitivity_training", description: "Send rival to sensitivity training (you +5 'managerial accountability' prestige; target -20 + Problematic for 4 ticks at -3/tick. Setup play — Bad Glassdoor Review hits Problematic targets for an extra -10.)", cost: 30, requiresTarget: true },
   { type: "schedule_conflict", description: "Cancel target's CEO meeting (clears their Has Deliverable + Meeting-Blocked for 2 ticks)", cost: 30, requiresTarget: true },
   { type: "hostile_takeover", description: "Mount a hostile takeover of target's cross-functional partnerships ($35). Their existing partners become YOUR partners; target's partner list goes to zero. Mid-to-late game power move.", cost: 35, requiresTarget: true },
   { type: "sabotage_plan", description: "Build dossier on target (-10 prestige to target + 'Documented' for 2 ticks: any take_credit against them auto-succeeds). Setup play.", cost: 40, requiresTarget: true },
