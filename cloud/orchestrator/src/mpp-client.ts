@@ -235,6 +235,7 @@ export function buildServiceUrls(npcBase: string): Record<string, { url: string;
     // === HR Department ===
     spread_rumor:            { url: npc("hr-dept",        "/spread-rumor"),           name: "HR Department",       price: 10 },
     file_complaint:          { url: npc("hr-dept",        "/file-complaint"),         name: "HR Department",       price: 22 },
+    slack_bomb:              { url: npc("hr-dept",        "/slack-bomb"),             name: "HR Department",       price: 25 },
     anonymous_pulse_survey:  { url: npc("hr-dept",        "/anonymous-pulse-survey"), name: "HR Department",       price: 25 },
     sensitivity_training:    { url: npc("hr-dept",        "/sensitivity-training"),   name: "HR Department",       price: 30 },
 
@@ -245,7 +246,6 @@ export function buildServiceUrls(npcBase: string): Record<string, { url: string;
     // === Executive Assistant ===
     move_meeting_early:      { url: npc("exec-assistant", "/move-meeting-early"),     name: "Executive Assistant", price: 10 },
     schedule_pre_meeting:    { url: npc("exec-assistant", "/schedule-pre-meeting"),   name: "Executive Assistant", price: 20 },
-    leak_org_chart:          { url: npc("exec-assistant", "/leak-org-chart"),         name: "Executive Assistant", price: 25 },
     schedule_conflict:       { url: npc("exec-assistant", "/schedule-conflict"),      name: "Executive Assistant", price: 30 },
     hostile_takeover:        { url: npc("exec-assistant", "/hostile-takeover"),       name: "Executive Assistant", price: 35 },
     book_ceo_time:           { url: npc("exec-assistant", "/book-ceo-time"),          name: "Executive Assistant", price: 40 },

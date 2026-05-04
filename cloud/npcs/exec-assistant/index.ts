@@ -35,17 +35,6 @@ const ENDPOINTS: Record<string, Endpoint> = {
       requiresDeliverable: true,
     }),
   },
-  "/leak-org-chart": {
-    price: 25,
-    needsTarget: false,
-    payload: () => ({
-      action: "org_chart_leaked",
-      description: "Received insider information about upcoming changes",
-      assistantNote: "You didn't hear this from me...",
-      rumor: pick(ORG_CHART_RUMORS),
-      intel: [],
-    }),
-  },
   "/schedule-conflict": {
     price: 30,
     needsTarget: true,

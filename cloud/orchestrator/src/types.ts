@@ -101,7 +101,8 @@ export type Action =
   | { type: "hostile_takeover"; target: string }
   | { type: "boomerang" }
   | { type: "cry_in_stairwell" }
-  | { type: "join_meeting_silently" };
+  | { type: "join_meeting_silently" }
+  | { type: "slack_bomb" };
 
 export interface GameEvent {
   id: string;
@@ -126,6 +127,11 @@ export interface GameEvent {
   /** Display name of the target agent (when the action has one). Resolved
    *  server-side so the dashboard doesn't need a separate name lookup. */
   targetName?: string;
+  /** Optional action-specific narrative detail (e.g. the title of a
+   *  consultant report) so the dashboard can produce headers like
+   *  "got a report titled 'Disruptive Alignment Strategy'" without
+   *  needing to parse the description string. */
+  actionDetail?: string;
 }
 
 export type GameEventType =

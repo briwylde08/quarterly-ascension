@@ -63,7 +63,7 @@ export async function generateGossip(
 const ALL_ACTIONS = [
   // === FREE (12) ===
   { type: "work", description: "Do actual work (+5 prestige, +$2 base salary, free). Boring. The audience does not enjoy watching this.", cost: 0 },
-  { type: "expense_report", description: "File an expense report (+$10 reimbursed; 20% chance Finance flags it for -5 prestige). Free, no skill required.", cost: 0 },
+  { type: "expense_report", description: "File an expense report (+$10 reimbursed; 10% chance Finance flags it for -5 prestige). Free money path — when budgets get tight, this is the cleanest refill.", cost: 0 },
   { type: "rest", description: "Rest and recover (removes Hit the Wall, free)", cost: 0 },
   { type: "take_credit", description: "Attempt to claim credit for someone's work (50% success: +30 prestige, 50% fail: -20 prestige)", cost: 0, requiresTarget: true },
 
@@ -74,7 +74,7 @@ const ALL_ACTIONS = [
 
   // Underdog comeback paths — gated by prestige thresholds in the filter below.
   { type: "boomerang", description: "Quit and come back (free). Resets your prestige to 100, clears all status effects. Massive visual moment, one shot per game. Available only when prestige < 50.", cost: 0 },
-  { type: "cry_in_stairwell", description: "Cry in the stairwell (free). Removes Problematic and Hit the Wall. 20% chance the VP sees and grants +20 sympathy prestige. Available only when prestige ≤ 30.", cost: 0 },
+  { type: "cry_in_stairwell", description: "Cry in the stairwell (free, anytime). Removes Problematic and Hit the Wall. 20% chance the VP sees and grants +20 sympathy prestige. The desperate self-rescue or just a Tuesday.", cost: 0 },
   { type: "hail_mary_idea", description: "Pitch a wild idea at the next all-hands (free). Lottery: 30% +50 prestige (CEO loved it), 50% +5 (polite nodding), 20% -5 (sounded unhinged). One use per game.", cost: 0 },
 
   // Passive accumulation — capped at 3 uses per game; 3rd use grants Mysterious Influence.
@@ -84,13 +84,13 @@ const ALL_ACTIONS = [
   { type: "coffee_chat", description: "Casual coffee with target ($5; non-self). Both gain +3 prestige. No alliance proposed. Low-stakes networking.", cost: 5, requiresTarget: true },
   { type: "buy_coffee", description: "Buy coffee (removes Hit the Wall).", cost: 5 },
   { type: "spread_rumor", description: "Spread a rumor about target ($10). Target loses 5 prestige and gets QUESTIONABLE JUDGMENT public tag for 2 cycles. Cheap social warfare with real teeth.", cost: 10, requiresTarget: true },
-  { type: "move_meeting_early", description: "Move target's meeting to 7:30am ($10). Target loses 5 prestige and becomes Hit the Wall. The room is freezing.", cost: 10, requiresTarget: true },
+  { type: "move_meeting_early", description: "Move target's meeting to 7:30am ($10). Target -5 prestige + Hit the Wall (-2/cycle for 3 cycles = -11 total damage, plus they'll need to spend a turn on Rest or $5 on Buy Coffee — that's stolen value on top of the prestige hit). Underrated cheap attack.", cost: 10, requiresTarget: true },
 
   // === MID PAID ($20 – $25) ===
   { type: "schedule_pre_meeting", description: "Schedule a pre-meeting for the meeting ($20). Target loses 15 prestige + gains MEETING BLOCKED. Loyal managers (loyalty > 70) are immune — they think this is normal.", cost: 20, requiresTarget: true },
   { type: "file_complaint", description: "File HR complaint (you +5 'diligence' prestige; target gets Under Investigation, can't retaliate against you for 1 tick)", cost: 22, requiresTarget: true },
   { type: "strategy_report", description: "Get consultant report (+35 prestige, gives Has Deliverable for a future +40 CEO meeting)", cost: 30 },
-  { type: "leak_org_chart", description: "Insider intel — top 3 wealth + alliance graph + you gain +5 prestige (positional advantage)", cost: 25 },
+  { type: "slack_bomb", description: "Drop a Slack bomb in #general ($25). Two random other managers each lose 6 prestige (caught in the crossfire). You gain 3 prestige (eyeballs are eyeballs). 15% chance HR flags it — you also lose 5 prestige and gain Problematic. Group damage with random targeting; pure chaos.", cost: 25 },
   { type: "office_party", description: "Throw an office party ($25). +5 prestige to ALL managers and +15 to you. Generous play that visibly helps your rivals too.", cost: 25 },
   { type: "anonymous_pulse_survey", description: "Launch an 'anonymous' morale survey somehow entirely about the leader ($25). Target loses 50 prestige. Available only when YOU are rank ≥ 4 AND target is rank #1. One shot per game.", cost: 25, requiresTarget: true },
 
@@ -134,6 +134,10 @@ interface DecisionContext {
    *  "you just got hit by X" pull in the prompt so retaliation is a
    *  visible, named option rather than a generic rival list. */
   recentAttackers: Array<{ attackerId: string; attackerName: string; actionType: string; tick: number }>;
+  /** True once any agent in the game has earned the Mysterious Influence
+   *  status — once that happens, join_meeting_silently is removed from
+   *  every menu globally. The "office cipher" trope is one-character-only. */
+  mysteriousInfluenceClaimed: boolean;
 }
 
 // Hostile actions that have a target argument and are subject to the
@@ -149,7 +153,7 @@ const TARGETED_HOSTILE_ACTIONS = new Set([
 const TARGET_COOLDOWN_TICKS = 10; // ≈ 2 cycles in 1-agent/tick mode
 
 function buildContextPrompt(ctx: DecisionContext): string {
-  const { agent, balance, currentTick, allAgents, recentActions, leakedEmails, directive, hailMaryUsed, boomerangUsed, pulseSurveyUsed, joinMeetingCount } = ctx;
+  const { agent, balance, currentTick, allAgents, recentActions, leakedEmails, directive, hailMaryUsed, boomerangUsed, pulseSurveyUsed, joinMeetingCount, mysteriousInfluenceClaimed } = ctx;
   // Rank used by the anonymous_pulse_survey gate (only available when underdog).
   const currentRank = allAgents.findIndex((a) => a.id === agent.id) + 1;
 
@@ -191,12 +195,18 @@ function buildContextPrompt(ctx: DecisionContext): string {
     if (action.type === "hail_mary_idea" && (agent.prestige > 10 || balance >= 5 || hailMaryUsed)) return false;
     // Retreat-mode comeback gates.
     if (action.type === "boomerang" && (agent.prestige >= 50 || boomerangUsed)) return false;
-    if (action.type === "cry_in_stairwell" && agent.prestige > 30) return false;
+    // Cry in the Stairwell is now anytime-available. Was gated to ≤30
+    // prestige but post-game-2 feedback: more melodrama is better.
     // Anonymous pulse survey: underdog tool, one-shot, target #1 only.
     // Per-agent gate here; per-target #1 check happens at execution.
     if (action.type === "anonymous_pulse_survey" && (currentRank < 4 || pulseSurveyUsed)) return false;
-    // Join meeting silently caps at 3 uses per game; 3rd grants Mysterious Influence.
-    if (action.type === "join_meeting_silently" && joinMeetingCount >= 3) return false;
+    // Join meeting silently has TWO gates:
+    //   1. Per-agent cap of 3 uses (each agent's path to Mysterious Influence)
+    //   2. Global one-per-game cap on the trophy itself — once any agent
+    //      has earned Mysterious Influence, the action disappears from
+    //      every menu. Pre-flight #2 saw 6/10 agents grab MI; that's
+    //      not the rare-trope-character beat we wanted.
+    if (action.type === "join_meeting_silently" && (joinMeetingCount >= 3 || mysteriousInfluenceClaimed)) return false;
     return true;
   });
 
@@ -548,7 +558,11 @@ export async function getAgentDecision(
     };
   });
 
-  const context: DecisionContext = { agent, balance, currentTick, allAgents, recentActions, leakedEmails, directive, hailMaryUsed, boomerangUsed, pulseSurveyUsed, joinMeetingCount, recentAttackers };
+  const mysteriousInfluenceClaimed = allAgents.some((a) =>
+    a.statusEffects.some((s) => s.type === "mysterious_influence")
+  );
+
+  const context: DecisionContext = { agent, balance, currentTick, allAgents, recentActions, leakedEmails, directive, hailMaryUsed, boomerangUsed, pulseSurveyUsed, joinMeetingCount, recentAttackers, mysteriousInfluenceClaimed };
 
   const openai = new OpenAI({
     apiKey: deps.openaiApiKey,

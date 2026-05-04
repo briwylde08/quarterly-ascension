@@ -1408,6 +1408,7 @@
             toService,
             actionType: event.actionType,
             targetName: event.targetName,
+            actionDetail: event.actionDetail,
           });
           if (narrative) {
             actionEl.innerHTML = '<span class="actor">' + narrative + '</span>';
@@ -1456,22 +1457,25 @@
     // the target manager's name when one exists. Used to render headers like
     // "Kevin Hustle went to HR and spread a rumor about Diane Process"
     // instead of the bare "Kevin Hustle → HR Department".
+    // Narrative builders take (targetName, actionDetail). actionDetail is
+    // optional and used when the action carries a specific detail string
+    // (e.g. the consultant report's title).
     const ACTION_NARRATIVE = {
-      spread_rumor:           (t) => 'spread a rumor about ' + t,
-      file_complaint:         (t) => 'filed an HR complaint against ' + t,
-      sensitivity_training:   (t) => 'sent ' + t + ' to sensitivity training',
-      anonymous_pulse_survey: (t) => 'launched an "anonymous" pulse survey about ' + t,
-      strategy_report:        ()  => 'got a consultant report',
-      sabotage_plan:          (t) => 'built a sabotage dossier on ' + t,
-      move_meeting_early:     (t) => "moved " + t + "'s meeting to 7:30am",
-      schedule_pre_meeting:   (t) => 'scheduled a pre-meeting on ' + t + "'s calendar",
-      schedule_conflict:      (t) => "cancelled " + t + "'s CEO meeting",
-      hostile_takeover:       (t) => "mounted a hostile takeover of " + t + "'s partnerships",
-      leak_org_chart:         ()  => 'leaked the org chart',
-      book_ceo_time:          ()  => 'met with the CEO',
-      office_party:           ()  => 'threw an office party',
-      buy_coffee:             ()  => 'bought coffee',
-      coffee_chat:            (t) => 'had a coffee chat with ' + t,
+      spread_rumor:           (t)    => 'spread a rumor about ' + t,
+      file_complaint:         (t)    => 'filed an HR complaint against ' + t,
+      sensitivity_training:   (t)    => 'sent ' + t + ' to sensitivity training',
+      anonymous_pulse_survey: (t)    => 'launched an "anonymous" pulse survey about ' + t,
+      strategy_report:        (_, d) => d ? 'got a consultant report titled "' + d + '"' : 'got a consultant report',
+      sabotage_plan:          (t)    => 'built a sabotage dossier on ' + t,
+      move_meeting_early:     (t)    => "moved " + t + "'s meeting to 7:30am",
+      schedule_pre_meeting:   (t)    => 'scheduled a pre-meeting on ' + t + "'s calendar",
+      schedule_conflict:      (t)    => "cancelled " + t + "'s CEO meeting",
+      hostile_takeover:       (t)    => "mounted a hostile takeover of " + t + "'s partnerships",
+      slack_bomb:             ()     => 'dropped a Slack bomb in #general',
+      book_ceo_time:          ()     => 'met with the CEO',
+      office_party:           ()     => 'threw an office party',
+      buy_coffee:             ()     => 'bought coffee',
+      coffee_chat:            (t)    => 'had a coffee chat with ' + t,
     };
     // Service short-names for the header preamble.
     const SERVICE_SHORT = {
@@ -1492,7 +1496,7 @@
       const builder = ACTION_NARRATIVE[t.actionType];
       if (!builder) return null;
       const targetName = t.targetName || t.targetId || '';
-      const verbPhrase = builder(targetName);
+      const verbPhrase = builder(targetName, t.actionDetail);
       const short = SERVICE_SHORT[t.toService] || t.toService;
       return escape(t.fromAgentName) + ' went to ' + escape(short) + ' and ' + escape(verbPhrase);
     }

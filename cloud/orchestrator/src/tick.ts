@@ -60,6 +60,17 @@ const RUMOR_FLAVORS = [
   "told the new hire to 'just figure it out' and left the country",
 ];
 
+// Slack Bomb flavor — what kind of #general post the agent dropped.
+const SLACK_BOMB_FLAVORS = [
+  "Posted a 1,200-word screed in #general about 'team alignment.'",
+  "Started a 47-message thread asking 'who decided this?' — Slack lit up.",
+  "Made #general a graveyard for the rest of the day.",
+  "Sent a passive-aggressive 'just a friendly reminder' to all-staff.",
+  "Replied-all to a six-month-old thread with a single sad emoji.",
+  "Posted a survey nobody asked for, then complained that engagement was low.",
+  "Quote-tweeted the CEO's last announcement with 'thoughts?'",
+];
+
 // Schmooze-with-existing-ally flavor. Without variety this read identically
 // every time and the audience clocked it as a bug.
 const SCHMOOZE_ALLY_FLAVORS = (target: string) => [
@@ -340,6 +351,7 @@ async function executeAction(
   let outcome = "";
   let prestigeChange = 0;
   let txHash: string | undefined;
+  let actionDetail: string | undefined;
 
   try {
     switch (action.type) {
@@ -360,10 +372,10 @@ async function executeAction(
         break;
 
       case "expense_report": {
-        // Free earning path. Always pays $10 from HR; 20% audit chance hits
-        // prestige. Rounds out the deflationary economy without giving the
-        // leader a prestige edge (which is why this isn't on `work`).
-        const audited = Math.random() < 0.20;
+        // Free earning path. Always pays $10 from HR; 10% audit chance
+        // hits prestige (was 20% pre-game-2). Lower audit risk → more
+        // attractive when the LLM is broke.
+        const audited = Math.random() < 0.10;
         if (audited) {
           prestigeChange = -5;
           await db.updateAgentPrestige(agent.id, prestigeChange);
@@ -538,6 +550,7 @@ async function executeAction(
           outcome = result.outcome;
           prestigeChange = result.prestigeChange;
           txHash = result.txHash;
+          actionDetail = result.actionDetail;
         } else {
           outcome = "Unknown action";
         }
@@ -577,6 +590,7 @@ async function executeAction(
     txHash,
     reasoning,
     actionType: action.type,
+    actionDetail,
   });
 }
 
@@ -587,7 +601,7 @@ async function executePaidAction(
   action: Action,
   tick: number,
   reasoning?: string
-): Promise<{ outcome: string; prestigeChange: number; txHash?: string }> {
+): Promise<{ outcome: string; prestigeChange: number; txHash?: string; actionDetail?: string }> {
   const { db, mpp, stellar, rewards } = deps;
   const serviceInfo = serviceUrls[action.type];
   if (!serviceInfo) return { outcome: "Unknown paid action", prestigeChange: 0 };
@@ -723,12 +737,15 @@ async function executePaidAction(
     case "strategy_report": {
       // Retreat mode dropped the New Initiative pivot, so the post-pivot
       // halving never applies. Flat +35 prestige + Has Deliverable.
+      // The buzzword-salad title is propagated up via actionDetail so the
+      // dashboard's narrative header can render "got a report titled X".
       prestigeChange = 35;
-      outcome = `Received consultant report: "${result.data?.deliverable?.title || "Strategic Document"}". Has Deliverable.`;
+      const reportTitle = result.data?.deliverable?.title || "Strategic Document";
+      outcome = `Received consultant report: "${reportTitle}". Has Deliverable.`;
       await db.updateAgentPrestige(agent.id, prestigeChange);
       const a = (await db.getAgent(agent.id))!;
       await db.updateAgentStatusEffects(agent.id, [...a.statusEffects, { type: "has_deliverable", expiresAtTick: 999 }]);
-      break;
+      return { outcome, prestigeChange, txHash: result.txHash, actionDetail: reportTitle };
     }
 
     case "sabotage_plan":
@@ -799,20 +816,32 @@ async function executePaidAction(
       }
       break;
 
-    case "leak_org_chart": {
+    case "slack_bomb": {
+      // $25 group attack. System randomly picks 2 OTHER managers; each
+      // takes -6 prestige. Attacker gains +3 ("eyeballs are eyeballs").
+      // 15% chance HR flags the post → attacker also -5 + Problematic 1 cycle.
       const all = await db.getAllAgents();
-      const balances = await Promise.all(
-        all.map(async (a) => ({ name: a.name, bal: await stellar.getAssetBalance(a.publicKey) }))
-      );
-      balances.sort((a, b) => b.bal - a.bal);
-      const top = balances.slice(0, 3).map((b) => `${b.name}: $${b.bal.toFixed(0)}`).join(", ");
-      const allies = all
-        .filter((a) => a.allies.length > 0)
-        .map((a) => `${a.id}↔${a.allies.join(",")}`)
-        .join(" | ");
-      prestigeChange = 5;
-      await db.updateAgentPrestige(agent.id, prestigeChange);
-      outcome = `Insider info — wealth ranking top 3: ${top}. Active alliances: ${allies || "none"}. Positional advantage: +5 prestige.`;
+      const others = all.filter((a) => a.id !== agent.id).sort(() => Math.random() - 0.5);
+      const victims = others.slice(0, 2);
+      for (const v of victims) {
+        await db.updateAgentPrestige(v.id, -6);
+      }
+      let selfDelta = 3;
+      let backfire = "";
+      if (Math.random() < 0.15) {
+        selfDelta = -5 + 3; // net -2: gain +3 then -5
+        const me = (await db.getAgent(agent.id))!;
+        await db.updateAgentStatusEffects(agent.id, [
+          ...me.statusEffects.filter((e) => e.type !== "problematic"),
+          { type: "problematic", expiresAtTick: tick + 1, source: "slack_bomb_backfire" },
+        ]);
+        backfire = " HR flagged the post — you also lose 5 prestige and gain Problematic for 1 cycle.";
+      }
+      prestigeChange = selfDelta;
+      await db.updateAgentPrestige(agent.id, selfDelta);
+      const flavor = SLACK_BOMB_FLAVORS[Math.floor(Math.random() * SLACK_BOMB_FLAVORS.length)];
+      const victimNames = victims.map((v) => v.name).join(" and ");
+      outcome = `${flavor} ${victimNames} caught in the crossfire (-6 each).${backfire}`;
       break;
     }
 

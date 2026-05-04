@@ -291,7 +291,7 @@
               <td class="action">Expense Report</td>
               <td class="cost free">free</td>
               <td class="target">—</td>
-              <td>File for reimbursement. +$10 from HR; 20% chance Finance flags it (−5 prestige).</td>
+              <td>File for reimbursement. +$10 from HR; 10% chance Finance flags it (−5 prestige). The cleanest budget-refill when cash is tight.</td>
             </tr>
             <tr>
               <td class="action">Rest</td>
@@ -349,7 +349,7 @@
               <td class="action">Cry in the Stairwell</td>
               <td class="cost free">free</td>
               <td class="target">—</td>
-              <td>Lifts Problematic and Hit the Wall. 20% chance the VP sees it and grants +20 sympathy prestige. <em>Available only when prestige ≤ 30.</em></td>
+              <td>Lifts Problematic and Hit the Wall. 20% chance the VP sees it and grants +20 sympathy prestige. <em>Available anytime — the desperate self-rescue or just a Tuesday.</em></td>
             </tr>
             <tr>
               <td class="action">Hail Mary Idea</td>
@@ -381,7 +381,7 @@
               <td class="action">Move Meeting Early</td>
               <td class="cost">$10</td>
               <td class="target yes">yes</td>
-              <td>Reschedule target's meeting to 7:30am. Target loses 5 prestige and gains Hit the Wall.</td>
+              <td>Reschedule target's meeting to 7:30am. Target loses 5 prestige and gains Hit the Wall (-2/cycle for 3 cycles, plus they'll need to spend a turn on Rest or Buy Coffee). One of the highest damage-per-dollar attacks in the game.</td>
             </tr>
 
             <tr class="group-header"><td colspan="4">Mid-Cost ($20 – $25)</td></tr>
@@ -404,10 +404,10 @@
               <td>+35 prestige and you gain Has Deliverable (your next CEO meeting awards +40 instead of −20).</td>
             </tr>
             <tr>
-              <td class="action">Leak the Org Chart</td>
+              <td class="action">Drop a Slack Bomb</td>
               <td class="cost">$25</td>
               <td class="target">—</td>
-              <td>See top 3 wealth and the partnership graph. +5 prestige for positional advantage.</td>
+              <td>Post a passive-aggressive thread in #general. Two random other managers each lose 6 prestige (caught in the crossfire). You gain 3 prestige (eyeballs are eyeballs). 15% chance HR flags the post — you also lose 5 and gain Problematic for 1 cycle.</td>
             </tr>
             <tr>
               <td class="action">Throw an Office Party</td>
@@ -577,8 +577,9 @@
         <p>
           A 33-minute game with 16 cycles of 5 ticks each (2 agents act
           per tick). The game has <b>fixed beats</b> at known ticks and
-          <b>random events</b> that roll at each cycle boundary (no-repeat
-          rule prevents the same event two cycles in a row).
+          <b>random events</b> that roll at each cycle boundary
+          (one-per-game cap — once an event fires, it's locked out for
+          the rest of the show).
         </p>
         <p><b>Fixed beats:</b></p>
         <ul style="margin-left: 24px; margin-bottom: 12px;">
@@ -597,6 +598,8 @@
           <li><b>Budget Cuts</b> — Finance "rebalances." Up to 5 random managers burn 15% of their DLBR balance back to the issuer. On-chain visible.</li>
           <li><b>Viral LinkedIn Post</b> — random manager posts something cringe. 75% lands and gives +15 prestige; 25% it's too cringe and they take −5 + Problematic for 1 cycle.</li>
           <li><b>Printer Achieves Sentience</b> — flavor event. Random manager loses 5 prestige; the most cautious manager (caution ≥ 60) gains +10 because of course they had printed backups.</li>
+          <li><b>Quiet Quitting Memo Leaked</b> — anonymous memo names every manager who picked Work 3+ times in their last 5 turns. -8 prestige + Problematic for 2 cycles. Punishes work-spam directly.</li>
+          <li><b>Vending Machine Showdown</b> — two random managers reach for the last bag of Sun Chips at the same moment. Coin flip: winner +5 prestige and the chips, loser -8 prestige and Hit the Wall. Petty office territoriality at its finest.</li>
         </ul>
       </div>
     </section>

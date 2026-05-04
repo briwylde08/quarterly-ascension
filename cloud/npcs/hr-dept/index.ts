@@ -62,6 +62,15 @@ const ENDPOINTS: Record<string, Endpoint> = {
       prestigeChange: -50,
     }),
   },
+  "/slack-bomb": {
+    price: 25,
+    needsTarget: false,
+    payload: () => ({
+      action: "slack_bomb_dropped",
+      description: "Dropped a passive-aggressive bomb in #general. Two random managers caught in the crossfire.",
+      corporateSpeak: "We trust managers to communicate constructively in shared channels.",
+    }),
+  },
 };
 
 export default {

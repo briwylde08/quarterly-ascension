@@ -31,12 +31,18 @@ export interface RandomEventsState {
   /** Set of random-event ids that fired in the previous cycle boundary.
    *  Skipped this cycle to prevent the same event back-to-back. */
   lastFiredEvents: Set<string>;
+  /** Once-per-game cap for the probabilistic event pool. Pre-flight #2
+   *  saw Surprise Demo Day fire 3× in one game; cool the first two
+   *  times, redundant the third. Each event id added here when it fires
+   *  the first time; subsequent rolls for that id are skipped. */
+  firedEventTypes: Set<string>;
 }
 
 export function createRandomEventsState(): RandomEventsState {
   return {
     glassCliffVictims: new Set(),
     lastFiredEvents: new Set(),
+    firedEventTypes: new Set(),
   };
 }
 
@@ -75,13 +81,19 @@ export async function processRandomEvents(
   // probabilistic pool can produce a "nothing happened in cycle 1"
   // silence by chance; force one high-energy event here so the host
   // always has narration material in the first ~2 minutes. Skips the
-  // regular probabilistic rolls for this cycle boundary so we don't
-  // double-fire.
+  // regular probabilistic rolls for this cycle boundary, AND marks the
+  // chosen event as fired so it doesn't roll again later (one-per-game).
   if (tick === 5) {
-    const openers = [surpriseDemoDay, surpriseBoardVisit, viralLinkedIn, badGlassdoorReview];
-    const fn = openers[Math.floor(Math.random() * openers.length)];
-    events.push(...(await fn(deps, tick)));
+    const openers = [
+      { id: "surprise_demo_day", fn: surpriseDemoDay },
+      { id: "surprise_board_visit", fn: surpriseBoardVisit },
+      { id: "viral_linkedin", fn: viralLinkedIn },
+      { id: "bad_glassdoor_review", fn: badGlassdoorReview },
+    ];
+    const opener = openers[Math.floor(Math.random() * openers.length)];
+    events.push(...(await opener.fn(deps, tick)));
     state.lastFiredEvents = new Set(["cycle1_opener"]);
+    state.firedEventTypes.add(opener.id);
     return { events, skipDecisions: false };
   }
 
@@ -100,29 +112,34 @@ export async function processRandomEvents(
   // ahead of rank-2, *and* hasn't already been cliffed this game.
   events.push(...(await glassCliffPromotion(deps, state, tick)));
 
-  // Per-cycle probabilistic rolls. Skip any event that fired at the previous
-  // cycle boundary so the same chaos doesn't hit two cycles in a row.
+  // Per-cycle probabilistic rolls. Skip any event that fired at the
+  // previous cycle boundary (no back-to-back) AND any event already
+  // fired once this game (post-game-2 cap — variety beats repeats).
   const fired = new Set<string>();
   const skipped = state.lastFiredEvents;
+  const alreadyFired = state.firedEventTypes;
   const roll = (id: string, prob: number): boolean => {
     if (skipped.has(id)) return false;
+    if (alreadyFired.has(id)) return false;
     if (Math.random() >= prob) return false;
     fired.add(id);
+    alreadyFired.add(id);
     return true;
   };
 
-  // 2-agents-per-tick mode doubles the cycle frequency (cycle = 5 ticks
-  // instead of 10), so per-cycle probabilities are halved here to keep
-  // total events per game roughly the same as the bumped post-pre-flight-1
-  // values. Sum ≈ 0.50/cycle × 16 cycles = ~8 random events + 2 fixed
-  // bonuses ≈ 10/game.
-  if (roll("surprise_board_visit", 0.08))   events.push(...(await surpriseBoardVisit(deps, tick)));
-  if (roll("bad_glassdoor_review", 0.08))   events.push(...(await badGlassdoorReview(deps, tick)));
-  if (roll("surprise_promotion", 0.07))     events.push(...(await surprisePromotion(deps, tick)));
-  if (roll("surprise_demo_day", 0.07))      events.push(...(await surpriseDemoDay(deps, tick)));
-  if (roll("budget_cuts", 0.08))            events.push(...(await budgetCuts(deps, tick)));
-  if (roll("viral_linkedin", 0.08))         events.push(...(await viralLinkedIn(deps, tick)));
-  if (roll("printer_sentience", 0.07))      events.push(...(await printerAchievesSentience(deps, tick)));
+  // Probabilities bumped slightly post-game-2 since each event can now
+  // fire only once per game and we want ~10 random events spread across
+  // 16 cycles. Sum ≈ 0.85/cycle. Plus 2 fixed Quarterly Bonuses + 0-2
+  // Glass Cliffs ≈ 10/game expected.
+  if (roll("surprise_board_visit", 0.10))   events.push(...(await surpriseBoardVisit(deps, tick)));
+  if (roll("bad_glassdoor_review", 0.10))   events.push(...(await badGlassdoorReview(deps, tick)));
+  if (roll("surprise_promotion", 0.10))     events.push(...(await surprisePromotion(deps, tick)));
+  if (roll("surprise_demo_day", 0.10))      events.push(...(await surpriseDemoDay(deps, tick)));
+  if (roll("budget_cuts", 0.10))            events.push(...(await budgetCuts(deps, tick)));
+  if (roll("viral_linkedin", 0.10))         events.push(...(await viralLinkedIn(deps, tick)));
+  if (roll("printer_sentience", 0.08))      events.push(...(await printerAchievesSentience(deps, tick)));
+  if (roll("quiet_quitting_memo", 0.10))    events.push(...(await quietQuittingMemo(deps, tick)));
+  if (roll("vending_machine", 0.07))        events.push(...(await vendingMachineShowdown(deps, tick)));
 
   state.lastFiredEvents = fired;
 
@@ -566,4 +583,91 @@ async function printerAchievesSentience(deps: EventDeps, tick: number): Promise<
     });
   }
   return events;
+}
+
+// === Quiet Quitting Memo Leaked ===========================================
+
+const QUIET_QUITTING_HEADLINES = [
+  "ANONYMOUS MEMO: 'I haven't shipped anything since cycle 4 and nobody's noticed.' Three managers are nodding along.",
+  "QUIET QUITTING MEMO LEAKED: 'Working hard is for people who want promotions.' HR is investigating who said this.",
+  "ANONYMOUS LINKEDIN POST GOING VIRAL: '47 ways middle managers signal effort without producing output.' All-staff Slack is on fire.",
+  "INTERNAL EMAIL CHAIN LEAKED: 'I've been on calendar all day. Nobody asks what I'm doing on those calls.' Everyone is reading along.",
+];
+
+async function quietQuittingMemo(deps: EventDeps, tick: number): Promise<GameEvent[]> {
+  // Punishes work-spam directly. Every agent whose last 5 actions include
+  // 3+ instances of `work` gets called out by name in the memo: -8 prestige
+  // and Problematic for 2 cycles.
+  const agents = await deps.db.getAllAgents();
+  const headline = QUIET_QUITTING_HEADLINES[Math.floor(Math.random() * QUIET_QUITTING_HEADLINES.length)];
+  const callouts: { agent: typeof agents[number]; workCount: number }[] = [];
+  for (const a of agents) {
+    const recent = await deps.db.getRecentActionLogsForAgent(a.id, 5);
+    const workCount = recent.filter((r: any) => r.action_type === "work").length;
+    if (workCount >= 3) callouts.push({ agent: a, workCount });
+  }
+
+  const parentId = uuid();
+  const events: GameEvent[] = [{
+    id: parentId, tick, timestamp: new Date(), type: "random_event",
+    description: callouts.length > 0
+      ? `${headline} ${callouts.length} manager(s) named in the memo for going quiet.`
+      : `${headline} (Nobody currently quiet quitting — the memo fizzles.)`,
+  }];
+  for (const c of callouts) {
+    await deps.db.updateAgentPrestige(c.agent.id, -8);
+    await deps.db.updateAgentStatusEffects(c.agent.id, [
+      ...c.agent.statusEffects.filter((e) => e.type !== "problematic"),
+      { type: "problematic", expiresAtTick: tick + 2, source: "quiet_quitting_memo" },
+    ]);
+    events.push({
+      id: uuid(), tick, timestamp: new Date(), type: "random_event", agentId: c.agent.id, prestigeChange: -8,
+      description: `${c.agent.name} named in the memo (${c.workCount} work actions in last 5 turns). -8 prestige + Problematic 2 cycles.`,
+      parentEventId: parentId,
+    });
+  }
+  return events;
+}
+
+// === Vending Machine Showdown =============================================
+
+const VENDING_WIN_FLAVORS = [
+  "ate the chips at his desk in front of HR",
+  "made eye contact while opening the bag",
+  "posted a photo to Slack with the caption 'mine'",
+  "saved one chip for the loser. Did not give it to them.",
+];
+const VENDING_LOSE_FLAVORS = [
+  "walked back to their desk hungry, narrating what they would have done with the chips",
+  "filed a grievance with the office manager about 'access to snacks'",
+  "spent the next three meetings staring at the winner",
+  "later took someone else's labeled lunch from the fridge in retaliation",
+];
+
+async function vendingMachineShowdown(deps: EventDeps, tick: number): Promise<GameEvent[]> {
+  // Petty 2-agent battle. Coin flip decides winner. Visceral office
+  // territoriality, contained.
+  const agents = await deps.db.getAllAgents();
+  if (agents.length < 2) return [];
+  const shuffled = [...agents].sort(() => Math.random() - 0.5);
+  const [winner, loser] = shuffled;
+  const winFlavor = VENDING_WIN_FLAVORS[Math.floor(Math.random() * VENDING_WIN_FLAVORS.length)];
+  const loseFlavor = VENDING_LOSE_FLAVORS[Math.floor(Math.random() * VENDING_LOSE_FLAVORS.length)];
+
+  await deps.db.updateAgentPrestige(winner.id, 5);
+  await deps.db.updateAgentPrestige(loser.id, -8);
+  await deps.db.updateAgentStatusEffects(loser.id, [
+    ...loser.statusEffects.filter((e) => e.type !== "tired"),
+    { type: "tired", expiresAtTick: tick + 2, source: "vending_machine" },
+  ]);
+
+  const parentId = uuid();
+  return [
+    { id: parentId, tick, timestamp: new Date(), type: "random_event",
+      description: `VENDING MACHINE SHOWDOWN: ${winner.name} and ${loser.name} both reached for the last bag of Sun Chips at the same moment. The kitchen went silent.` },
+    { id: uuid(), tick, timestamp: new Date(), type: "random_event", agentId: winner.id, prestigeChange: 5,
+      description: `${winner.name} won the standoff and ${winFlavor}. (+5 prestige)`, parentEventId: parentId },
+    { id: uuid(), tick, timestamp: new Date(), type: "random_event", agentId: loser.id, prestigeChange: -8,
+      description: `${loser.name} ${loseFlavor}. (-8 prestige + Hit the Wall)`, parentEventId: parentId },
+  ];
 }
