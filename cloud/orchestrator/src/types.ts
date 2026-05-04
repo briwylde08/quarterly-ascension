@@ -24,6 +24,10 @@ export interface StatusEffect {
 }
 
 export type StatusEffectType =
+  // Retreat-mode keys (internal stable strings; user-facing labels are
+  // applied in the LLM/dashboard formatters):
+  //   "tired" displays as "Hit the Wall"
+  //   "marked" displays as "Documented"
   | "tired"
   | "caffeinated"
   | "inspired"
@@ -35,7 +39,12 @@ export type StatusEffectType =
   | "mandatory_motivation"
   | "meeting_blocked"
   /** Sabotage_plan paints a target — take_credit against them auto-succeeds. */
-  | "marked";
+  | "marked"
+  /** Acquired after 3× join_meeting_silently. +2 prestige/cycle passive +
+   *  10% chance another agent's reasoning credits the holder for their own action. */
+  | "mysterious_influence"
+  /** Spread_rumor leaves the target with a public credibility tag. */
+  | "questionable_judgment";
 
 export interface ActionResult {
   success: boolean;

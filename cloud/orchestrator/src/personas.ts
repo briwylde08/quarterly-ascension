@@ -37,7 +37,7 @@ export const PERSONAS: Persona[] = [
     traits: {
       aggression: 30,
       greed: 50,
-      caution: 90,
+      caution: 80,
       loyalty: 60,
     },
     backstory: "Has been at MegaCorp for 15 years. Survived six reorgs by making herself indispensable to whoever was in charge. Trusts spreadsheets more than people.",
@@ -65,7 +65,7 @@ export const PERSONAS: Persona[] = [
     traits: {
       aggression: 20,
       greed: 30,
-      caution: 95,
+      caution: 85,
       loyalty: 80,
     },
     backstory: "Started in legal, moved to compliance. Has read every policy document ever written. Knows where all the bodies are buried — and has documented the burial procedures.",
@@ -135,7 +135,7 @@ export const PERSONAS: Persona[] = [
     traits: {
       aggression: 25,
       greed: 80,
-      caution: 85,
+      caution: 75,
       loyalty: 30,
     },
     backstory: "Has been 'Senior VP' for 12 years. No one knows what he actually does. Survives by defending his territory and taking credit for anything that happens in his vicinity.",
