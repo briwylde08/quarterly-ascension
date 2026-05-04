@@ -224,31 +224,34 @@ export class MppClient {
  */
 export function buildServiceUrls(npcBase: string): Record<string, { url: string; name: string; price: number }> {
   const npc = (name: string, path: string) => npcBase.replace("__npc__", name) + path;
+  // Retreat mode: 16 paid endpoints across 4 active NPCs. IT Guy and
+  // Motivational Speaker have no retreat endpoints — their workers stay
+  // deployed but aren't invoked.
   return {
-    buy_coffee:           { url: npc("coffee-cart",          "/buy"),                  name: "Coffee Cart",          price: 5 },
-    buy_fancy_coffee:     { url: npc("coffee-cart",          "/buy-fancy"),            name: "Coffee Cart",          price: 10 },
-    file_complaint:       { url: npc("hr-dept",              "/file-complaint"),       name: "HR Department",        price: 22 },
-    sensitivity_training: { url: npc("hr-dept",              "/sensitivity-training"), name: "HR Department",        price: 30 },
-    check_hr_status:      { url: npc("hr-dept",              "/check-status"),         name: "HR Department",        price: 5 },
-    strategy_report:      { url: npc("consultant",           "/strategy-report"),      name: "The Consultant",       price: 25 },
-    competitive_intel:    { url: npc("consultant",           "/competitive-intel"),    name: "The Consultant",       price: 25 },
-    sabotage_plan:        { url: npc("consultant",           "/sabotage-plan"),        name: "The Consultant",       price: 40 },
-    fix_laptop:           { url: npc("it-guy",               "/fix-laptop"),           name: "IT Guy",               price: 12 },
-    recover_emails:       { url: npc("it-guy",               "/recover-emails"),       name: "IT Guy",               price: 20 },
-    calendar_conflict:    { url: npc("it-guy",               "/calendar-conflict"),    name: "IT Guy",               price: 15 },
-    book_ceo_time:        { url: npc("exec-assistant",       "/book-ceo-time"),        name: "Executive Assistant",  price: 50 },
-    leak_org_chart:       { url: npc("exec-assistant",       "/leak-org-chart"),       name: "Executive Assistant",  price: 25 },
-    schedule_conflict:    { url: npc("exec-assistant",       "/schedule-conflict"),    name: "Executive Assistant",  price: 30 },
-    team_lunch:           { url: npc("caterer",              "/team-lunch"),           name: "The Caterer",          price: 25 },
-    poison_meeting:       { url: npc("caterer",              "/poison-meeting"),       name: "The Caterer",          price: 35 },
-    birthday_cake:        { url: npc("caterer",              "/birthday-cake"),        name: "The Caterer",          price: 12 },
-    book_motivation:      { url: npc("motivational-speaker", "/book-session"),         name: "Motivational Speaker", price: 30 },
-    send_motivation:      { url: npc("motivational-speaker", "/send-to-rival"),        name: "Motivational Speaker", price: 25 },
+    // === Coffee Cart ===
+    buy_coffee:              { url: npc("coffee-cart",    "/buy"),                    name: "Coffee Cart",         price: 5 },
+    coffee_chat:             { url: npc("coffee-cart",    "/coffee-chat"),            name: "Coffee Cart",         price: 5 },
 
-    // Phase 5 — earning paths.
-    whistleblower_bounty: { url: npc("hr-dept",              "/whistleblower"),        name: "HR Department",        price: 10 },
-    mentorship:           { url: npc("motivational-speaker", "/mentorship"),           name: "Motivational Speaker", price: 15 },
-    coffee_chat:          { url: npc("coffee-cart",          "/coffee-chat"),          name: "Coffee Cart",          price: 5 },
+    // === HR Department ===
+    spread_rumor:            { url: npc("hr-dept",        "/spread-rumor"),           name: "HR Department",       price: 10 },
+    file_complaint:          { url: npc("hr-dept",        "/file-complaint"),         name: "HR Department",       price: 22 },
+    anonymous_pulse_survey:  { url: npc("hr-dept",        "/anonymous-pulse-survey"), name: "HR Department",       price: 25 },
+    sensitivity_training:    { url: npc("hr-dept",        "/sensitivity-training"),   name: "HR Department",       price: 30 },
+
+    // === The Consultant ===
+    strategy_report:         { url: npc("consultant",     "/strategy-report"),        name: "The Consultant",      price: 25 },
+    sabotage_plan:           { url: npc("consultant",     "/sabotage-plan"),          name: "The Consultant",      price: 40 },
+
+    // === Executive Assistant ===
+    move_meeting_early:      { url: npc("exec-assistant", "/move-meeting-early"),     name: "Executive Assistant", price: 10 },
+    schedule_pre_meeting:    { url: npc("exec-assistant", "/schedule-pre-meeting"),   name: "Executive Assistant", price: 20 },
+    leak_org_chart:          { url: npc("exec-assistant", "/leak-org-chart"),         name: "Executive Assistant", price: 25 },
+    schedule_conflict:       { url: npc("exec-assistant", "/schedule-conflict"),      name: "Executive Assistant", price: 30 },
+    hostile_takeover:        { url: npc("exec-assistant", "/hostile-takeover"),       name: "Executive Assistant", price: 35 },
+    book_ceo_time:           { url: npc("exec-assistant", "/book-ceo-time"),          name: "Executive Assistant", price: 50 },
+
+    // === The Caterer ===
+    office_party:            { url: npc("caterer",        "/office-party"),           name: "The Caterer",         price: 25 },
   };
 }
 

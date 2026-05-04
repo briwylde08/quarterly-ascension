@@ -18,6 +18,7 @@ import type { Stellar } from "./stellar.js";
 import { MppClient, buildServiceUrls, isPaidAction } from "./mpp-client.js";
 import { getAgentDecision, type LlmDeps, type TickCtx } from "./llm.js";
 import { processRandomEvents, type RandomEventsState } from "./random-events.js";
+import { getPersona } from "./personas.js";
 
 export interface RewardSources {
   hrDeptSecret: string;
@@ -35,42 +36,39 @@ export interface TickDeps {
   emit: (event: GameEvent) => Promise<void>;
 }
 
+// Retreat-mode hostile action set. Used by random events that count
+// hostility (e.g. Surprise Board Visit's "scrutinized" pick) and by any
+// future bounty/audit logic.
 const HOSTILE_ACTIONS = new Set([
+  "take_credit",
+  "spread_rumor",
+  "move_meeting_early",
+  "schedule_pre_meeting",
   "file_complaint",
   "sensitivity_training",
-  "sabotage_plan",
-  "fix_laptop",
-  "calendar_conflict",
   "schedule_conflict",
-  "poison_meeting",
-  "send_motivation",
-  "take_credit",
+  "anonymous_pulse_survey",
+  "hostile_takeover",
+  "sabotage_plan",
 ]);
 
-// Multiple flavor variants for fallback paths so we don't see the same
-// boilerplate twice in a row.
-function pick<T>(list: T[]): T {
-  return list[Math.floor(Math.random() * list.length)];
-}
-
-const TEAM_LUNCH_FALLBACK_FLAVORS = [
-  (other: string) =>
-    `(Bummed someone — ${other} — already booked the Caterer this cycle. Pivoted to actual work.) `,
-  () =>
-    `(Tried to book lunch but the Caterer's calendar was triple-stacked by the time I sent the invite. Real synergy lost. Pivoted to work.) `,
-  (other: string) =>
-    `(Walked over to set up catering, found ${other} already there with the same idea. Awkward small talk, then back to my desk to grind.) `,
-  () =>
-    `(Texted the Caterer about lunch; got an out-of-office about workshop overcommitment. Had to reroute to actually doing work. Tragic.) `,
-  () =>
-    `(Lunch booking declined — apparently we're "post-perks" this cycle. Logged a JIRA. Did some work in the meantime.) `,
-];
-
-export async function processTick(deps: TickDeps): Promise<void> {
+/**
+ * Runs one tick of the simulation. In retreat round-robin mode, the caller
+ * passes a single `activeAgentId` so only that one agent gets a decision
+ * and side effects this tick. Random events fire only at cycle boundaries
+ * (every 10th tick), giving the show a steady drumbeat of single actions
+ * punctuated by big-moment events.
+ */
+export async function processTick(deps: TickDeps, activeAgentId?: string): Promise<void> {
   const { db, stellar, mpp, npcBase, llm, randomEventsState, emit, rewards } = deps;
 
   const tick = (await db.getCurrentTick()) + 1;
   await db.setCurrentTick(tick);
+
+  // Cycle = 10 ticks. Random events fire only at the end of a cycle so the
+  // intra-cycle drumbeat stays clean (one action per tick, no event noise
+  // in between).
+  const isCycleBoundary = tick % 10 === 0;
 
   console.log(`\n${"=".repeat(60)}`);
   console.log(`TICK ${tick} STARTING`);
@@ -98,113 +96,101 @@ export async function processTick(deps: TickDeps): Promise<void> {
   const balances = new Map(balanceEntries);
   const tickCtx: TickCtx = { allAgents: refreshedAgents, leakedEmails, balances };
 
-  // Phase 2: random events. processRandomEvents now returns events + signals
-  // (e.g. skipDecisions when All-Hands fires).
-  const eventsResult = await processRandomEvents({ db, stellar, rewards, balances }, randomEventsState, tick);
-  for (const event of eventsResult.events) await emit(event);
-
-  // Phase 3: if All-Hands fired, every agent's action this tick is replaced
-  // with a synthetic "stuck in the meeting" event. No decisions, no payments.
-  if (eventsResult.skipDecisions) {
-    const skipping = await db.getAllAgents();
-    for (const a of skipping) {
-      await emit({
-        id: uuid(),
-        tick,
-        timestamp: new Date(),
-        type: "action",
-        agentId: a.id,
-        description: `${a.name}: trapped in the All-Hands. Took notes that nobody will read.`,
-        prestigeChange: 0,
-        reasoning: "All-Hands meeting consumed the entire cycle.",
-      });
-    }
-    await applyPassiveStatusDecay(deps, tick);
-    console.log(`\nTick ${tick} complete (All-Hands skipped decisions).\n`);
-    return;
+  // Phase 2: random events fire only at cycle boundaries (end of every 10
+  // single-agent ticks). On non-boundary ticks this is a no-op.
+  if (isCycleBoundary) {
+    const eventsResult = await processRandomEvents({ db, stellar, rewards, balances }, randomEventsState, tick);
+    for (const event of eventsResult.events) await emit(event);
+    // skipDecisions (All-Hands) is no longer used in retreat mode — kept the
+    // signal in random-events for compat but ignored here.
   }
 
-  // Phase 3b: get decisions
+  // Phase 3: get a decision for the single active agent this tick.
+  // (In retreat round-robin mode, activeAgentId is always set. The
+  // legacy branch — process all agents — runs only if no activeAgentId
+  // is provided, which shouldn't happen in retreat play.)
   const freshAgents = await db.getAllAgents();
+  const actingAgents = activeAgentId
+    ? freshAgents.filter((a) => a.id === activeAgentId)
+    : freshAgents;
   const decisions: { agent: Agent; action: Action; reasoning: string }[] = [];
 
-  for (const agent of freshAgents) {
-    if (agent.statusEffects.some((s) => s.type === "technical_difficulties")) {
-      decisions.push({ agent, action: { type: "rest" }, reasoning: "Technical difficulties - forced to rest" });
-      continue;
-    }
-    if (agent.statusEffects.some((s) => s.type === "mandatory_motivation")) {
-      decisions.push({ agent, action: { type: "rest" }, reasoning: "Stuck in mandatory motivation session" });
-      continue;
-    }
-
+  for (const agent of actingAgents) {
     const { action, reasoning } = await getAgentDecision(llm, agent, tick, tickCtx);
     decisions.push({ agent, action, reasoning });
     console.log(`${agent.name}: ${action.type}${("target" in action) ? ` → ${action.target}` : ""}`);
   }
 
-  // Phase 4: execute decisions
+  // Phase 4: execute decisions. Retreat mode has no singleton actions
+  // (team_lunch was the only one and is cut). Each agent's choice runs as-is.
   const SERVICE_URLS = buildServiceUrls(npcBase);
-  const SINGLETON_ACTIONS = new Set(["team_lunch"]);
-  const consumedSingletons = new Map<string, string>(); // type → which agent consumed it
-
   for (const { agent, action, reasoning } of decisions) {
-    let effectiveAction = action;
-    let effectiveReasoning = reasoning;
+    await executeAction(deps, SERVICE_URLS, agent, action, reasoning, tick);
+  }
 
-    if (SINGLETON_ACTIONS.has(action.type)) {
-      if (consumedSingletons.has(action.type)) {
-        const winner = consumedSingletons.get(action.type)!;
-        effectiveAction = { type: "work" };
-        const flavor = pick(TEAM_LUNCH_FALLBACK_FLAVORS);
-        effectiveReasoning = flavor(winner) + reasoning;
-      } else {
-        consumedSingletons.set(action.type, agent.name);
-      }
-    }
-
-    await executeAction(deps, SERVICE_URLS, agent, effectiveAction, effectiveReasoning, tick);
+  // Phase 4b: Mysterious Influence misattribution. After the active agent
+  // acts, every other agent holding Mysterious Influence has a 10% roll
+  // to be falsely credited for the action. Pure flavor — no prestige
+  // movement — but the audience reads each "somehow involved" line as a
+  // running joke and recognizes the trope of the office cipher who gets
+  // credit for everything.
+  if (activeAgentId && decisions.length > 0) {
+    await applyMysteriousInfluenceMisattribution(deps, tick, decisions[0]);
   }
 
   // Phase 5: passive ticks (Inspired bonus + Tired/Problematic decay)
   await applyPassiveStatusDecay(deps, tick);
 
-  // Phase 5b: fatigue check. Any agent who has gone 4+ consecutive ticks
-  // without a `rest` action accrues `tired` status (-2 prestige/tick decay
-  // for 3 ticks, removable by coffee or rest). Without this, `buy_coffee`
-  // and `buy_fancy_coffee` were dead weight in the action economy because
-  // `tired` was almost never applied — the coffee_machine_broken random
-  // event was its only source.
-  await applyFatigue(deps, tick);
+  // Retreat mode: natural fatigue accrual is dropped. Hit the Wall is now
+  // spread only by the move_meeting_early action as an intentional weapon —
+  // ambient burnout doesn't fit a 30-min show where every cycle wants a
+  // visible paid action.
 
   console.log(`\nTick ${tick} complete.\n`);
 }
 
-async function applyFatigue(deps: TickDeps, tick: number): Promise<void> {
+const MYSTERIOUS_CREDIT_FLAVORS = [
+  (mystery: string, actor: string, action: string) =>
+    `${mystery} was somehow involved in ${actor}'s ${action}. Nobody can explain how.`,
+  (mystery: string, actor: string, action: string) =>
+    `Reports surface that ${mystery} "consulted" on ${actor}'s ${action}. Reports are unsourced.`,
+  (mystery: string, actor: string, action: string) =>
+    `${mystery}'s name appears on the post-mortem for ${actor}'s ${action}. They were not on the post-mortem.`,
+  (mystery: string, actor: string, action: string) =>
+    `${actor}'s ${action} is mysteriously credited to ${mystery} in the all-hands recap deck.`,
+  (mystery: string, actor: string) =>
+    `Three separate Slack messages confirm ${mystery} was on the kickoff invite for ${actor}'s last move. There was no kickoff.`,
+  (mystery: string) =>
+    `${mystery} just got cc'd on something that did not concern them. They replied "thanks for the loop."`,
+];
+
+/**
+ * Phase 4b: 10% chance per Mysterious Influence holder (other than the
+ * active agent) to surface a flavor event crediting them for whatever
+ * the active agent just did. Pure comedy — no prestige movement.
+ */
+async function applyMysteriousInfluenceMisattribution(
+  deps: TickDeps,
+  tick: number,
+  active: { agent: Agent; action: Action; reasoning: string }
+): Promise<void> {
   const { db, emit } = deps;
-  // Window widened from 4 → 6 cycles. The 4-cycle threshold caused a
-  // synchronized wall around tick 5 (everyone hit fatigue at once because
-  // every agent's history starts at tick 1). 6 desyncs them and gives the
-  // game a chance to spread the tired status organically.
-  const FATIGUE_WINDOW = 6;
-  const agents = await db.getAllAgents();
-  for (const agent of agents) {
-    if (agent.statusEffects.some((e) => e.type === "tired" || e.type === "caffeinated")) continue;
-    const recent = await db.getRecentActionLogsForAgent(agent.id, FATIGUE_WINDOW);
-    if (recent.length < FATIGUE_WINDOW) continue;
-    const allNonRest = recent.every((r) => r.action_type !== "rest");
-    if (!allNonRest) continue;
-    await db.updateAgentStatusEffects(agent.id, [
-      ...agent.statusEffects,
-      { type: "tired", expiresAtTick: tick + 3 },
-    ]);
+  const all = await db.getAllAgents();
+  const influencers = all.filter(
+    (a) => a.id !== active.agent.id && a.statusEffects.some((s) => s.type === "mysterious_influence")
+  );
+  for (const influencer of influencers) {
+    if (Math.random() >= 0.10) continue;
+    const flavor = MYSTERIOUS_CREDIT_FLAVORS[Math.floor(Math.random() * MYSTERIOUS_CREDIT_FLAVORS.length)];
+    const description = flavor(influencer.name, active.agent.name, active.action.type);
     await emit({
       id: uuid(),
       tick,
       timestamp: new Date(),
       type: "status_effect",
-      agentId: agent.id,
-      description: `${agent.name} hit the wall (${FATIGUE_WINDOW} cycles without rest) — now Tired (-2 prestige/cycle for 3 cycles, removed by rest, coffee, or fancy coffee).`,
+      agentId: influencer.id,
+      description,
+      prestigeChange: 0,
     });
   }
 }
@@ -219,13 +205,17 @@ async function applyPassiveStatusDecay(deps: TickDeps, tick: number): Promise<vo
     let net = 0;
     const reasons: string[] = [];
 
+    if (agent.statusEffects.some((s) => s.type === "mysterious_influence")) {
+      net += 2;
+      reasons.push("Mysterious Influence");
+    }
     if (agent.statusEffects.some((s) => s.type === "inspired" && s.expiresAtTick > tick)) {
       net += 5;
       reasons.push("Inspired");
     }
     if (agent.statusEffects.some((s) => s.type === "tired")) {
       net -= 2;
-      reasons.push("Tired");
+      reasons.push("Hit the Wall");
     }
     if (agent.statusEffects.some((s) => s.type === "problematic")) {
       net -= 3;
@@ -332,11 +322,12 @@ async function executeAction(
 
       case "take_credit":
         if ("target" in action) {
-          // Marked targets (from sabotage_plan) auto-succeed — the dossier
-          // is in your hand and the receipts have been pre-disputed.
+          // Documented targets (from sabotage_plan; internal key "marked")
+          // auto-succeed — the dossier is in your hand and the receipts
+          // have been pre-disputed.
           const target = await db.getAgent(action.target);
           const targetIsMarked = target?.statusEffects.some((e) => e.type === "marked") ?? false;
-          const success = targetIsMarked || Math.random() < 0.4;
+          const success = targetIsMarked || Math.random() < 0.5;
           if (success) {
             prestigeChange = 30;
             if (targetIsMarked) {
@@ -389,6 +380,57 @@ async function executeAction(
           prestigeChange = -15; // self-cost reduced from -30 (handler also locks ex-ally out for 1 tick)
         }
         break;
+
+      case "boomerang": {
+        // Eligibility (prestige < 50, not yet used) is enforced in
+        // availableActions. Reset prestige to 100, clear all status effects,
+        // mark used so the LLM filter hides it for the rest of the game.
+        const a = (await db.getAgent(agent.id))!;
+        const oldPrestige = a.prestige;
+        prestigeChange = 100 - oldPrestige;
+        await db.updateAgentPrestige(agent.id, prestigeChange);
+        await db.updateAgentStatusEffects(agent.id, []);
+        await db.setGameStateValue(`boomerang_used_${agent.id}`, "yes");
+        outcome = `Quit and came back. Prestige reset to 100 (was ${oldPrestige}); all status effects cleared.`;
+        break;
+      }
+
+      case "cry_in_stairwell": {
+        // Eligibility (prestige ≤ 30) is enforced in availableActions.
+        // Always clears Problematic + Hit the Wall; 20% chance the VP grants +20.
+        const a = (await db.getAgent(agent.id))!;
+        const cleaned = a.statusEffects.filter((e) => e.type !== "problematic" && e.type !== "tired");
+        await db.updateAgentStatusEffects(agent.id, cleaned);
+        if (Math.random() < 0.20) {
+          prestigeChange = 20;
+          await db.updateAgentPrestige(agent.id, prestigeChange);
+          outcome = "Cried in the stairwell. The VP saw, gave a sympathy nod (+20 prestige). Problematic + Hit the Wall cleared.";
+        } else {
+          outcome = "Cried in the stairwell. Problematic + Hit the Wall cleared. Nobody saw.";
+        }
+        break;
+      }
+
+      case "join_meeting_silently": {
+        // Capped at 3 uses per game (filter enforces). Each use +4 prestige.
+        // The 3rd use grants the Mysterious Influence passive — +2/cycle and
+        // a 10% chance of misattribution (handled in passive decay + reasoning).
+        prestigeChange = 4;
+        await db.updateAgentPrestige(agent.id, prestigeChange);
+        const count = parseInt((await db.getGameStateValue(`join_meeting_count_${agent.id}`)) ?? "0", 10) + 1;
+        await db.setGameStateValue(`join_meeting_count_${agent.id}`, count.toString());
+        if (count === 3) {
+          const a = (await db.getAgent(agent.id))!;
+          await db.updateAgentStatusEffects(agent.id, [
+            ...a.statusEffects.filter((e) => e.type !== "mysterious_influence"),
+            { type: "mysterious_influence", expiresAtTick: 9999, source: agent.id },
+          ]);
+          outcome = "Joined a meeting and said nothing (+4 prestige). Third such occurrence — gained MYSTERIOUS INFLUENCE.";
+        } else {
+          outcome = `Joined a meeting and said nothing (+4 prestige). ${count}/3 toward Mysterious Influence.`;
+        }
+        break;
+      }
 
       default:
         if (isPaidAction(action.type, serviceUrls)) {
@@ -461,31 +503,44 @@ async function executePaidAction(
   let outcome = "";
 
   switch (action.type) {
+    // === Coffee Cart ===
     case "buy_coffee": {
-      outcome = "Bought coffee - productivity boosted";
+      outcome = "Bought coffee. Hit the Wall lifted.";
       const a = (await db.getAgent(agent.id))!;
       await db.updateAgentStatusEffects(agent.id, a.statusEffects.filter((e) => e.type !== "tired"));
       break;
     }
 
-    case "buy_fancy_coffee": {
-      outcome = "Bought fancy coffee - feeling caffeinated";
-      const a = (await db.getAgent(agent.id))!;
-      const newEffects: StatusEffect[] = [
-        ...a.statusEffects.filter((e) => e.type !== "tired" && e.type !== "caffeinated"),
-        { type: "caffeinated", expiresAtTick: tick + 2 },
-      ];
-      await db.updateAgentStatusEffects(agent.id, newEffects);
+    case "coffee_chat":
+      if ("target" in action) {
+        prestigeChange = 3;
+        await db.updateAgentPrestige(agent.id, prestigeChange);
+        await db.updateAgentPrestige(action.target, 3);
+        outcome = `Low-stakes coffee with ${action.target}. Both +3 prestige, no alliance proposed.`;
+      }
       break;
-    }
+
+    // === HR Department ===
+    case "spread_rumor":
+      if ("target" in action) {
+        const target = await db.getAgent(action.target);
+        if (target) {
+          await db.updateAgentPrestige(action.target, -5);
+          await db.updateAgentStatusEffects(action.target, [
+            ...target.statusEffects.filter((e) => e.type !== "questionable_judgment"),
+            { type: "questionable_judgment", expiresAtTick: tick + 2, source: agent.id },
+          ]);
+          outcome = `Spread a rumor about ${action.target}. They lose 5 prestige and gain QUESTIONABLE JUDGMENT for 2 cycles.`;
+        }
+      }
+      break;
 
     case "file_complaint":
       if ("target" in action) {
-        // Buff: filer also gets +5 prestige for "managerial diligence." Without
-        // this the action only restricted the target's retaliation and gave
-        // the filer nothing — strictly worse than free take_credit.
+        // Filer also gets +5 prestige for "managerial diligence." Target
+        // gets Under Investigation for 1 cycle (can't retaliate against filer).
         prestigeChange = 5;
-        outcome = `Filed HR complaint against ${action.target}; you receive a "diligence" prestige bonus`;
+        outcome = `Filed HR complaint against ${action.target}; you receive a "diligence" prestige bonus. Target Under Investigation for 1 cycle.`;
         await db.updateAgentPrestige(agent.id, prestigeChange);
         const target = await db.getAgent(action.target);
         if (target) {
@@ -497,17 +552,32 @@ async function executePaidAction(
       }
       break;
 
+    case "anonymous_pulse_survey":
+      if ("target" in action) {
+        // Eligibility (rank ≥ 4, not yet used) is enforced in availableActions.
+        // Verify target is rank #1 at execution; otherwise the survey misses.
+        const all = await db.getAllAgents();
+        const targetIsLeader = all[0]?.id === action.target;
+        if (!targetIsLeader) {
+          outcome = `Tried to launch a survey about ${action.target}, but they're no longer the leader — the email got buried.`;
+          break;
+        }
+        await db.updateAgentPrestige(action.target, -50);
+        await db.setGameStateValue(`pulse_survey_used_${agent.id}`, "yes");
+        outcome = `Launched an 'anonymous' pulse survey somehow entirely about ${action.target}. They lose 50 prestige (the data was damning).`;
+      }
+      break;
+
     case "sensitivity_training":
       if ("target" in action) {
         const target = await db.getAgent(action.target);
         if (target) {
           // Well-allied targets (3+ alliances) absorb half the prestige hit.
-          // Coalition-builders are politically harder to torpedo.
           const wellAllied = target.allies.length >= 3;
           const hit = wellAllied ? -10 : -20;
           outcome = wellAllied
             ? `Sent ${action.target} to sensitivity training; their alliances softened the blow (${hit} prestige instead of -20)`
-            : `Sent ${action.target} to sensitivity training (${hit} prestige)`;
+            : `Sent ${action.target} to sensitivity training (${hit} prestige + Problematic for 4 cycles)`;
           await db.updateAgentPrestige(action.target, hit);
           await db.updateAgentStatusEffects(action.target, [
             ...target.statusEffects,
@@ -517,44 +587,22 @@ async function executePaidAction(
       }
       break;
 
-    case "check_hr_status": {
-      // Reveal complaints filed against the agent (under_investigation entries
-      // where source = filer).
-      const me = (await db.getAgent(agent.id))!;
-      const open = me.statusEffects.filter((e) => e.type === "under_investigation");
-      if (open.length === 0) {
-        outcome = "Checked HR — slate is clean. No complaints on file.";
-      } else {
-        const filers = open.map((e) => e.source).filter(Boolean) as string[];
-        outcome = `HR records show ${open.length} active complaint(s), filed by: ${filers.join(", ")}`;
-      }
-      break;
-    }
-
-    case "competitive_intel": {
-      const all = await db.getAllAgents();
-      const top3 = all.slice(0, 3).filter((a) => a.id !== agent.id);
-      const lines: string[] = [];
-      for (const t of top3) {
-        const last = await db.getAgentLastActionLog(t.id);
-        const shortAction = last ? `${last.action_type} (t${last.tick})` : "no recent action";
-        lines.push(`${t.name}: ${shortAction}`);
-      }
-      // New: also spread rumors that nick the leader. Pure-info actions were
-      // never picked in the first run; an immediate -3 to the top non-self
-      // rival makes this a real competitive move.
-      const topRival = top3[0];
-      if (topRival) {
-        await db.updateAgentPrestige(topRival.id, -3);
-      }
-      outcome = `Competitive intel — top 3 last moves: ${lines.join("; ")}.${topRival ? ` Rumor-spreading nicked ${topRival.name} for -3 prestige.` : ""}`;
+    // === The Consultant ===
+    case "strategy_report": {
+      // Retreat mode dropped the New Initiative pivot, so the post-pivot
+      // halving never applies. Flat +35 prestige + Has Deliverable.
+      prestigeChange = 35;
+      outcome = `Received consultant report: "${result.data?.deliverable?.title || "Strategic Document"}". Has Deliverable.`;
+      await db.updateAgentPrestige(agent.id, prestigeChange);
+      const a = (await db.getAgent(agent.id))!;
+      await db.updateAgentStatusEffects(agent.id, [...a.statusEffects, { type: "has_deliverable", expiresAtTick: 999 }]);
       break;
     }
 
     case "sabotage_plan":
       if ("target" in action) {
-        // Stronger prestige hit + 2-tick "marked" debuff. Well-allied targets
-        // halve the prestige damage.
+        // Stronger prestige hit + 2-tick Documented debuff. Well-allied
+        // targets halve the prestige damage.
         const recent = await db.getRecentActionLogsForAgent(action.target, 3);
         const summary = recent.length > 0
           ? recent.map((r) => `t${r.tick}:${r.action_type}`).join(", ")
@@ -570,44 +618,44 @@ async function executePaidAction(
           ]);
         }
         outcome = wellAllied
-          ? `Sabotage dossier on ${action.target}: ${hit} prestige (alliance bloc absorbed half the hit) + marked for 2 cycles. Recent moves: ${summary}`
-          : `Sabotage dossier on ${action.target}: ${hit} prestige + marked for 2 cycles (next take_credit against them auto-succeeds). Recent moves: ${summary}`;
+          ? `Sabotage dossier on ${action.target}: ${hit} prestige (alliance bloc absorbed half the hit) + Documented for 2 cycles. Recent moves: ${summary}`
+          : `Sabotage dossier on ${action.target}: ${hit} prestige + Documented for 2 cycles (next take_credit against them auto-succeeds). Recent moves: ${summary}`;
       }
       break;
 
-    case "recover_emails":
-      if ("target" in action) {
-        const recent = await db.getRecentActionLogsForAgent(action.target, 3);
-        const summary = recent.length > 0
-          ? recent.map((r) => `t${r.tick}:${r.action_type}`).join(", ")
-          : "no recent activity";
-        // Buff: 30% chance to expose & nuke the target's pending alliance.
-        // Adds an actionable wrinkle on top of the info reveal.
-        const target = await db.getAgent(action.target);
-        let expose = "";
-        if (target && target.pendingAlliance && Math.random() < 0.3) {
-          await db.updateAgentPendingAlliance(action.target, null);
-          expose = ` Bonus find: forwarded a draft alliance with ${target.pendingAlliance} that quietly evaporated.`;
-        }
-        outcome = `Recovered ${action.target}'s recent inbox traces: ${summary}.${expose}`;
-      }
-      break;
-
-    case "calendar_conflict":
+    // === Executive Assistant ===
+    case "move_meeting_early":
       if ("target" in action) {
         const target = await db.getAgent(action.target);
         if (target) {
-          // Buff: always apply meeting_blocked (1 tick) on top of clearing
-          // has_deliverable + pending_alliance. Without this, calendar_conflict
-          // did literally nothing if the target had neither — and most agents
-          // don't.
-          const cleaned = target.statusEffects.filter((e) => e.type !== "has_deliverable");
+          await db.updateAgentPrestige(action.target, -5);
           await db.updateAgentStatusEffects(action.target, [
-            ...cleaned,
-            { type: "meeting_blocked", expiresAtTick: tick + 1, source: agent.id },
+            ...target.statusEffects.filter((e) => e.type !== "tired"),
+            { type: "tired", expiresAtTick: tick + 3, source: agent.id },
           ]);
-          await db.updateAgentPendingAlliance(action.target, null);
-          outcome = `Triple-booked ${action.target}'s calendar. Deliverable prep + pending alliance gone, and they're meeting-blocked for 1 cycle.`;
+          outcome = `Moved ${action.target}'s meeting to 7:30am. They lose 5 prestige and become Hit the Wall (-2/cycle for 3 cycles). The room is freezing.`;
+        }
+      }
+      break;
+
+    case "schedule_pre_meeting":
+      if ("target" in action) {
+        const target = await db.getAgent(action.target);
+        if (target) {
+          // Loyal managers (loyalty > 70) shrug off the meeting bloat —
+          // they think this is normal corporate behavior.
+          const persona = getPersona(target.personaId);
+          const loyalty = persona?.traits.loyalty ?? 0;
+          if (loyalty > 70) {
+            outcome = `Booked a pre-meeting on ${action.target}'s calendar. They thought it was normal — no effect (their loyalty trait absorbs the slight).`;
+          } else {
+            await db.updateAgentPrestige(action.target, -15);
+            await db.updateAgentStatusEffects(action.target, [
+              ...target.statusEffects.filter((e) => e.type !== "meeting_blocked"),
+              { type: "meeting_blocked", expiresAtTick: tick + 2, source: agent.id },
+            ]);
+            outcome = `Booked a pre-meeting (and pre-pre-meeting) for ${action.target}. They lose 15 prestige and gain Meeting Blocked for 2 cycles.`;
+          }
         }
       }
       break;
@@ -623,9 +671,6 @@ async function executePaidAction(
         .filter((a) => a.allies.length > 0)
         .map((a) => `${a.id}↔${a.allies.join(",")}`)
         .join(" | ");
-      // Buff: tangible reward — +5 prestige for "positioning yourself well
-      // with insider info." Otherwise this $25 action returned data the LLM
-      // already had access to.
       prestigeChange = 5;
       await db.updateAgentPrestige(agent.id, prestigeChange);
       outcome = `Insider info — wealth ranking top 3: ${top}. Active alliances: ${allies || "none"}. Positional advantage: +5 prestige.`;
@@ -641,49 +686,36 @@ async function executePaidAction(
             ...cleaned,
             { type: "meeting_blocked", expiresAtTick: tick + 2, source: agent.id },
           ]);
-          outcome = `Cancelled ${action.target}'s CEO meeting. They're meeting-blocked for 2 cycles.`;
+          outcome = `Cancelled ${action.target}'s CEO meeting. They're meeting-blocked for 2 cycles and any prepared deliverable is lost.`;
         }
       }
       break;
 
-    case "poison_meeting":
+    case "hostile_takeover":
       if ("target" in action) {
-        const target = await db.getAgent(action.target);
-        const wellAllied = target ? target.allies.length >= 3 : false;
-        const hit = wellAllied ? -5 : -10;
-        await db.updateAgentPrestige(action.target, hit);
-        outcome = wellAllied
-          ? `Sabotaged ${action.target}'s catering — but their allies covered the optics. ${hit} prestige instead of -10.`
-          : `Sabotaged ${action.target}'s catering. They lose ${hit} prestige in the post-meeting fallout.`;
-      }
-      break;
-
-    case "fix_laptop":
-      if ("target" in action) {
-        outcome = `Sabotaged ${action.target}'s laptop`;
         const target = await db.getAgent(action.target);
         if (target) {
-          await db.updateAgentStatusEffects(action.target, [
-            ...target.statusEffects,
-            { type: "technical_difficulties", expiresAtTick: tick + 1, source: agent.id },
-          ]);
+          // Transfer target's allies to the attacker; clear target's allies.
+          // For each transferred ally, update their allies array: drop the
+          // old partner, add the new one (deduplicated).
+          const me = (await db.getAgent(agent.id))!;
+          const stolenAllies = target.allies.filter((id) => id !== agent.id);
+          const newMyAllies = Array.from(new Set([...me.allies, ...stolenAllies]));
+          for (const allyId of stolenAllies) {
+            const ally = await db.getAgent(allyId);
+            if (!ally) continue;
+            const updated = ally.allies.filter((id) => id !== action.target);
+            if (!updated.includes(agent.id) && allyId !== agent.id) updated.push(agent.id);
+            await db.updateAgentAllies(allyId, updated);
+          }
+          await db.updateAgentAllies(agent.id, newMyAllies);
+          await db.updateAgentAllies(action.target, []);
+          outcome = stolenAllies.length > 0
+            ? `Mounted a hostile takeover. Transferred ${stolenAllies.length} of ${action.target}'s cross-functional partnerships to your column. ${action.target}'s partner list is now zero.`
+            : `Mounted a hostile takeover, but ${action.target} had no partners to transfer. The kickoff invites went out to nobody.`;
         }
       }
       break;
-
-    case "strategy_report": {
-      // The New Initiative midgame event halves future strategy report rewards.
-      // Bumped from 25→35 (and 12→18 post-NI) so the LLM picks it more often
-      // — in the previous run nobody ever held has_deliverable when New
-      // Initiative fired, which made the midgame pivot toothless.
-      const newInit = (await db.getGameStateValue("new_initiative_active")) === "true";
-      prestigeChange = newInit ? 18 : 35;
-      outcome = `Received consultant report${newInit ? " (post-pivot, prestige halved)" : ""}: "${result.data?.deliverable?.title || "Strategic Document"}"`;
-      await db.updateAgentPrestige(agent.id, prestigeChange);
-      const a = (await db.getAgent(agent.id))!;
-      await db.updateAgentStatusEffects(agent.id, [...a.statusEffects, { type: "has_deliverable", expiresAtTick: 999 }]);
-      break;
-    }
 
     case "book_ceo_time": {
       const a = (await db.getAgent(agent.id))!;
@@ -691,111 +723,35 @@ async function executePaidAction(
       const blocked = a.statusEffects.some((e) => e.type === "meeting_blocked");
       if (blocked) {
         prestigeChange = -10;
-        outcome = "CEO meeting blocked — prior schedule conflict couldn't be resolved";
+        outcome = "CEO meeting blocked — prior schedule conflict couldn't be resolved (-10 prestige)";
       } else if (hasDeliverable) {
         prestigeChange = 40;
-        outcome = "CEO meeting successful - impressed with deliverable";
+        outcome = "CEO meeting successful — impressed with deliverable (+40 prestige)";
         await db.updateAgentStatusEffects(agent.id, a.statusEffects.filter((e) => e.type !== "has_deliverable"));
       } else {
         prestigeChange = -20;
-        outcome = "CEO meeting awkward - had nothing to present";
+        outcome = "CEO meeting awkward — had nothing to present (-20 prestige)";
       }
       await db.updateAgentPrestige(agent.id, prestigeChange);
       break;
     }
 
-    case "team_lunch":
+    // === The Caterer ===
+    case "office_party": {
+      // Host gets +15. Every other manager gets +5. Generous play that
+      // visibly helps your rivals — comedy of cost-benefit on the dashboard.
       prestigeChange = 15;
-      outcome = "Hosted team lunch - everyone appreciated the free food";
       await db.updateAgentPrestige(agent.id, prestigeChange);
-      break;
-
-    case "birthday_cake": {
-      prestigeChange = 5;
-      outcome = "Brought birthday cake - removed Problematic status";
-      await db.updateAgentPrestige(agent.id, prestigeChange);
-      const a = (await db.getAgent(agent.id))!;
-      await db.updateAgentStatusEffects(agent.id, a.statusEffects.filter((e) => e.type !== "problematic"));
+      const all = await db.getAllAgents();
+      let rippled = 0;
+      for (const other of all) {
+        if (other.id === agent.id) continue;
+        await db.updateAgentPrestige(other.id, 5);
+        rippled++;
+      }
+      outcome = `Threw an office party. +15 prestige to you; +5 to each of the ${rippled} other managers. Generosity!`;
       break;
     }
-
-    case "book_motivation": {
-      prestigeChange = 20;
-      outcome = "Attended motivation session - feeling inspired";
-      await db.updateAgentPrestige(agent.id, prestigeChange);
-      const a = (await db.getAgent(agent.id))!;
-      await db.updateAgentStatusEffects(agent.id, [...a.statusEffects, { type: "inspired", expiresAtTick: tick + 2 }]);
-      break;
-    }
-
-    case "send_motivation":
-      if ("target" in action) {
-        outcome = `Sent ${action.target} to mandatory motivation`;
-        const target = await db.getAgent(action.target);
-        if (target) {
-          await db.updateAgentStatusEffects(action.target, [
-            ...target.statusEffects,
-            { type: "mandatory_motivation", expiresAtTick: tick + 2, source: agent.id },
-          ]);
-        }
-      }
-      break;
-
-    case "whistleblower_bounty":
-      if ("target" in action) {
-        const recent = await db.getRecentActionLogsForAgent(action.target, 6);
-        const cutoff = tick - 3;
-        const recentHostile = recent.filter(
-          (r) => r.tick >= cutoff && HOSTILE_ACTIONS.has(r.action_type)
-        );
-        if (recentHostile.length > 0) {
-          // Valid report. HR pays $25 bounty + 30 prestige.
-          prestigeChange = 30;
-          await db.updateAgentPrestige(agent.id, prestigeChange);
-          let payHash: string | undefined;
-          try {
-            payHash = await stellar.sendAsset(rewards.hrDeptSecret, agent.publicKey, 25);
-          } catch (err) {
-            console.error(`[whistleblower] HR payout to ${agent.name} failed:`, err);
-          }
-          outcome = `Whistleblower bounty paid — ${action.target} flagged for ${recentHostile.length} hostile action(s) in the last 3 cycles. HR sent $25.`;
-          if (payHash) outcome += ` (tx: ${payHash.slice(0, 8)}…)`;
-        } else {
-          // Bad-faith report. Small prestige hit (was -10; lowered to -3 so
-          // the bounty is worth attempting more often). Target still gets +5
-          // wrongful-report bonus for the inconvenience.
-          prestigeChange = -3;
-          await db.updateAgentPrestige(agent.id, prestigeChange);
-          await db.updateAgentPrestige(action.target, 5);
-          outcome = `Whistleblower report against ${action.target} unsubstantiated — HR found nothing. You: -3 prestige. ${action.target}: +5 prestige (wrongful-report bonus).`;
-        }
-      }
-      break;
-
-    case "mentorship":
-      if ("target" in action) {
-        prestigeChange = 5;
-        await db.updateAgentPrestige(agent.id, prestigeChange);
-        await db.updateAgentPrestige(action.target, 10);
-        let payHash: string | undefined;
-        try {
-          payHash = await stellar.sendAsset(rewards.motivSpeakerSecret, agent.publicKey, 30);
-        } catch (err) {
-          console.error(`[mentorship] Speaker payout to ${agent.name} failed:`, err);
-        }
-        outcome = `Mentored ${action.target} (+10 prestige to them, +5 to me). Pay-It-Forward stipend: $30.`;
-        if (payHash) outcome += ` (tx: ${payHash.slice(0, 8)}…)`;
-      }
-      break;
-
-    case "coffee_chat":
-      if ("target" in action) {
-        prestigeChange = 3;
-        await db.updateAgentPrestige(agent.id, prestigeChange);
-        await db.updateAgentPrestige(action.target, 3);
-        outcome = `Low-stakes coffee with ${action.target}. Both +3 prestige, no alliance proposed.`;
-      }
-      break;
 
     default:
       outcome = `Completed ${action.type}`;

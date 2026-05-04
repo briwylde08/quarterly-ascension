@@ -13,8 +13,8 @@
     "HORIZON_URL": "https://horizon-testnet.stellar.org",
     "OPENAI_BASE_URL": "https://gateway.ai.cloudflare.com/v1/761663b4f4fb18d989e23e5dd4a7e165/quarterly-ascension/compat",
     "NPC_BASE_URL": "https://__npc__.briana-761.workers.dev",
-    "TICK_INTERVAL_MS": "300000",
-    "MAX_TICKS": "48",
+    "TICK_INTERVAL_MS": "25000",
+    "MAX_TICKS": "80",
 
     // Phase 5: NPC reward source addresses (public keys are non-sensitive; the
     // matching SECRETs are pushed via `wrangler secret put`).

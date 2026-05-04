@@ -13,8 +13,12 @@ export interface Agent {
   statusEffects: StatusEffect[];
   allies: string[];       // Agent IDs
   pendingAlliance: string | null;  // Agent ID who proposed
-  claimedBy: string | null;  // Player email
-  claimedByName: string | null;  // Player name
+  /** Legacy email column from the long-form claim flow. Always NULL in
+   *  retreat mode — auth is password-based; the password hash lives in
+   *  game_state under password_<agentId>. Kept on the Agent type so the
+   *  DB row mapper stays simple. */
+  claimedBy: string | null;
+  claimedByName: string | null;  // Player name (set at /api/claim)
 }
 
 export interface StatusEffect {
@@ -24,6 +28,10 @@ export interface StatusEffect {
 }
 
 export type StatusEffectType =
+  // Retreat-mode keys (internal stable strings; user-facing labels are
+  // applied in the LLM/dashboard formatters):
+  //   "tired" displays as "Hit the Wall"
+  //   "marked" displays as "Documented"
   | "tired"
   | "caffeinated"
   | "inspired"
@@ -35,7 +43,12 @@ export type StatusEffectType =
   | "mandatory_motivation"
   | "meeting_blocked"
   /** Sabotage_plan paints a target — take_credit against them auto-succeeds. */
-  | "marked";
+  | "marked"
+  /** Acquired after 3× join_meeting_silently. +2 prestige/cycle passive +
+   *  10% chance another agent's reasoning credits the holder for their own action. */
+  | "mysterious_influence"
+  /** Spread_rumor leaves the target with a public credibility tag. */
+  | "questionable_judgment";
 
 export interface ActionResult {
   success: boolean;
@@ -78,7 +91,17 @@ export type Action =
   | { type: "mentorship"; target: string }
   | { type: "coffee_chat"; target: string }
   | { type: "hail_mary_idea" }
-  | { type: "expense_report" };
+  | { type: "expense_report" }
+  // === Retreat-mode additions (handlers in tick.ts land in #87) ===
+  | { type: "spread_rumor"; target: string }
+  | { type: "move_meeting_early"; target: string }
+  | { type: "schedule_pre_meeting"; target: string }
+  | { type: "office_party" }
+  | { type: "anonymous_pulse_survey"; target: string }
+  | { type: "hostile_takeover"; target: string }
+  | { type: "boomerang" }
+  | { type: "cry_in_stairwell" }
+  | { type: "join_meeting_silently" };
 
 export interface GameEvent {
   id: string;
@@ -160,43 +183,3 @@ export interface NpcEndpoint {
   effect: string;
 }
 
-// Email report types
-export interface HourlyReport {
-  agentId: string;
-  agentName: string;
-  playerEmail: string;
-  playerName: string;
-  tickRange: [number, number];
-  prestige: number;
-  prestigeRank: number;
-  budget: number;
-  actions: ActionSummary[];
-  rivals: string[];
-  allies: string[];
-  statusEffects: string[];
-  notableQuotes: string[];
-  complaints: ComplaintSummary[];
-  transactions: TransactionSummary[];
-}
-
-export interface ActionSummary {
-  tick: number;
-  action: string;
-  cost: number;
-  outcome: string;
-  quote: string;
-}
-
-export interface ComplaintSummary {
-  type: "filed" | "received";
-  counterparty: string;
-  tick: number;
-}
-
-export interface TransactionSummary {
-  tick: number;
-  service: string;
-  amount: number;
-  txHash: string;
-  explorerUrl: string;
-}

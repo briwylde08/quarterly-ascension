@@ -227,11 +227,6 @@
 
     const params = new URLSearchParams(location.search);
     const agentId = params.get('id');
-    // The email query param (set by the progress-email coaching link) lets
-    // the API surface the directive + ownership flag for THIS visitor.
-    // Must be declared BEFORE the call to load() — otherwise the call hits
-    // a temporal dead zone when load()'s body reads coachEmail.
-    const coachEmail = params.get('email')?.trim().toLowerCase() || '';
 
     if (!agentId) {
       document.getElementById('profile-body').innerHTML =
@@ -241,9 +236,7 @@
     }
 
     async function load() {
-      const url = coachEmail
-        ? `${ORCHESTRATOR_BASE}/api/agent/${encodeURIComponent(agentId)}?email=${encodeURIComponent(coachEmail)}`
-        : `${ORCHESTRATOR_BASE}/api/agent/${encodeURIComponent(agentId)}`;
+      const url = `${ORCHESTRATOR_BASE}/api/agent/${encodeURIComponent(agentId)}`;
       const res = await fetch(url);
       if (res.status === 404) {
         document.getElementById('profile-body').innerHTML =
@@ -260,10 +253,6 @@
       renderActivity(a.recentActions || []);
       renderClaim(a);
       renderCoach(a);
-      // If we landed via the email link, jump to the coach section.
-      if (location.hash === '#coach') {
-        document.getElementById('coach-area')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-      }
     }
 
     function renderProfile(a) {
@@ -359,27 +348,23 @@
     function renderClaim(a) {
       const area = document.getElementById('claim-area');
       if (a.claimed) {
-        // Release UI is gated by ownership: only render the form if the
-        // server has confirmed (via ?email=) that this visitor is the
-        // claimer. Otherwise show a generic "already adopted" card with
-        // no actionable controls — anyone with knowledge of someone
-        // else's email shouldn't be able to release on their behalf.
+        // In retreat mode anyone with the right password can release. Show
+        // the release affordance whenever the game isn't actively running.
         const gameInProgress = a.gameStatus === 'running';
-        const isOwner = a.directiveOwner === true;
         let releaseSection = '';
-        if (isOwner && gameInProgress) {
+        if (gameInProgress) {
           releaseSection = `<div style="margin-top:14px;padding-top:14px;border-top:1px solid #f1c40f;font-size:12px;color:var(--text-muted);">
-              🔒 <b>Locked during active cycle.</b> You can release this manager once the game halts or ends.
+              🔒 <b>Locked during active cycle.</b> Release reopens once the game halts or ends.
             </div>`;
-        } else if (isOwner) {
+        } else {
           releaseSection = `<div style="margin-top:14px;padding-top:14px;border-top:1px solid #f1c40f;">
               <details>
                 <summary style="cursor:pointer;color:var(--warning);font-size:12px;font-weight:600;letter-spacing:0.4px;text-transform:uppercase;">Release this manager →</summary>
                 <p style="font-size:12px;color:var(--text-muted);margin-top:10px;line-height:1.5;">
-                  Confirm by entering the email you used to adopt them. The slot reopens for someone else.
+                  Enter the password you set at claim time. The slot reopens for someone else.
                 </p>
                 <form id="release-form" style="margin-top:8px;">
-                  <input id="release-email" type="email" required placeholder="email@used.to.adopt"
+                  <input id="release-pw" type="password" required minlength="4" maxlength="128" placeholder="password"
                          style="width:100%;padding:8px 10px;border:1px solid var(--border-2);border-radius:2px;font-size:13px;font-family:inherit;">
                   <button id="release-submit" type="submit"
                           style="width:100%;margin-top:10px;background:var(--danger);color:#fff;padding:9px;border:0;font-family:inherit;font-size:12px;font-weight:600;letter-spacing:0.6px;text-transform:uppercase;cursor:pointer;">
@@ -396,10 +381,10 @@
             <a href="/intro.html" style="color:var(--warning);">Pick another manager →</a>
             ${releaseSection}
           </div>`;
-        if (isOwner && !gameInProgress) {
+        if (!gameInProgress) {
           document.getElementById('release-form').addEventListener('submit', async (e) => {
             e.preventDefault();
-            const email = document.getElementById('release-email').value.trim();
+            const password = document.getElementById('release-pw').value;
             const btn = document.getElementById('release-submit');
             const msg = document.getElementById('release-msg');
             msg.style.color = 'var(--text-muted)';
@@ -409,7 +394,7 @@
               const r = await fetch(`${ORCHESTRATOR_BASE}/api/release`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ agentId: a.id, email }),
+                body: JSON.stringify({ agentId: a.id, password }),
               });
               const data = await r.json();
               if (r.ok) {
@@ -434,13 +419,15 @@
         <div class="claim-box">
           <h3>Adopt ${escape(a.name.split(' ')[0])}</h3>
           <p style="font-size:12px;color:var(--text-muted);">
-            Get four performance summary emails over the course of the quarter (cycles 12, 24, 36, and a final outcome). One claim per manager.
+            Pick a password — you'll re-enter it each time you submit a directive during the show. Don't lose it; there's no recovery.
           </p>
           <form id="claim-form">
             <label>Your name</label>
             <input id="claim-name" type="text" required maxlength="80" placeholder="Briana Stahl">
-            <label>Email</label>
-            <input id="claim-email" type="email" required placeholder="you@example.com">
+            <label>Password</label>
+            <input id="claim-pw" type="password" required minlength="4" maxlength="128" placeholder="anything 4+ characters">
+            <label>Confirm password</label>
+            <input id="claim-pw2" type="password" required minlength="4" maxlength="128" placeholder="repeat">
             <button class="claim-btn" type="submit" id="claim-submit">Claim ${escape(a.name)}</button>
             <div id="claim-msg"></div>
           </form>
@@ -449,24 +436,31 @@
       document.getElementById('claim-form').addEventListener('submit', async (e) => {
         e.preventDefault();
         const name = document.getElementById('claim-name').value.trim();
-        const email = document.getElementById('claim-email').value.trim();
+        const password = document.getElementById('claim-pw').value;
+        const password2 = document.getElementById('claim-pw2').value;
         const btn = document.getElementById('claim-submit');
         const msg = document.getElementById('claim-msg');
         msg.className = '';
         msg.innerHTML = '';
+        if (password !== password2) {
+          msg.className = 'claim-msg error';
+          msg.textContent = 'Passwords do not match.';
+          return;
+        }
         btn.disabled = true;
         btn.textContent = 'Submitting…';
         try {
           const r = await fetch(`${ORCHESTRATOR_BASE}/api/claim`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ agentId: a.id, name, email }),
+            body: JSON.stringify({ agentId: a.id, name, password }),
           });
           const data = await r.json();
           if (r.ok) {
             msg.className = 'claim-msg success';
-            msg.innerHTML = `Claim confirmed. Check <b>${escape(email)}</b> for a welcome email — and watch <a href="/">the live dashboard</a>.`;
+            msg.innerHTML = `Claim confirmed. Watch <a href="/">the live dashboard</a> — directives go live as soon as you submit them.`;
             btn.textContent = 'Claimed';
+            setTimeout(() => location.reload(), 1200);
           } else {
             msg.className = 'claim-msg error';
             msg.textContent = data.error || `Claim failed (${r.status})`;
@@ -483,35 +477,25 @@
     }
 
     // ============================================================
-    // Coaching: stakeholder directive editor.
-    // Visible only when:
-    //   - the agent is claimed by someone
-    //   - the visitor's ?email= matches the claim record (verified server-side
-    //     via /api/agent/:id?email=)
-    // Each owner gets one directive credit per quarter (Q2/Q3/Q4) — spendable
-    // any time within that quarter, but only once.
+    // Retreat-mode coaching: always-open. Anyone with the right password
+    // can set or clear the directive at any tick during a running/halted
+    // game. Directive persists until overwritten or DELETE'd. The current
+    // directive is shown publicly (audience reads it on the directive
+    // screen); the password is re-entered with every submission.
     // ============================================================
     function renderCoach(a) {
       const area = document.getElementById('coach-area');
       if (!a.claimed) { area.innerHTML = ''; return; }
 
-      // No email param at all → don't show the section. The coaching link
-      // in the email always carries it.
-      if (!a.directiveOwner) { area.innerHTML = ''; return; }
-
-      const w = a.coachingWindow || { open: false, currentTick: 0, currentQuarter: null, quarterCloseTick: null, creditUsed: false, nextWindowTick: null };
+      const w = a.coachingWindow || { open: false };
       const dirText = a.directive || '';
       const stateText = w.open
-        ? `Coaching credit available for Q${w.currentQuarter} (cycles ${w.currentTick}–${w.quarterCloseTick - 1}). One directive per quarter — set it whenever.`
+        ? `Coaching is open. Submit a directive any time — it persists until you overwrite it.`
         : a.gameStatus === 'ended'
-          ? `Game has ended. Directives are cleared at end-of-game.`
+          ? `Game ended. Directives cleared at end-of-game.`
           : a.gameStatus === 'setup'
-            ? `Game hasn't started. Q2 coaching unlocks at cycle 12 (when the first progress email lands).`
-            : w.creditUsed && w.currentQuarter
-              ? `Coaching credit for Q${w.currentQuarter} already spent. Next credit opens at cycle ${w.quarterCloseTick}.`
-              : w.nextWindowTick
-                ? `No coaching credit yet. Q2 opens at cycle ${w.nextWindowTick}.`
-                : `No more coaching credits this game.`;
+            ? `Game hasn't started. Coaching opens when the first cycle does.`
+            : `Coaching unavailable (game ${a.gameStatus}).`;
       const stateClass = w.open ? 'open' : 'locked';
 
       area.innerHTML = `
@@ -520,35 +504,48 @@
           <div class="coach-state ${stateClass}">${escape(stateText)}</div>
           ${dirText ? `<div class="current-directive">"${escape(dirText)}"</div>` : ''}
           ${w.open ? `
-            <textarea id="coach-input" maxlength="250" placeholder="e.g. Stop attacking everyone. Build alliances and bring birthday cake."></textarea>
-            <div class="coach-counter"><span id="coach-len">0</span>/250</div>
+            <textarea id="coach-input" maxlength="280" placeholder="e.g. Go after Marcus. Hostile takeover his partnerships if you can."></textarea>
+            <div class="coach-counter"><span id="coach-len">0</span>/280</div>
+            <label style="display:block;font-size:12px;color:var(--text-muted);margin-top:10px;margin-bottom:4px;text-transform:uppercase;letter-spacing:0.6px;">Password</label>
+            <input id="coach-pw" type="password" minlength="4" maxlength="128" placeholder="password set at claim time"
+                   style="width:100%;padding:10px 12px;border:1px solid var(--border-2);border-radius:2px;font-size:14px;font-family:inherit;">
             <div class="coach-buttons">
               <button class="coach-save" id="coach-save" type="button">Save Directive</button>
               ${dirText ? `<button class="coach-clear" id="coach-clear" type="button">Clear</button>` : ''}
             </div>
             <div class="coach-msg" id="coach-msg"></div>
           ` : `
-            ${!dirText ? '<div class="coach-state">No directive set this game.</div>' : ''}
+            ${!dirText ? '<div class="coach-state">No directive set.</div>' : ''}
           `}
         </div>`;
 
       if (w.open) {
         const input = document.getElementById('coach-input');
         const counter = document.getElementById('coach-len');
-        if (dirText) input.value = dirText;
+        // NOTE: don't pre-fill the textarea with the existing directive —
+        // submissions always replace, so a blank textarea is the safer default.
         counter.textContent = String(input.value.length);
         input.addEventListener('input', () => { counter.textContent = String(input.value.length); });
 
         const msg = document.getElementById('coach-msg');
         document.getElementById('coach-save').addEventListener('click', async () => {
           const directive = input.value.trim();
+          const password = document.getElementById('coach-pw').value;
           if (!directive) { msg.style.color = 'var(--danger)'; msg.textContent = 'Directive is empty.'; return; }
-          await sendCoach({ method: 'POST', body: { agentId: a.id, email: coachEmail, directive } });
+          if (!password) { msg.style.color = 'var(--danger)'; msg.textContent = 'Password required.'; return; }
+          await sendCoach({ method: 'POST', body: { agentId: a.id, password, directive } });
         });
         const clearBtn = document.getElementById('coach-clear');
         clearBtn?.addEventListener('click', async () => {
-          if (!confirm('Clear the current directive? Your manager goes back to base personality.')) return;
-          await sendCoach({ method: 'DELETE', body: { agentId: a.id, email: coachEmail } });
+          const password = document.getElementById('coach-pw').value;
+          if (!password) {
+            const m = document.getElementById('coach-msg');
+            m.style.color = 'var(--danger)';
+            m.textContent = 'Enter your password to clear the directive.';
+            return;
+          }
+          if (!confirm('Clear the current directive? Your manager reverts to base personality + default behavior.')) return;
+          await sendCoach({ method: 'DELETE', body: { agentId: a.id, password } });
         });
       }
     }

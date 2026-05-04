@@ -1,0 +1,266 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>MegaCorp · Live Coach Directives</title>
+  <link rel="icon" type="image/svg+xml" href="/favicon.svg">
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    :root {
+      --navy: #1c3a64;
+      --navy-2: #2c5896;
+      --bg: #0e1a2b;
+      --card: #ffffff;
+      --card-empty: #1f2d44;
+      --border: #2c5896;
+      --text: #1c3a64;
+      --text-muted: #7a8b99;
+      --gold: #f1c40f;
+    }
+
+    html, body {
+      font-family: Calibri, "Segoe UI", Arial, sans-serif;
+      color: var(--text);
+      background: var(--bg);
+      min-height: 100vh;
+    }
+
+    /* Projector-friendly header */
+    .header {
+      background: var(--navy);
+      color: #fff;
+      padding: 18px 32px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      border-bottom: 4px solid var(--gold);
+    }
+    .header .title {
+      font-size: 28px;
+      font-weight: 700;
+      letter-spacing: 1px;
+      text-transform: uppercase;
+    }
+    .header .meta {
+      font-size: 16px;
+      color: #aab9c9;
+      font-family: Consolas, "SF Mono", Menlo, monospace;
+    }
+    .header .meta b { color: var(--gold); }
+
+    /* Grid: 5 wide × 2 tall = 10 cards */
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(5, 1fr);
+      gap: 12px;
+      padding: 16px 24px;
+      height: calc(100vh - 80px);
+    }
+
+    .card {
+      background: var(--card);
+      border-radius: 4px;
+      padding: 16px 18px;
+      display: flex;
+      flex-direction: column;
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+      overflow: hidden;
+      position: relative;
+    }
+    .card.empty {
+      background: var(--card-empty);
+      color: #aab9c9;
+    }
+
+    .card-head {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      margin-bottom: 12px;
+      padding-bottom: 12px;
+      border-bottom: 2px solid #e6ebf1;
+    }
+    .card.empty .card-head { border-bottom-color: #2c3e50; }
+
+    .portrait {
+      width: 56px;
+      height: 56px;
+      border-radius: 4px;
+      background: #e6ebf1;
+      flex-shrink: 0;
+      overflow: hidden;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 22px;
+      font-weight: 700;
+      color: var(--navy);
+    }
+    .card.empty .portrait { background: #2c3e50; color: #aab9c9; }
+    .portrait img { width: 100%; height: 100%; object-fit: cover; display: block; }
+
+    .ident {
+      flex: 1;
+      min-width: 0;
+    }
+    .agent-name {
+      font-size: 18px;
+      font-weight: 700;
+      color: var(--navy);
+      letter-spacing: 0.3px;
+    }
+    .card.empty .agent-name { color: #d6dde4; }
+    .coach-line {
+      font-size: 13px;
+      color: var(--text-muted);
+      margin-top: 2px;
+      font-family: Consolas, "SF Mono", Menlo, monospace;
+    }
+    .card.empty .coach-line { color: #7a8b99; }
+
+    .directive {
+      flex: 1;
+      font-size: 22px;
+      line-height: 1.4;
+      color: var(--text);
+      font-style: italic;
+      letter-spacing: 0.2px;
+      overflow-wrap: break-word;
+      hyphens: auto;
+    }
+    .directive::before { content: "“"; color: var(--gold); font-size: 32px; vertical-align: -6px; margin-right: 2px; }
+    .directive::after { content: "”"; color: var(--gold); font-size: 32px; vertical-align: -6px; margin-left: 2px; }
+
+    .no-directive {
+      flex: 1;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 16px;
+      color: #7a8b99;
+      letter-spacing: 0.5px;
+      text-transform: uppercase;
+      font-family: Consolas, "SF Mono", Menlo, monospace;
+    }
+
+    .unclaimed {
+      flex: 1;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 14px;
+      color: #d68910;
+      letter-spacing: 0.5px;
+      text-transform: uppercase;
+      font-family: Consolas, "SF Mono", Menlo, monospace;
+    }
+
+    /* Empty state on first load */
+    .loading {
+      grid-column: 1 / -1;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: #7a8b99;
+      font-size: 18px;
+      letter-spacing: 0.5px;
+    }
+
+    /* Responsive — projector or laptop */
+    @media (max-width: 1400px) {
+      .grid { grid-template-columns: repeat(4, 1fr); }
+      .directive { font-size: 19px; }
+    }
+    @media (max-width: 1100px) {
+      .grid { grid-template-columns: repeat(3, 1fr); }
+    }
+    @media (max-width: 800px) {
+      .grid { grid-template-columns: repeat(2, 1fr); height: auto; }
+    }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <div class="title">⏱ Live Coach Directives</div>
+    <div class="meta">
+      Cycle <b id="hdr-cycle">—</b> / 8
+      <span style="margin-left:18px;">refreshes every 5s</span>
+    </div>
+  </div>
+  <div class="grid" id="grid">
+    <div class="loading">Loading directives…</div>
+  </div>
+
+  <script>
+    const ORCHESTRATOR_BASE = window.ORCHESTRATOR_BASE
+      || 'https://orchestrator.briana-761.workers.dev';
+
+    function escape(s) {
+      return String(s ?? '')
+        .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+    }
+
+    function initials(name) {
+      return String(name || '')
+        .split(/\s+/)
+        .filter(Boolean)
+        .slice(0, 2)
+        .map((s) => s[0].toUpperCase())
+        .join('');
+    }
+
+    async function refresh() {
+      try {
+        const r = await fetch(ORCHESTRATOR_BASE + '/api/agents');
+        if (!r.ok) return;
+        const data = await r.json();
+        const tick = data.tick ?? 0;
+        const cycle = Math.max(1, Math.ceil(tick / 10) || 1);
+        document.getElementById('hdr-cycle').textContent = String(cycle);
+        render(data.agents || []);
+      } catch (err) {
+        console.error('[directives] refresh failed:', err);
+      }
+    }
+
+    function render(agents) {
+      const grid = document.getElementById('grid');
+      // Sort alphabetically by name for stable layout — not by rank, since
+      // rank churns and we want each card position to mean the same person.
+      const sorted = [...agents].sort((a, b) => a.name.localeCompare(b.name));
+      grid.innerHTML = sorted.map((a) => {
+        const portraitUrl = `/images/${encodeURIComponent(a.name)}.png`;
+        const portraitHtml = `<img src="${portraitUrl}" alt="${escape(a.name)}"
+            onerror="this.replaceWith(Object.assign(document.createTextNode('${initials(a.name)}'), {}))">`;
+        const isEmpty = !a.directive;
+        const coachName = a.claimedByName || (a.claimed ? 'a claimer' : null);
+        let bodyHtml = '';
+        if (!a.claimed) {
+          bodyHtml = `<div class="unclaimed">Unclaimed</div>`;
+        } else if (a.directive) {
+          bodyHtml = `<div class="directive">${escape(a.directive)}</div>`;
+        } else {
+          bodyHtml = `<div class="no-directive">No directive yet</div>`;
+        }
+        return `
+          <div class="card${isEmpty ? ' empty' : ''}">
+            <div class="card-head">
+              <div class="portrait">${portraitHtml}</div>
+              <div class="ident">
+                <div class="agent-name">${escape(a.name)}</div>
+                <div class="coach-line">${coachName ? 'coached by ' + escape(coachName) : ''}</div>
+              </div>
+            </div>
+            ${bodyHtml}
+          </div>`;
+      }).join('');
+    }
+
+    refresh();
+    setInterval(refresh, 5000);
+  </script>
+</body>
+</html>

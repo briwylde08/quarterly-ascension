@@ -27,12 +27,10 @@ export interface Env {
   MOTIVATIONAL_SPEAKER_ADDRESS: string;
   MOTIVATIONAL_SPEAKER_SECRET: string;
 
-  // Phase 6 — claim flow + emails.
-  RESEND_API_KEY: string;
-
-  // Asset issuer's secret. Used by /admin/normalize to mint DLBR to agents
-  // who are below the configured starting balance. Only the orchestrator
-  // ever signs from this account; agents themselves don't have access.
+  // Asset issuer's secret. Used by /admin/normalize (DLBR mint to agents
+  // below starting balance) and /admin/start (HR Department auto-replenish
+  // before kickoff). Only the orchestrator ever signs from this account;
+  // agents themselves don't have access.
   ASSET_ISSUER_SECRET: string;
 }
 

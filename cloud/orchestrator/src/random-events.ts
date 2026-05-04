@@ -1,17 +1,20 @@
-// Random events. Phase 5: every event that fires now has actual mechanics.
-//   - All-Hands: signals the tick processor to skip Phase 4 (decisions/actions)
-//   - Budget Cuts: each agent loses 15% of their DLBR balance via on-chain
-//     payment to the asset issuer (effective burn)
-//   - Reorg Rumors: every alliance is dissolved, pending proposals cleared
-//   - Email Leak: a fake corporate email is generated and persisted to D1;
-//     future LLM prompts include the most recent leaks as "Public Knowledge"
-//   - New Initiative (one-shot, tick 24): all `has_deliverable` removed,
-//     and a flag is set so future strategy_report rewards are halved
-//   - Quarterly Bonus (every 12 ticks): top 3 agents each receive $50 from
-//     HR Dept on-chain
-//   - Employee of the Month (every 8 ticks): agent with the most `work`
-//     actions in the last 8 ticks gets $40 + Inspired (2 ticks)
-//   - Fire Drill: still flavor only, by request
+// Retreat-mode random events. 9-event set, scheduled on cycle boundaries
+// (every 10th tick under the round-robin layout — see processTick in tick.ts).
+//
+// Always-on:
+//   - Glass Cliff Promotion (auto-fires when leader is 50+ ahead of #2;
+//     once per victim per game)
+// Fixed-cycle:
+//   - Quarterly Bonus (cycle 4 = tick 40: $50/$30/$20 to top 3;
+//                     cycle 8 = tick 80: $100/$60/$40 to top 3)
+// Per-cycle probabilistic (skipped if same event fired last cycle):
+//   - Surprise Board Visit (10%)        — top 3 reshuffle, 3 nested children
+//   - Bad Glassdoor Review (12%)        — every Problematic agent takes -10
+//   - Surprise Promotion (10%)          — random underdog gets +30
+//   - Surprise Demo Day (10%)           — every agent reacts per personality
+//   - Budget Cuts (12%)                  — on-chain USDC burn from 5 random agents
+//   - Viral LinkedIn Post (10%)          — single agent +15 / -5 lottery + cringe quote
+//   - Printer Achieves Sentience (6%)    — flavor with per-agent micro-effect
 
 import { v4 as uuid } from "uuid";
 import type { GameEvent } from "./types.js";
@@ -21,25 +24,18 @@ import type { RewardSources } from "./tick.js";
 import { getPersona } from "./personas.js";
 
 export interface RandomEventsState {
-  triggeredOnce: Set<string>;
-  lastWeeklyTick: number;       // 12-tick cycle (mandatory fun, audit, quarterly bonus)
-  lastEmployeeMonthTick: number; // 8-tick cycle (employee of the month)
-  /** Audit cooldown: agentId → tick of last audit. Eligible victims must be
-   *  >= 12 ticks since their last audit, otherwise we skip them. Without
-   *  this, the lowest-balance agent gets pinned with -30 prestige + under
-   *  review every weekly tick (death spiral). */
-  recentAudits: Map<string, number>;
-  /** Set of random-event ids that fired in the previous tick. Skipped when
-   *  rolling this tick — prevents the same chaos two cycles in a row. */
+  /** Once-per-game tracking for Glass Cliff Promotion: each victim can be
+   *  cliffed at most once. Empty at game start; cleared by the orchestrator
+   *  via the per-game-state cleanup at game end. */
+  glassCliffVictims: Set<string>;
+  /** Set of random-event ids that fired in the previous cycle boundary.
+   *  Skipped this cycle to prevent the same event back-to-back. */
   lastFiredEvents: Set<string>;
 }
 
 export function createRandomEventsState(): RandomEventsState {
   return {
-    triggeredOnce: new Set(),
-    lastWeeklyTick: 0,
-    lastEmployeeMonthTick: 0,
-    recentAudits: new Map(),
+    glassCliffVictims: new Set(),
     lastFiredEvents: new Set(),
   };
 }
@@ -48,14 +44,15 @@ interface EventDeps {
   db: Db;
   stellar: Stellar;
   rewards: RewardSources;
-  /** Pre-fetched balance map (agentId → DLBR), supplied by processTick.
-   *  Audit reuses it to avoid 10 redundant Horizon calls per weekly tick. */
+  /** Pre-fetched balance map (agentId → DLBR), supplied by processTick. */
   balances?: Map<string, number>;
 }
 
 export interface RandomEventsResult {
   events: GameEvent[];
-  skipDecisions: boolean;  // All-Hands sets this true
+  /** Legacy field — never set in retreat mode (All-Hands cut). Retained
+   *  in the shape so tick.ts can keep its existing destructure. */
+  skipDecisions: boolean;
 }
 
 export async function processRandomEvents(
@@ -64,31 +61,21 @@ export async function processRandomEvents(
   tick: number
 ): Promise<RandomEventsResult> {
   const events: GameEvent[] = [];
-  let skipDecisions = false;
 
-  // Weekly cycle (every 12 ticks): mandatory fun, audit, quarterly bonus
-  if (tick > 0 && tick % 12 === 0 && tick !== state.lastWeeklyTick) {
-    state.lastWeeklyTick = tick;
-    events.push(...(await mandatoryFun(deps, tick)));
-    events.push(...(await audit(deps, state, tick)));
-    events.push(...(await quarterlyBonus(deps, tick)));
+  // Quarterly Bonus at fixed cycle boundaries: halftime (cycle 4 = tick 40)
+  // and finale (cycle 8 = tick 80, also game-end).
+  if (tick === 40) {
+    events.push(...(await quarterlyBonus(deps, tick, [50, 30, 20], "Halftime")));
+  } else if (tick === 80) {
+    events.push(...(await quarterlyBonus(deps, tick, [100, 60, 40], "Finale")));
   }
 
-  // Employee of the Month (every 8 ticks)
-  if (tick > 0 && tick % 8 === 0 && tick !== state.lastEmployeeMonthTick) {
-    state.lastEmployeeMonthTick = tick;
-    events.push(...(await employeeOfTheMonth(deps, tick)));
-  }
+  // Glass Cliff Promotion: auto-fires whenever the leader pulls 50+ prestige
+  // ahead of rank-2, *and* hasn't already been cliffed this game.
+  events.push(...(await glassCliffPromotion(deps, state, tick)));
 
-  // One-shot midgame: New Initiative at tick 24
-  if (tick === 24 && !state.triggeredOnce.has("new_initiative")) {
-    state.triggeredOnce.add("new_initiative");
-    events.push(...(await newInitiative(deps, tick)));
-  }
-
-  // Random per-tick rolls. Skip any event that fired last tick — prevents
-  // back-to-back Budget Cuts, double Reorg Rumors etc. Track what fires
-  // this tick into firedThisTick; replace state.lastFiredEvents at the end.
+  // Per-cycle probabilistic rolls. Skip any event that fired at the previous
+  // cycle boundary so the same chaos doesn't hit two cycles in a row.
   const fired = new Set<string>();
   const skipped = state.lastFiredEvents;
   const roll = (id: string, prob: number): boolean => {
@@ -98,232 +85,54 @@ export async function processRandomEvents(
     return true;
   };
 
-  // All-Hands skips the entire decisions phase for this tick, which is
-  // disruptive — keep the probability low so 4-hour games still see most
-  // ticks produce action.
-  if (roll("all_hands", 0.05)) {
-    events.push(...(await allHands(tick)));
-    skipDecisions = true;
-  }
-  if (roll("budget_cuts", 0.08))            events.push(...(await budgetCuts(deps, tick)));
-  if (roll("reorg_rumors", 0.05))           events.push(...(await reorgRumors(deps, tick)));
-  if (roll("viral_linkedin", 0.07))         events.push(...(await viralLinkedIn(deps, tick)));
-  if (roll("coffee_machine_broken", 0.05))  events.push(...(await coffeeMachineBroken(deps, tick)));
-  if (roll("printer_jam", 0.08))            events.push(...(await printerJam(deps, tick)));
-  if (roll("surprise_promotion", 0.03))     events.push(...(await surprisePromotion(deps, tick)));
-  if (roll("email_leak", 0.06))             events.push(...(await emailLeak(deps, tick)));
-  if (roll("fire_drill", 0.04))             events.push(...(await fireDrill(tick)));
+  if (roll("surprise_board_visit", 0.10))   events.push(...(await surpriseBoardVisit(deps, tick)));
+  if (roll("bad_glassdoor_review", 0.12))   events.push(...(await badGlassdoorReview(deps, tick)));
+  if (roll("surprise_promotion", 0.10))     events.push(...(await surprisePromotion(deps, tick)));
+  if (roll("surprise_demo_day", 0.10))      events.push(...(await surpriseDemoDay(deps, tick)));
+  if (roll("budget_cuts", 0.12))            events.push(...(await budgetCuts(deps, tick)));
+  if (roll("viral_linkedin", 0.10))         events.push(...(await viralLinkedIn(deps, tick)));
+  if (roll("printer_sentience", 0.06))      events.push(...(await printerAchievesSentience(deps, tick)));
 
   state.lastFiredEvents = fired;
 
-  return { events, skipDecisions };
+  return { events, skipDecisions: false };
 }
 
-// === All-Hands ==============================================================
+// === Quarterly Bonus =======================================================
 
-async function allHands(tick: number): Promise<GameEvent[]> {
-  return [{
-    id: uuid(),
-    tick,
-    timestamp: new Date(),
-    type: "random_event",
-    description: "ALL-HANDS MEETING: CEO is rambling about vision, synergy, and 'a really exciting Q4'. Nobody is getting anything done this cycle.",
-  }];
-}
-
-// === Budget Cuts (on-chain 15% burn) =======================================
-
-async function budgetCuts(deps: EventDeps, tick: number): Promise<GameEvent[]> {
-  const agents = await deps.db.getAllAgents();
-  if (agents.length === 0) return [];
-
-  // Pick a random subset (up to 5) instead of every agent. Burning from all
-  // 10 in parallel pushed us past the per-invocation subrequest cap on
-  // weekly ticks (when audit + bonuses + budget cuts all fire together);
-  // partial completion left the prior run with 3/10 burned and 7/10 unhit.
-  const VICTIM_CAP = 5;
-  const shuffled = [...agents].sort(() => Math.random() - 0.5);
-  const victims = shuffled.slice(0, Math.min(VICTIM_CAP, agents.length));
-
-  const events: GameEvent[] = [{
-    id: uuid(),
-    tick,
-    timestamp: new Date(),
-    type: "random_event",
-    description: `BUDGET CUTS: Finance is clawing back 15% from ${victims.length} randomly-selected managers' discretionary budgets. Effective immediately.`,
-  }];
-
-  // Burn 15% from each selected agent in parallel — payments to the issuer
-  // destroy supply.
-  await Promise.all(victims.map(async (agent) => {
-    try {
-      const balance = await deps.stellar.getAssetBalance(agent.publicKey);
-      const burn = Math.floor(balance * 0.15 * 100) / 100;
-      if (burn < 0.01) return; // skip if effectively nothing
-      const txHash = await deps.stellar.burn(agent.secretKey, burn);
-      events.push({
-        id: uuid(),
-        tick,
-        timestamp: new Date(),
-        type: "random_event",
-        agentId: agent.id,
-        description: `${agent.name}: lost $${burn.toFixed(2)} to Q4 austerity (15% cut)`,
-        txHash,
-      });
-    } catch (err) {
-      console.error(`[budget-cuts] burn failed for ${agent.name}:`, err);
-    }
-  }));
-
-  return events;
-}
-
-// === Reorg Rumors (dissolve all alliances) =================================
-
-async function reorgRumors(deps: EventDeps, tick: number): Promise<GameEvent[]> {
-  const agents = await deps.db.getAllAgents();
-
-  const broken = agents.filter((a) => a.allies.length > 0 || a.pendingAlliance);
-  await Promise.all(broken.map(async (a) => {
-    if (a.allies.length > 0) await deps.db.updateAgentAllies(a.id, []);
-    if (a.pendingAlliance) await deps.db.updateAgentPendingAlliance(a.id, null);
-  }));
-
-  return [{
-    id: uuid(),
-    tick,
-    timestamp: new Date(),
-    type: "random_event",
-    description: `REORG RUMORS: Slack is on fire. ${broken.length} alliance(s) dissolved overnight as everyone scrambles to protect themselves.`,
-  }];
-}
-
-// === Email Leak (persisted fake email) =====================================
-
-const EMAIL_TEMPLATES: Array<(from: string, to: string, third?: string) => { subject: string; body: string }> = [
-  (from, to, third) => ({
-    subject: "between us",
-    body: `${third ? `look, ${third}'s "strategic vision" deck is just bullet points from the 2019 offsite. don't tell anyone i said that. — ${from}` : `${to}, real talk — half this team would not survive a real RIF. — ${from}`}`,
-  }),
-  (from, to) => ({
-    subject: "Re: Re: Re: Q-thinking-about-it",
-    body: `${to} — i'm not going to that meeting. tell anyone who asks i'm "in another stand-up." — ${from}`,
-  }),
-  (from, to, third) => ({
-    subject: "fwd: idea",
-    body: `${to} what if we just ${third ? `quietly took ${third}'s deck and reformatted it ` : "rebranded last quarter's deck "}— calling it "synthesis," vibes-based plagiarism, but no one will check. — ${from}`,
-  }),
-  (from, to) => ({
-    subject: "reading between the lines",
-    body: `${to}, the CEO's "great work everyone" email had ${from === "Linda Metrics" ? "exactly 3" : "exactly 2"} exclamation points. last week it was 5. this is a soft warning. — ${from}`,
-  }),
-  (from, to, third) => ({
-    subject: "career advice (delete after reading)",
-    body: `${to} — if you want to make principal, ${third ? `you need to start being seen with ${third} at lunches. visibility theater works.` : "you need to volunteer for the cross-functional taskforce. nobody who joined that has been laid off in 3 cycles."} — ${from}`,
-  }),
-  (from, to) => ({
-    subject: "DO NOT FORWARD",
-    body: `${to} the all-hands deck was leaked to me 4 hrs early. only mentioning because the "team kudos" slide doesn't have your name and i thought you should know. — ${from}`,
-  }),
-  (from, to, third) => ({
-    subject: "Q3 retro thoughts",
-    body: `${to} — ${third ? `${third} hosted "team lunch" but the food was a leftover wrap platter from a Tuesday all-hands. ` : ""}retros are theater. let's just complain to each other on slack like adults. — ${from}`,
-  }),
-  (from, to) => ({
-    subject: "ok this is the move",
-    body: `${to}: "Here's where we landed" + slide-with-arrow. that's the deck. that's the whole deck. people will applaud. — ${from}`,
-  }),
-];
-
-async function emailLeak(deps: EventDeps, tick: number): Promise<GameEvent[]> {
-  const agents = await deps.db.getAllAgents();
-  if (agents.length < 2) return [];
-
-  const victim = agents[Math.floor(Math.random() * agents.length)];
-  const others = agents.filter((a) => a.id !== victim.id);
-  const recipient = others[Math.floor(Math.random() * others.length)];
-  const thirdParty = others.length > 1
-    ? others.filter((a) => a.id !== recipient.id)[Math.floor(Math.random() * (others.length - 1))]
-    : undefined;
-
-  const tmpl = EMAIL_TEMPLATES[Math.floor(Math.random() * EMAIL_TEMPLATES.length)];
-  const { subject, body } = tmpl(victim.name, recipient.name, thirdParty?.name);
-
-  const id = uuid();
-  await deps.db.saveLeakedEmail({
-    id,
-    tick,
-    fromAgent: victim.id,
-    toAgent: recipient.id,
-    subject,
-    body,
-  });
-
-  return [{
-    id: uuid(),
-    tick,
-    timestamp: new Date(),
-    type: "random_event",
-    agentId: victim.id,
-    targetId: recipient.id,
-    description: `EMAIL LEAK: ${victim.name} → ${recipient.name} (Subject: "${subject}") — "${body}"`,
-  }];
-}
-
-// === New Initiative (midgame pivot) ========================================
-
-async function newInitiative(deps: EventDeps, tick: number): Promise<GameEvent[]> {
-  // Activate the flag — strategy_report payouts will be halved going forward.
-  await deps.db.setGameStateValue("new_initiative_active", "true");
-
-  // Anyone holding has_deliverable just had their deck invalidated.
-  const agents = await deps.db.getAllAgents();
-  let invalidated = 0;
-  for (const a of agents) {
-    if (a.statusEffects.some((e) => e.type === "has_deliverable")) {
-      await deps.db.updateAgentStatusEffects(
-        a.id,
-        a.statusEffects.filter((e) => e.type !== "has_deliverable")
-      );
-      invalidated++;
-    }
-  }
-
-  return [{
-    id: uuid(),
-    tick,
-    timestamp: new Date(),
-    type: "random_event",
-    description: `NEW INITIATIVE: CEO announces a "Q3 strategic pivot." All ${invalidated} in-flight deliverable(s) are now obsolete. Future consultant reports earn 50% less prestige.`,
-  }];
-}
-
-// === Quarterly Bonus (every 12 ticks; HR pays top 3) =======================
-
-async function quarterlyBonus(deps: EventDeps, tick: number): Promise<GameEvent[]> {
-  const agents = await deps.db.getAllAgents(); // already sorted prestige DESC
+async function quarterlyBonus(
+  deps: EventDeps,
+  tick: number,
+  payouts: [number, number, number],
+  label: string
+): Promise<GameEvent[]> {
+  const agents = await deps.db.getAllAgents(); // sorted prestige DESC
   const top3 = agents.slice(0, 3);
   if (top3.length === 0) return [];
 
+  const parentId = uuid();
   const events: GameEvent[] = [{
-    id: uuid(),
+    id: parentId,
     tick,
     timestamp: new Date(),
     type: "random_event",
-    description: `QUARTERLY BONUS: HR is releasing performance bonuses to the top 3 by prestige.`,
+    description: `QUARTERLY BONUS — ${label}: HR is releasing performance bonuses to the top 3 by prestige.`,
   }];
 
-  for (const a of top3) {
+  for (let i = 0; i < top3.length; i++) {
+    const a = top3[i];
+    const amount = payouts[i];
     try {
-      const txHash = await deps.stellar.sendAsset(deps.rewards.hrDeptSecret, a.publicKey, 50);
+      const txHash = await deps.stellar.sendAsset(deps.rewards.hrDeptSecret, a.publicKey, amount);
       events.push({
         id: uuid(),
         tick,
         timestamp: new Date(),
         type: "payment",
         agentId: a.id,
-        description: `${a.name}: received $50 quarterly bonus from HR`,
+        description: `${a.name} (rank #${i + 1}): received $${amount} ${label.toLowerCase()} bonus from HR`,
         txHash,
+        parentEventId: parentId,
       });
     } catch (err) {
       console.error(`[quarterly-bonus] HR payout to ${a.name} failed:`, err);
@@ -333,189 +142,131 @@ async function quarterlyBonus(deps: EventDeps, tick: number): Promise<GameEvent[
         timestamp: new Date(),
         type: "random_event",
         agentId: a.id,
-        description: `${a.name}: bonus pending — HR is "processing" (failed payout)`,
+        description: `${a.name}: $${amount} bonus pending — HR is "processing" (failed payout)`,
+        parentEventId: parentId,
       });
     }
   }
   return events;
 }
 
-// === Employee of the Month (every 8 ticks) =================================
+// === Glass Cliff Promotion (auto, once per victim) =========================
 
-async function employeeOfTheMonth(deps: EventDeps, tick: number): Promise<GameEvent[]> {
-  const agents = await deps.db.getAllAgents();
-  if (agents.length === 0) return [];
+const GLASS_CLIFF_FLAVORS = [
+  "the CEO 'has full confidence' in them taking on a stretch role",
+  "they were tapped to lead the Q3 'transformation initiative' with no resources",
+  "they were promoted to a new VP-of-Cross-Org-Synergy role nobody asked for",
+  "they were handed a P&L for a department that no longer exists",
+  "the board 'reorganized them upward' into a strategic-advisory function",
+];
 
-  const since = Math.max(0, tick - 8);
-  const counts = await Promise.all(
-    agents.map(async (a) => ({ agent: a, n: await deps.db.countWorkActionsSince(a.id, since) }))
-  );
-  counts.sort((x, y) => y.n - x.n);
-  const winner = counts[0];
-  // Bar raised to 3+ work actions in 8 cycles — winning with 1 work action
-  // looked silly in the first run.
-  if (winner.n < 3) {
-    return [{
-      id: uuid(),
-      tick,
-      timestamp: new Date(),
-      type: "random_event",
-      description: `EMPLOYEE OF THE MONTH: nominations were "underwhelming" — no manager logged enough actual work to qualify. Award withheld this cycle.`,
-    }];
-  }
+async function glassCliffPromotion(
+  deps: EventDeps,
+  state: RandomEventsState,
+  tick: number
+): Promise<GameEvent[]> {
+  const agents = await deps.db.getAllAgents(); // sorted prestige DESC
+  if (agents.length < 2) return [];
+  const leader = agents[0];
+  const second = agents[1];
+  const gap = leader.prestige - second.prestige;
+  if (gap <= 50) return [];
+  if (state.glassCliffVictims.has(leader.id)) return [];
 
-  // Pay $40 from HR + Inspired buff (2 ticks).
-  let txHash: string | undefined;
-  try {
-    txHash = await deps.stellar.sendAsset(deps.rewards.hrDeptSecret, winner.agent.publicKey, 40);
-  } catch (err) {
-    console.error(`[employee-of-month] HR payout to ${winner.agent.name} failed:`, err);
-  }
-  await deps.db.updateAgentStatusEffects(winner.agent.id, [
-    ...winner.agent.statusEffects,
-    { type: "inspired", expiresAtTick: tick + 2 },
-  ]);
+  // Drag the leader down to rank-2's prestige (no longer ahead).
+  const delta = -gap;
+  await deps.db.updateAgentPrestige(leader.id, delta);
+  state.glassCliffVictims.add(leader.id);
 
+  const flavor = GLASS_CLIFF_FLAVORS[Math.floor(Math.random() * GLASS_CLIFF_FLAVORS.length)];
   return [{
     id: uuid(),
     tick,
     timestamp: new Date(),
-    type: "payment",
-    agentId: winner.agent.id,
-    description: `EMPLOYEE OF THE MONTH: ${winner.agent.name} (${winner.n} work actions in 8 cycles) → $40 + Inspired status.`,
-    txHash,
+    type: "random_event",
+    description: `GLASS CLIFF PROMOTION: ${leader.name} got too far ahead — ${flavor}. They lose ${gap} prestige (back to the pack at ${second.prestige}).`,
+    agentId: leader.id,
+    prestigeChange: delta,
   }];
 }
 
-// === Mandatory Fun (still random per-agent prestige; weekly) ===============
+// === Surprise Board Visit ==================================================
 
-async function mandatoryFun(deps: EventDeps, tick: number): Promise<GameEvent[]> {
+async function surpriseBoardVisit(deps: EventDeps, tick: number): Promise<GameEvent[]> {
+  // Top 3 prestige managers reshuffle: one +25, one -25, one Under Investigation.
   const agents = await deps.db.getAllAgents();
-  const events: GameEvent[] = [{
-    id: uuid(),
-    tick,
-    timestamp: new Date(),
-    type: "random_event",
-    description: "MANDATORY FUN: Team building event! Reactions vary by personality.",
-  }];
+  const top3 = agents.slice(0, 3);
+  if (top3.length < 3) return [];
+  const shuffled = [...top3].sort(() => Math.random() - 0.5);
+  const [winner, loser, scrutinized] = shuffled;
+  await deps.db.updateAgentPrestige(winner.id, 25);
+  await deps.db.updateAgentPrestige(loser.id, -25);
+  await deps.db.updateAgentStatusEffects(scrutinized.id, [
+    ...scrutinized.statusEffects.filter((e) => e.type !== "under_investigation"),
+    { type: "under_investigation", expiresAtTick: tick + 2, source: "board" },
+  ]);
+  const parentId = uuid();
+  return [
+    { id: parentId, tick, timestamp: new Date(), type: "random_event",
+      description: `SURPRISE BOARD VISIT: The board flew in unannounced. They had... opinions.` },
+    { id: uuid(), tick, timestamp: new Date(), type: "random_event", agentId: winner.id, prestigeChange: 25,
+      description: `${winner.name} caught the board's eye (+25 prestige).`, parentEventId: parentId },
+    { id: uuid(), tick, timestamp: new Date(), type: "random_event", agentId: loser.id, prestigeChange: -25,
+      description: `${loser.name} stumbled in front of the board (-25 prestige).`, parentEventId: parentId },
+    { id: uuid(), tick, timestamp: new Date(), type: "random_event", agentId: scrutinized.id,
+      description: `${scrutinized.name} is now Under Investigation — the board "wants to dig in" on their numbers.`, parentEventId: parentId },
+  ];
+}
 
-  // Roll modulated by loyalty: high-loyalty agents (the team players) skew
-  // positive; low-loyalty agents (the cynics) skew negative. Same range
-  // overall (~30 points) but the center shifts up to ±10 points based on
-  // (loyalty - 50) / 5.
-  for (const agent of agents) {
-    const persona = getPersona(agent.personaId);
-    const loyalty = persona?.traits.loyalty ?? 50;
-    const shift = Math.round((loyalty - 50) / 5); // -10 to +10
-    const baseRoll = Math.floor(Math.random() * 31) - 10; // -10 to +20
-    const prestigeChange = baseRoll + shift;
-    await deps.db.updateAgentPrestige(agent.id, prestigeChange);
-    const reaction = prestigeChange > 5 ? "thrived at" : prestigeChange >= 0 ? "enjoyed" : prestigeChange > -5 ? "endured" : "actively hated";
+// === Bad Glassdoor Review ==================================================
+
+const GLASSDOOR_HEADLINES = [
+  "BAD GLASSDOOR REVIEW: Anonymous post titled 'Where ambition goes to die' is making the rounds.",
+  "BAD GLASSDOOR REVIEW: New 1-star review: 'They have a foosball table. That is the only positive.'",
+  "BAD GLASSDOOR REVIEW: Anonymous review calls leadership 'a masterclass in conflict avoidance.'",
+  "BAD GLASSDOOR REVIEW: 'Pros: free coffee. Cons: everything else.' Two stars.",
+  "BAD GLASSDOOR REVIEW: A reviewer specifically named the management team's vibe as 'casually hostile.'",
+  "BAD GLASSDOOR REVIEW: Sentence-long takedown: 'I learned more in three weeks of unemployment.'",
+  "BAD GLASSDOOR REVIEW: 'They use the word synergy unironically. Six times. In one all-hands.'",
+  "BAD GLASSDOOR REVIEW: Trending review: 'Saw a manager cry. Was a Tuesday. Mid-quarter.'",
+  "BAD GLASSDOOR REVIEW: A flood of three-star reviews suspiciously dropped overnight.",
+];
+
+async function badGlassdoorReview(deps: EventDeps, tick: number): Promise<GameEvent[]> {
+  // Hits every Problematic manager for -10. If nobody's Problematic, fizzles.
+  const agents = await deps.db.getAllAgents();
+  const problematic = agents.filter((a) => a.statusEffects.some((e) => e.type === "problematic"));
+  for (const a of problematic) {
+    await deps.db.updateAgentPrestige(a.id, -10);
+  }
+  const headline = GLASSDOOR_HEADLINES[Math.floor(Math.random() * GLASSDOOR_HEADLINES.length)];
+  const parentId = uuid();
+  const events: GameEvent[] = [{
+    id: parentId, tick, timestamp: new Date(), type: "random_event",
+    description: problematic.length > 0
+      ? `${headline} Everyone Problematic takes -10.`
+      : `${headline} Nobody on the Problematic list — review fizzles.`,
+  }];
+  for (const a of problematic) {
     events.push({
-      id: uuid(),
-      tick,
-      timestamp: new Date(),
-      type: "random_event",
-      agentId: agent.id,
-      description: `${agent.name} ${reaction} mandatory fun (${prestigeChange >= 0 ? "+" : ""}${prestigeChange})`,
-      prestigeChange,
+      id: uuid(), tick, timestamp: new Date(), type: "random_event", agentId: a.id, prestigeChange: -10,
+      description: `${a.name} mentioned by name in the review (-10 prestige).`,
+      parentEventId: parentId,
     });
   }
-
   return events;
 }
 
-// === Audit (weekly) =========================================================
+// === Surprise Promotion (underdog booster) ================================
 
-async function audit(deps: EventDeps, state: RandomEventsState, tick: number): Promise<GameEvent[]> {
-  const agents = await deps.db.getAllAgents();
+async function surprisePromotion(deps: EventDeps, tick: number): Promise<GameEvent[]> {
+  // Picks a random agent from the bottom half of the leaderboard, +30 prestige.
+  const agents = await deps.db.getAllAgents(); // sorted prestige DESC
   if (agents.length === 0) return [];
-
-  // Cooldown: skip anyone audited in the last 12 ticks. Without this, whoever
-  // hits the lowest balance once gets pinned and audited every weekly cycle.
-  const eligible = agents.filter((a) => {
-    const last = state.recentAudits.get(a.id);
-    return !last || tick - last >= 12;
-  });
-
-  if (eligible.length === 0) {
-    return [{
-      id: uuid(),
-      tick,
-      timestamp: new Date(),
-      type: "random_event",
-      description: "AUDIT: HR queued an audit, but every plausible suspect is already on review. Deferred to next quarter.",
-    }];
-  }
-
-  // Use the pre-fetched balance map when present (cheap), else fall back.
-  const balanceFor = async (a: typeof eligible[number]) =>
-    deps.balances?.get(a.id) ?? (await deps.stellar.getAssetBalance(a.publicKey));
-
-  const ranked = await Promise.all(
-    eligible.map(async (a) => ({ agent: a, balance: await balanceFor(a) }))
-  );
-  ranked.sort((x, y) => x.balance - y.balance);
-
-  // Pick randomly from the bottom 3 of eligible — adds variety so the same
-  // person doesn't get audited twice in a row even if their balance is still
-  // lowest right after the cooldown clears.
-  const pool = ranked.slice(0, Math.min(3, ranked.length));
-  const victim = pool[Math.floor(Math.random() * pool.length)].agent;
-
-  state.recentAudits.set(victim.id, tick);
-
-  // Penalty modulated by caution. High-caution agents (Linda, Brenda, Ron,
-  // Diane) ran tighter books — smaller penalty. Low-caution agents (Kevin,
-  // Trevor, Chad) get hammered. Range: -15 to -45 around the -30 baseline.
-  const persona = getPersona(victim.personaId);
-  const caution = persona?.traits.caution ?? 50;
-  // (caution - 50) / 50 spans -1 to +1; multiply by 15 to add ±15 to the
-  // base -30 (so high caution → -15, low caution → -45). Negative because
-  // we want higher caution to *reduce* the penalty magnitude.
-  const cautionAdjust = Math.round(((caution - 50) / 50) * 15);
-  const penalty = -30 + cautionAdjust;
-  await deps.db.updateAgentPrestige(victim.id, penalty);
-  const agentData = (await deps.db.getAgent(victim.id))!;
-  await deps.db.updateAgentStatusEffects(victim.id, [
-    ...agentData.statusEffects,
-    { type: "under_review" as const, expiresAtTick: tick + 4 },
-  ]);
-
-  const flavor = caution >= 70
-    ? "their spreadsheets were already audit-ready"
-    : caution <= 30
-      ? "their bookkeeping was a war crime"
-      : "their records held up to standard scrutiny";
-
-  return [{
-    id: uuid(),
-    tick,
-    timestamp: new Date(),
-    type: "random_event",
-    agentId: victim.id,
-    description: `AUDIT: ${victim.name} is under review for excessive spending — ${flavor} (${penalty} prestige).`,
-    prestigeChange: -30,
-  }];
-}
-
-// === Viral LinkedIn ========================================================
-
-async function viralLinkedIn(deps: EventDeps, tick: number): Promise<GameEvent[]> {
-  const agents = await deps.db.getAllAgents();
-  if (agents.length === 0) return [];
-
-  const lucky = agents[Math.floor(Math.random() * agents.length)];
-  await deps.db.updateAgentPrestige(lucky.id, 50);
-
-  const posts = [
-    "I'm humbled to announce...",
-    "Agree? 👇",
-    "My unpopular opinion: hard work pays off",
-    "Here's what 10 years in corporate taught me...",
-    "CEO: You're fired. Me: I quit first. CEO: 😮 Hired.",
-  ];
-  const post = posts[Math.floor(Math.random() * posts.length)];
+  const bottomHalf = agents.slice(Math.floor(agents.length / 2));
+  if (bottomHalf.length === 0) return [];
+  const lucky = bottomHalf[Math.floor(Math.random() * bottomHalf.length)];
+  await deps.db.updateAgentPrestige(lucky.id, 30);
 
   return [{
     id: uuid(),
@@ -523,84 +274,200 @@ async function viralLinkedIn(deps: EventDeps, tick: number): Promise<GameEvent[]
     timestamp: new Date(),
     type: "random_event",
     agentId: lucky.id,
-    description: `VIRAL LINKEDIN POST: ${lucky.name} posted "${post}" and gained 50 prestige!`,
-    prestigeChange: 50,
+    prestigeChange: 30,
+    description: `SURPRISE PROMOTION: ${lucky.name} got pulled into a leadership-development cohort. Comes with a small title bump and a +30 prestige boost.`,
   }];
 }
 
-// === Coffee Machine Broken =================================================
+// === Surprise Demo Day (personality-flavored per agent) ====================
 
-async function coffeeMachineBroken(deps: EventDeps, tick: number): Promise<GameEvent[]> {
+async function surpriseDemoDay(deps: EventDeps, tick: number): Promise<GameEvent[]> {
   const agents = await deps.db.getAllAgents();
-  for (const agent of agents) {
-    if (!agent.statusEffects.some((e) => e.type === "caffeinated")) {
-      await deps.db.updateAgentStatusEffects(agent.id, [
-        ...agent.statusEffects,
-        { type: "tired" as const, expiresAtTick: tick + 2 },
-      ]);
+  const parentId = uuid();
+  const events: GameEvent[] = [{
+    id: parentId, tick, timestamp: new Date(), type: "random_event",
+    description: "SURPRISE DEMO DAY: The CEO wants to see what everyone's been working on. Right now.",
+  }];
+  for (const a of agents) {
+    const persona = getPersona(a.personaId);
+    const aggression = persona?.traits.aggression ?? 50;
+    const greed = persona?.traits.greed ?? 50;
+    const caution = persona?.traits.caution ?? 50;
+    const loyalty = persona?.traits.loyalty ?? 50;
+    const hasDeliverable = a.statusEffects.some((e) => e.type === "has_deliverable");
+
+    let prestigeDelta = hasDeliverable ? 25 : -5;
+    let flavor = "";
+
+    if (hasDeliverable) {
+      if (aggression > 70) {
+        prestigeDelta = 30;
+        flavor = "crushed Q&A by interrupting every clarifying question";
+      } else if (greed > 70) {
+        prestigeDelta = 20;
+        flavor = "tried to claim credit for two other teams' work mid-presentation; got side-eye";
+      } else if (caution > 70) {
+        prestigeDelta = 25;
+        flavor = "presented like a defense lawyer — every slide footnoted, every claim hedged";
+      } else if (loyalty > 70) {
+        prestigeDelta = 27;
+        flavor = "credited the whole team; the CEO loved the humility";
+      } else {
+        flavor = "delivered the deck cleanly";
+      }
+      await deps.db.updateAgentStatusEffects(a.id, a.statusEffects.filter((e) => e.type !== "has_deliverable"));
+    } else {
+      if (aggression > 70) {
+        prestigeDelta = -2;
+        flavor = "deflected by attacking the brief; CEO smirked";
+      } else if (caution > 70) {
+        prestigeDelta = -3;
+        flavor = "asked for an extension and a process review; got a stern look";
+      } else if (loyalty < 30) {
+        prestigeDelta = -10;
+        flavor = "blamed the team for not delivering; the team heard";
+      } else if (loyalty > 70) {
+        prestigeDelta = -2;
+        flavor = "took the L gracefully — said the team needs more support";
+      } else {
+        flavor = "winged it, looked unprepared";
+      }
     }
+    await deps.db.updateAgentPrestige(a.id, prestigeDelta);
+    const sign = prestigeDelta > 0 ? `+${prestigeDelta}` : `${prestigeDelta}`;
+    events.push({
+      id: uuid(), tick, timestamp: new Date(), type: "random_event", agentId: a.id, prestigeChange: prestigeDelta,
+      description: `${a.name} ${flavor} (${sign} prestige).`,
+      parentEventId: parentId,
+    });
   }
-
-  return [{
-    id: uuid(),
-    tick,
-    timestamp: new Date(),
-    type: "random_event",
-    description: "COFFEE MACHINE BROKEN: Everyone without Caffeinated status is now Tired (-2 prestige/cycle for 2 cycles)!",
-  }];
+  return events;
 }
 
-// === Printer Jam ===========================================================
+// === Budget Cuts (on-chain USDC burn) ======================================
 
-async function printerJam(deps: EventDeps, tick: number): Promise<GameEvent[]> {
+async function budgetCuts(deps: EventDeps, tick: number): Promise<GameEvent[]> {
   const agents = await deps.db.getAllAgents();
-  const victims = agents.filter((a) => a.statusEffects.some((e) => e.type === "has_deliverable"));
-  if (victims.length === 0) return [];
-
-  const victim = victims[Math.floor(Math.random() * victims.length)];
-  await deps.db.updateAgentStatusEffects(
-    victim.id,
-    victim.statusEffects.filter((e) => e.type !== "has_deliverable")
-  );
-
-  return [{
-    id: uuid(),
-    tick,
-    timestamp: new Date(),
-    type: "random_event",
-    agentId: victim.id,
-    description: `PRINTER JAM: ${victim.name} lost their deliverable! The printer ate it.`,
-  }];
-}
-
-// === Surprise Promotion ====================================================
-
-async function surprisePromotion(deps: EventDeps, tick: number): Promise<GameEvent[]> {
-  const agents = (await deps.db.getAllAgents()).sort((a, b) => a.prestige - b.prestige);
   if (agents.length === 0) return [];
 
-  const lowest = agents[0];
-  await deps.db.updateAgentPrestige(lowest.id, 20);
+  // Pick a random subset (up to 5) instead of every agent. Burning from all
+  // 10 in parallel pushed us past the per-invocation subrequest cap on the
+  // long-form weekly tick (when audit + bonuses + budget cuts all stacked).
+  const VICTIM_CAP = 5;
+  const shuffled = [...agents].sort(() => Math.random() - 0.5);
+  const victims = shuffled.slice(0, Math.min(VICTIM_CAP, agents.length));
 
+  const parentId = uuid();
+  const events: GameEvent[] = [{
+    id: parentId,
+    tick,
+    timestamp: new Date(),
+    type: "random_event",
+    description: `BUDGET CUTS: Finance is "rebalancing" — ${victims.length} managers each losing 15% of their DLBR balance (sent back to the issuer).`,
+  }];
+
+  for (const victim of victims) {
+    const balance = (deps.balances?.get(victim.id)) ?? (await deps.stellar.getAssetBalance(victim.publicKey));
+    const burn = Math.floor(balance * 0.15);
+    if (burn <= 0) continue;
+    try {
+      const txHash = await deps.stellar.burn(victim.secretKey, burn);
+      events.push({
+        id: uuid(),
+        tick,
+        timestamp: new Date(),
+        type: "payment",
+        agentId: victim.id,
+        description: `${victim.name}: -$${burn} sent back to Finance (15% of $${balance.toFixed(0)})`,
+        txHash,
+        parentEventId: parentId,
+      });
+    } catch (err) {
+      console.error(`[budget-cuts] burn from ${victim.name} failed:`, err);
+    }
+  }
+  return events;
+}
+
+// === Viral LinkedIn Post (cringe lottery) ==================================
+
+const LINKEDIN_QUOTES = [
+  "10 things I learned about leadership from my Peloton instructor 🧵",
+  "Cried in the parking lot after a hard meeting today. Vulnerability IS leadership. #authenticity",
+  "My toddler taught me more about Q4 strategy than any MBA program ever could.",
+  "Just took my team off-site to goat yoga. Productivity is up 312%. Thread below.",
+  "Got rejected from Y Combinator for the third time. Here's why I'm grateful.",
+  "Fired my entire eng team this morning. Here's why it was actually an act of love.",
+  "I read 47 business books this year. Here's the one rule that beats them all.",
+  "Got told 'no' in my 1:1 today. Best thing that's ever happened to me. #grateful",
+  "My intern made a typo today. I let her keep her job. Here's why mercy is the new KPI.",
+  "Just closed our Series B. The real win? My therapist said I'm 'less reactive.'",
+];
+
+async function viralLinkedIn(deps: EventDeps, tick: number): Promise<GameEvent[]> {
+  const agents = await deps.db.getAllAgents();
+  if (agents.length === 0) return [];
+  const lucky = agents[Math.floor(Math.random() * agents.length)];
+  const quote = LINKEDIN_QUOTES[Math.floor(Math.random() * LINKEDIN_QUOTES.length)];
+
+  // 75% the post lands (+15). 25% it's too cringe (-5 + Problematic 1 cycle).
+  const lands = Math.random() < 0.75;
+  if (lands) {
+    await deps.db.updateAgentPrestige(lucky.id, 15);
+    return [{
+      id: uuid(),
+      tick,
+      timestamp: new Date(),
+      type: "random_event",
+      agentId: lucky.id,
+      prestigeChange: 15,
+      description: `VIRAL LINKEDIN POST: ${lucky.name} posted "${quote}" — it landed (+15 prestige; the engagement is filthy).`,
+    }];
+  }
+  await deps.db.updateAgentPrestige(lucky.id, -5);
+  await deps.db.updateAgentStatusEffects(lucky.id, [
+    ...lucky.statusEffects.filter((e) => e.type !== "problematic"),
+    { type: "problematic", expiresAtTick: tick + 1, source: "linkedin" },
+  ]);
   return [{
     id: uuid(),
     tick,
     timestamp: new Date(),
     type: "random_event",
-    agentId: lowest.id,
-    description: `SURPRISE PROMOTION: ${lowest.name} got promoted out of nowhere! +20 prestige. Everyone is confused.`,
-    prestigeChange: 20,
+    agentId: lucky.id,
+    prestigeChange: -5,
+    description: `VIRAL LINKEDIN POST: ${lucky.name} posted "${quote}" — it was too cringe (-5 prestige + Problematic 1 cycle). The replies are unkind.`,
   }];
 }
 
-// === Fire Drill (still flavor only — by request) ===========================
+// === Printer Achieves Sentience (flavor + per-agent micro-effect) ==========
 
-async function fireDrill(tick: number): Promise<GameEvent[]> {
-  return [{
-    id: uuid(),
-    tick,
-    timestamp: new Date(),
-    type: "random_event",
-    description: "FIRE DRILL: Everyone evacuates! Plenty of time for hallway gossip in the parking lot.",
-  }];
+async function printerAchievesSentience(deps: EventDeps, tick: number): Promise<GameEvent[]> {
+  const agents = await deps.db.getAllAgents();
+  if (agents.length === 0) return [];
+  const victim = agents[Math.floor(Math.random() * agents.length)];
+
+  // Find one cautious manager (highest caution) for the printed-backups bonus.
+  const cautious = agents
+    .map((a) => ({ a, c: getPersona(a.personaId)?.traits.caution ?? 50 }))
+    .sort((x, y) => y.c - x.c)[0];
+
+  const parentId = uuid();
+  await deps.db.updateAgentPrestige(victim.id, -5);
+  const events: GameEvent[] = [
+    { id: parentId, tick, timestamp: new Date(), type: "random_event",
+      description: "PRINTER ACHIEVES SENTIENCE: HP-9000 is making demands. IT is calling it 'a learning moment.'" },
+    { id: uuid(), tick, timestamp: new Date(), type: "random_event", agentId: victim.id, prestigeChange: -5,
+      description: `${victim.name} got cornered by the printer (-5 prestige).`,
+      parentEventId: parentId },
+  ];
+  if (cautious && cautious.c >= 60 && cautious.a.id !== victim.id) {
+    await deps.db.updateAgentPrestige(cautious.a.id, 10);
+    events.push({
+      id: uuid(), tick, timestamp: new Date(), type: "random_event", agentId: cautious.a.id, prestigeChange: 10,
+      description: `${cautious.a.name} had printed backups (+10 prestige). Of course they did.`,
+      parentEventId: parentId,
+    });
+  }
+  return events;
 }
