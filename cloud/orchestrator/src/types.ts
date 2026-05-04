@@ -115,6 +115,10 @@ export interface GameEvent {
   txHash?: string;
   settlementTime?: number;
   reasoning?: string;  // In-character LLM justification, surfaced in the event feed
+  /** Multi-agent random events emit a parent "header" event plus child
+   *  events nested under it on the dashboard. Children carry parentEventId
+   *  pointing back to the parent so the renderer can group them. */
+  parentEventId?: string;
 }
 
 export type GameEventType =
