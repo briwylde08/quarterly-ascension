@@ -72,6 +72,55 @@ const SCHMOOZE_ALLY_FLAVORS = (target: string) => [
   `Slacked ${target} a meme. Both laughed. Productivity unchanged.`,
 ];
 
+// Per-(actionType, target) cooldown window. Hostile actions targeting
+// the same person within this many ticks fizzle into a no-op flavor
+// outcome. Surfaced to the LLM in the prompt; enforced here as a
+// guardrail in case the model ignores the warning. Matches the
+// TARGET_COOLDOWN_TICKS in llm.ts.
+const TARGET_COOLDOWN_TICKS = 10;
+const COOLDOWN_FIZZLE_FLAVORS = [
+  (verb: string, target: string) => `Tried to ${verb} ${target} again, but the office gossip mill is bored of this storyline.`,
+  (verb: string, target: string) => `Went to ${verb} ${target}, then realized you'd done it last cycle. Walked back to your desk.`,
+  (verb: string, target: string) => `${target} preempted the move with a "we should talk" Slack DM. Standoff. Cycle wasted.`,
+  (verb: string, target: string) => `HR flagged this as 'a pattern' before you could even submit. No effect.`,
+];
+async function checkTargetCooldown(
+  deps: TickDeps,
+  attackerId: string,
+  actionType: string,
+  targetId: string,
+  currentTick: number
+): Promise<{ onCooldown: boolean; lastTick?: number }> {
+  const key = `cd_${actionType}_${attackerId}_${targetId}`;
+  const v = await deps.db.getGameStateValue(key);
+  if (!v) return { onCooldown: false };
+  const lastTick = parseInt(v, 10);
+  if (currentTick - lastTick < TARGET_COOLDOWN_TICKS) {
+    return { onCooldown: true, lastTick };
+  }
+  return { onCooldown: false };
+}
+async function recordTargetUse(
+  deps: TickDeps,
+  attackerId: string,
+  actionType: string,
+  targetId: string,
+  currentTick: number
+): Promise<void> {
+  await deps.db.setGameStateValue(`cd_${actionType}_${attackerId}_${targetId}`, String(currentTick));
+}
+function fizzleOutcome(actionType: string, targetName: string): string {
+  const verbMap: Record<string, string> = {
+    spread_rumor: "spread another rumor about",
+    sensitivity_training: "send to sensitivity training",
+    sabotage_plan: "build a fresh dossier on",
+    take_credit: "take credit from",
+  };
+  const verb = verbMap[actionType] ?? actionType;
+  const fn = COOLDOWN_FIZZLE_FLAVORS[Math.floor(Math.random() * COOLDOWN_FIZZLE_FLAVORS.length)];
+  return fn(verb, targetName);
+}
+
 // Retreat-mode hostile action set. Used by random events that count
 // hostility (e.g. Surprise Board Visit's "scrutinized" pick) and by any
 // future bounty/audit logic.
@@ -89,24 +138,26 @@ const HOSTILE_ACTIONS = new Set([
 ]);
 
 /**
- * Runs one tick of the simulation. In retreat round-robin mode, the caller
- * passes a single `activeAgentId` so only that one agent gets a decision
- * and side effects this tick. Random events fire only at cycle boundaries
- * (every 10th tick), giving the show a steady drumbeat of single actions
- * punctuated by big-moment events.
+ * Runs one tick of the simulation. In retreat round-robin mode the caller
+ * passes the IDs of the agents who should act this tick — typically 2 at
+ * a time, one per ~12.5s of the 25s tick window. They run sequentially
+ * within the same alarm: status expiry, random events (if applicable),
+ * then each agent's decision + execution in order, then passive decay.
+ *
+ * Cycle = 5 ticks (10 agents acting at 2/tick = full round). Random
+ * events fire only at:
+ *   - tick 1 (Q1 Kickoff per-agent reactions)
+ *   - cycle boundaries (every 5th tick) for the probabilistic pool,
+ *     fixed-cycle bonuses, and the guaranteed cycle-1 closer
+ * Intra-cycle ticks stay clean — just the action drumbeat.
  */
-export async function processTick(deps: TickDeps, activeAgentId?: string): Promise<void> {
+export async function processTick(deps: TickDeps, activeAgentIds?: string[]): Promise<void> {
   const { db, stellar, mpp, npcBase, llm, randomEventsState, emit, rewards } = deps;
 
   const tick = (await db.getCurrentTick()) + 1;
   await db.setCurrentTick(tick);
 
-  // Cycle = 10 ticks. Random events fire at:
-  //   - tick 1 (Q1 Kickoff per-agent reactions)
-  //   - cycle boundaries (every 10th tick) for the regular probabilistic
-  //     pool, fixed-cycle bonuses, and the guaranteed cycle-1 closer
-  // Intra-cycle ticks stay clean (one action per tick, no event noise).
-  const isCycleBoundary = tick % 10 === 0;
+  const isCycleBoundary = tick % 5 === 0;
   const isKickoff = tick === 1;
   const fireRandomEvents = isKickoff || isCycleBoundary;
 
@@ -144,13 +195,15 @@ export async function processTick(deps: TickDeps, activeAgentId?: string): Promi
     // signal in random-events for compat but ignored here.
   }
 
-  // Phase 3: get a decision for the single active agent this tick.
-  // (In retreat round-robin mode, activeAgentId is always set. The
-  // legacy branch — process all agents — runs only if no activeAgentId
-  // is provided, which shouldn't happen in retreat play.)
+  // Phase 3: get decisions for the active agents this tick (typically 2).
+  // Resolve in turn-order — earlier agents in activeAgentIds act first
+  // and their state changes are visible to subsequent agents within the
+  // same tick (e.g. if A schmoozes B then B's pendingAlliance is set
+  // when B acts).
   const freshAgents = await db.getAllAgents();
-  const actingAgents = activeAgentId
-    ? freshAgents.filter((a) => a.id === activeAgentId)
+  const agentById = new Map(freshAgents.map((a) => [a.id, a] as const));
+  const actingAgents = activeAgentIds && activeAgentIds.length > 0
+    ? activeAgentIds.map((id) => agentById.get(id)).filter((a): a is Agent => !!a)
     : freshAgents;
   const decisions: { agent: Agent; action: Action; reasoning: string }[] = [];
 
@@ -167,14 +220,12 @@ export async function processTick(deps: TickDeps, activeAgentId?: string): Promi
     await executeAction(deps, SERVICE_URLS, agent, action, reasoning, tick);
   }
 
-  // Phase 4b: Mysterious Influence misattribution. After the active agent
-  // acts, every other agent holding Mysterious Influence has a 10% roll
-  // to be falsely credited for the action. Pure flavor — no prestige
-  // movement — but the audience reads each "somehow involved" line as a
-  // running joke and recognizes the trope of the office cipher who gets
-  // credit for everything.
-  if (activeAgentId && decisions.length > 0) {
-    await applyMysteriousInfluenceMisattribution(deps, tick, decisions[0]);
+  // Phase 4b: Mysterious Influence misattribution. After each agent acts,
+  // every other agent holding Mysterious Influence has a 10% roll to be
+  // falsely credited for it. Pure flavor — no prestige movement — but
+  // the running joke is the office cipher who keeps getting credit.
+  for (const d of decisions) {
+    await applyMysteriousInfluenceMisattribution(deps, tick, d);
   }
 
   // Phase 5: passive ticks (Inspired bonus + Tired/Problematic decay)
@@ -365,12 +416,18 @@ async function executeAction(
 
       case "take_credit":
         if ("target" in action) {
+          const target = await db.getAgent(action.target);
+          const cd = await checkTargetCooldown(deps, agent.id, "take_credit", action.target, tick);
+          if (cd.onCooldown && target) {
+            outcome = fizzleOutcome("take_credit", target.name);
+            break;
+          }
           // Documented targets (from sabotage_plan; internal key "marked")
           // auto-succeed — the dossier is in your hand and the receipts
           // have been pre-disputed.
-          const target = await db.getAgent(action.target);
           const targetIsMarked = target?.statusEffects.some((e) => e.type === "marked") ?? false;
           const success = targetIsMarked || Math.random() < 0.5;
+          await recordTargetUse(deps, agent.id, "take_credit", action.target, tick);
           if (success) {
             prestigeChange = 30;
             if (targetIsMarked) {
@@ -579,11 +636,17 @@ async function executePaidAction(
       if ("target" in action) {
         const target = await db.getAgent(action.target);
         if (target) {
+          const cd = await checkTargetCooldown(deps, agent.id, "spread_rumor", action.target, tick);
+          if (cd.onCooldown) {
+            outcome = fizzleOutcome("spread_rumor", target.name);
+            break;
+          }
           await db.updateAgentPrestige(action.target, -5);
           await db.updateAgentStatusEffects(action.target, [
             ...target.statusEffects.filter((e) => e.type !== "questionable_judgment"),
             { type: "questionable_judgment", expiresAtTick: tick + 2, source: agent.id },
           ]);
+          await recordTargetUse(deps, agent.id, "spread_rumor", action.target, tick);
           const rumor = RUMOR_FLAVORS[Math.floor(Math.random() * RUMOR_FLAVORS.length)];
           outcome = `Spread a rumor about ${target.name} — that they ${rumor}. -5 prestige + QUESTIONABLE JUDGMENT 2 cycles.`;
         }
@@ -627,6 +690,12 @@ async function executePaidAction(
       if ("target" in action) {
         const target = await db.getAgent(action.target);
         if (target) {
+          const cd = await checkTargetCooldown(deps, agent.id, "sensitivity_training", action.target, tick);
+          if (cd.onCooldown) {
+            outcome = fizzleOutcome("sensitivity_training", target.name);
+            break;
+          }
+          await recordTargetUse(deps, agent.id, "sensitivity_training", action.target, tick);
           // Attacker gains +5 "managerial accountability" prestige — same
           // pattern as file_complaint. Without this nobody picked the
           // action because $30 with zero direct payoff didn't beat
@@ -664,6 +733,13 @@ async function executePaidAction(
 
     case "sabotage_plan":
       if ("target" in action) {
+        const targetForCd = await db.getAgent(action.target);
+        const cd = await checkTargetCooldown(deps, agent.id, "sabotage_plan", action.target, tick);
+        if (cd.onCooldown && targetForCd) {
+          outcome = fizzleOutcome("sabotage_plan", targetForCd.name);
+          break;
+        }
+        await recordTargetUse(deps, agent.id, "sabotage_plan", action.target, tick);
         // Stronger prestige hit + 2-tick Documented debuff. Well-allied
         // targets halve the prestige damage.
         const recent = await db.getRecentActionLogsForAgent(action.target, 3);

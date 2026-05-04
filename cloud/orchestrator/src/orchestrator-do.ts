@@ -267,14 +267,13 @@ export class GameOrchestrator {
 
     if (path === "/tick" && request.method === "POST") {
       // Manual tick trigger for smoke testing without waiting for the alarm.
-      // Uses the same round-robin picker as the alarm so manual ticks stay
-      // in turn-order with whatever the alarm has done.
+      // Uses the same round-robin picker as the alarm (2 agents per tick).
       if (this.tickInFlight) {
         return Response.json({ error: "Tick already in progress" }, { status: 409 });
       }
-      const activeAgentId = await this.pickActiveAgentForRoundRobin();
-      await this.runTick(activeAgentId);
-      return Response.json({ ok: true, tick: await db.getCurrentTick(), activeAgent: activeAgentId });
+      const activeAgentIds = await this.pickActiveAgentsForRoundRobin(2);
+      await this.runTick(activeAgentIds);
+      return Response.json({ ok: true, tick: await db.getCurrentTick(), activeAgents: activeAgentIds });
     }
 
     // Reset the game: clears events/ticker/action_logs/leaked_emails, resets
@@ -888,15 +887,14 @@ export class GameOrchestrator {
       return;
     }
 
-    // Retreat round-robin: each alarm fires for ONE agent's turn. Picks
-    // the next agent from the rolling turn-order queue.
-    const activeAgentId = await this.pickActiveAgentForRoundRobin();
-    await this.runTick(activeAgentId);
+    // Retreat round-robin: each alarm fires for 2 agents' turns. Picks
+    // the next 2 from the rolling turn-order queue.
+    const activeAgentIds = await this.pickActiveAgentsForRoundRobin(2);
+    await this.runTick(activeAgentIds);
 
-    // After the tick, refresh the gossip narrative every 5 ticks (twice
-    // per cycle — once mid-cycle and once at the boundary). Pre-flight #1
-    // showed the Water Cooler felt stale at once-per-cycle. Cheap (one
-    // mini call), failure shouldn't break the tick loop.
+    // After the tick, refresh the gossip narrative every 5 ticks (= once
+    // per cycle in 2-agents-per-tick mode). Cheap (one mini call), failure
+    // shouldn't break the tick loop.
     const newTick = await db.getCurrentTick();
     if (newTick > 0 && newTick % 5 === 0) {
       try {
@@ -914,7 +912,7 @@ export class GameOrchestrator {
     }
   }
 
-  private async runTick(activeAgentId?: string): Promise<void> {
+  private async runTick(activeAgentIds?: string[]): Promise<void> {
     if (this.tickInFlight) return;
     this.tickInFlight = true;
     try {
@@ -962,7 +960,7 @@ export class GameOrchestrator {
         },
       };
 
-      await processTick(deps, activeAgentId);
+      await processTick(deps, activeAgentIds);
     } catch (err) {
       console.error("[tick] FAILED:", err);
     } finally {
@@ -1012,30 +1010,31 @@ export class GameOrchestrator {
   }
 
   /**
-   * Round-robin turn picker. Each cycle (10 ticks) operates on a randomized
-   * permutation of the 10 agents. Stored in game_state as `turn_order`
-   * (JSON string array) and `turn_index` (next position to consume). When
-   * the index reaches the end, the order is cleared and a fresh one is
-   * generated on the next call.
+   * Round-robin turn picker — 2 agents per tick. Each cycle (5 ticks ×
+   * 2 agents = 10 agents) operates on a randomized permutation of the
+   * full roster. Stored in game_state as `turn_order` (JSON array) and
+   * `turn_index`. When the index runs out, a fresh order is generated.
    */
-  private async pickActiveAgentForRoundRobin(): Promise<string | undefined> {
+  private async pickActiveAgentsForRoundRobin(count: number = 2): Promise<string[]> {
     const db = new Db(this.env.DB);
     const orderRaw = await db.getGameStateValue("turn_order");
     const indexRaw = await db.getGameStateValue("turn_index");
     let order: string[] = orderRaw ? JSON.parse(orderRaw) : [];
     let index = indexRaw ? parseInt(indexRaw, 10) : 0;
 
-    if (order.length === 0 || index >= order.length) {
-      // Generate a fresh randomized turn order from the live agent list.
-      const agents = await db.getAllAgents();
-      order = agents.map((a) => a.id).sort(() => Math.random() - 0.5);
-      index = 0;
-      await db.setGameStateValue("turn_order", JSON.stringify(order));
+    const out: string[] = [];
+    for (let i = 0; i < count; i++) {
+      if (order.length === 0 || index >= order.length) {
+        const agents = await db.getAllAgents();
+        order = agents.map((a) => a.id).sort(() => Math.random() - 0.5);
+        index = 0;
+        await db.setGameStateValue("turn_order", JSON.stringify(order));
+      }
+      out.push(order[index]);
+      index += 1;
     }
-
-    const activeId = order[index];
-    await db.setGameStateValue("turn_index", String(index + 1));
-    return activeId;
+    await db.setGameStateValue("turn_index", String(index));
+    return out;
   }
 
   /**

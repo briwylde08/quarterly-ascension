@@ -130,7 +130,23 @@ interface DecisionContext {
   /** Number of times the agent has used join_meeting_silently this game.
    *  Capped at 3 — the 3rd use grants Mysterious Influence. */
   joinMeetingCount: number;
+  /** Recent inbound attacks targeting this agent. Used to surface a
+   *  "you just got hit by X" pull in the prompt so retaliation is a
+   *  visible, named option rather than a generic rival list. */
+  recentAttackers: Array<{ attackerId: string; attackerName: string; actionType: string; tick: number }>;
 }
+
+// Hostile actions that have a target argument and are subject to the
+// per-target cooldown ("you can't attack the same person with the same
+// move twice in a row"). Surfaced both as a prompt warning and enforced
+// at handler-time.
+const TARGETED_HOSTILE_ACTIONS = new Set([
+  "spread_rumor",
+  "sensitivity_training",
+  "sabotage_plan",
+  "take_credit",
+]);
+const TARGET_COOLDOWN_TICKS = 10; // ≈ 2 cycles in 1-agent/tick mode
 
 function buildContextPrompt(ctx: DecisionContext): string {
   const { agent, balance, currentTick, allAgents, recentActions, leakedEmails, directive, hailMaryUsed, boomerangUsed, pulseSurveyUsed, joinMeetingCount } = ctx;
@@ -216,21 +232,58 @@ function buildContextPrompt(ctx: DecisionContext): string {
       }).join("\n")}\n`
     : "";
 
-  // Anti-pattern nudge: reasoning models lock onto a single action once
-  // they've used it a few times. If an action shows up >=3x in the last 5,
-  // drop a one-liner suggesting (not forcing) variety.
-  const recentSlice = recentActions.slice(-5);
+  // Anti-pattern nudge: tighter than long-form (was 3+ in last 5).
+  // Retreat: 2+ same action in last 4 = nudge.
+  const recentSlice = recentActions.slice(-4);
   const actionCounts = new Map<string, number>();
   for (const a of recentSlice) {
     actionCounts.set(a.action_type, (actionCounts.get(a.action_type) ?? 0) + 1);
   }
   let lockInNote = "";
   for (const [actionType, count] of actionCounts) {
-    if (count >= 3) {
+    if (count >= 2) {
       lockInNote =
-        `\nSTRATEGY NOTE: You've chosen '${actionType}' ${count} of your last ${recentSlice.length} cycles. That's a strong pattern. Your rivals likely see it too — consider whether your default move is still the optimal one this cycle, or whether varying your approach would catch them off-guard. (Sticking with it is fine if it's still right; just don't pick it on autopilot.)\n`;
+        `\nSTRATEGY NOTE: You've chosen '${actionType}' ${count} of your last ${recentSlice.length} turns. The audience is starting to clock the pattern. Your rivals see it too. Strongly consider varying your approach this turn — there are 27 actions in the menu and most of them you haven't tried yet.\n`;
       break;
     }
+  }
+
+  // Per-target hostile cooldown surface. For each (actionType, targetId)
+  // pair this agent has used in the last TARGET_COOLDOWN_TICKS, mark it
+  // as on cooldown — the LLM is told not to repeat, and the handler
+  // enforces a no-op if it tries anyway.
+  const cooldownPairs: Array<{ actionType: string; targetId: string; tick: number }> = [];
+  for (const a of recentActions) {
+    if (!TARGETED_HOSTILE_ACTIONS.has(a.action_type)) continue;
+    let target: string | undefined;
+    try {
+      const data = typeof a.action_data === "string" ? JSON.parse(a.action_data) : a.action_data;
+      target = data?.target;
+    } catch { /* ignore parse failures */ }
+    if (!target) continue;
+    if (currentTick - a.tick >= TARGET_COOLDOWN_TICKS) continue;
+    cooldownPairs.push({ actionType: a.action_type, targetId: target, tick: a.tick });
+  }
+  let cooldownNote = "";
+  if (cooldownPairs.length > 0) {
+    const lines = cooldownPairs.map((p) => {
+      const t = allAgents.find((a) => a.id === p.targetId);
+      return `- ${p.actionType} → ${t?.name ?? p.targetId} (used at tick ${p.tick}, cooldown until tick ${p.tick + TARGET_COOLDOWN_TICKS})`;
+    });
+    cooldownNote =
+      `\nCOOLDOWNS — these (action, target) pairs are on cooldown. Repeating now will fizzle (no effect; the office gossip mill is bored of this storyline):\n${lines.join("\n")}\n`;
+  }
+
+  // Retaliation pull: surface the most recent inbound attack so the LLM
+  // sees a clear "this person just hit you" pointer rather than a generic
+  // rival list.
+  let retaliationNote = "";
+  if (ctx.recentAttackers.length > 0) {
+    const lines = ctx.recentAttackers.slice(0, 3).map((r) =>
+      `- ${r.attackerName} hit you with ${r.actionType} at tick ${r.tick}`
+    );
+    retaliationNote =
+      `\nRECENT INCOMING ATTACKS (you may want to retaliate):\n${lines.join("\n")}\nRetaliation is a strong play — the audience reads back-and-forth feuds as drama. Counter-attacks land especially well.\n`;
   }
 
   const directiveSection = directive
@@ -265,7 +318,7 @@ how your action relates. The audience is watching this play out.
     positionalNudge = `\nSTRATEGIC POSITION:\nYou're in the bottom half (Rank ${rank} of ${allAgents.length}, ${gapToLeader} behind the leader). Picking fights at the top from here usually backfires — you'll burn budget for marginal damage and the leader will still be ahead. Focus on rebuilding your own position: work, alliances, deliverables, and earning paths (mentorship, coffee_chat). Climb steadily before you punch up.\n`;
   }
 
-  return `${directiveSection}${positionalNudge}
+  return `${directiveSection}${positionalNudge}${retaliationNote}${cooldownNote}${lockInNote}
 CURRENT SITUATION (Tick ${currentTick}):
 
 YOUR STATUS:
@@ -482,7 +535,20 @@ export async function getAgentDecision(
   const pulseSurveyUsed = (await deps.db.getGameStateValue(`pulse_survey_used_${agent.id}`)) === "yes";
   const joinMeetingCount = parseInt((await deps.db.getGameStateValue(`join_meeting_count_${agent.id}`)) ?? "0", 10);
 
-  const context: DecisionContext = { agent, balance, currentTick, allAgents, recentActions, leakedEmails, directive, hailMaryUsed, boomerangUsed, pulseSurveyUsed, joinMeetingCount };
+  // Recent inbound attacks against this agent (used for the retaliation pull
+  // in the prompt). Look back ~6 ticks ≈ 1 cycle.
+  const inboundRaw = await deps.db.getRecentActionsTargetingAgent(agent.id, Math.max(0, currentTick - 6), 5);
+  const recentAttackers = inboundRaw.map((row: any) => {
+    const attacker = allAgents.find((a) => a.id === row.agent_id);
+    return {
+      attackerId: row.agent_id,
+      attackerName: attacker?.name ?? row.agent_id,
+      actionType: row.action_type,
+      tick: row.tick,
+    };
+  });
+
+  const context: DecisionContext = { agent, balance, currentTick, allAgents, recentActions, leakedEmails, directive, hailMaryUsed, boomerangUsed, pulseSurveyUsed, joinMeetingCount, recentAttackers };
 
   const openai = new OpenAI({
     apiKey: deps.openaiApiKey,

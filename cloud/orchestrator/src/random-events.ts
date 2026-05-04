@@ -70,12 +70,14 @@ export async function processRandomEvents(
     return { events, skipDecisions: false };
   }
 
-  // Tick 10: GUARANTEED first-cycle closer. The probabilistic pool can
-  // produce a "nothing happened in cycle 1" silence by chance; force one
-  // high-energy event here so the host always has narration material in
-  // the first 5 minutes. Skips the regular probabilistic rolls for this
-  // cycle boundary so we don't double-fire.
-  if (tick === 10) {
+  // Tick 5: GUARANTEED first-cycle closer. With 2-agents-per-tick mode,
+  // cycle 1 ends at tick 5 (5 ticks × 2 agents = 10 agent-actions). The
+  // probabilistic pool can produce a "nothing happened in cycle 1"
+  // silence by chance; force one high-energy event here so the host
+  // always has narration material in the first ~2 minutes. Skips the
+  // regular probabilistic rolls for this cycle boundary so we don't
+  // double-fire.
+  if (tick === 5) {
     const openers = [surpriseDemoDay, surpriseBoardVisit, viralLinkedIn, badGlassdoorReview];
     const fn = openers[Math.floor(Math.random() * openers.length)];
     events.push(...(await fn(deps, tick)));
@@ -109,16 +111,18 @@ export async function processRandomEvents(
     return true;
   };
 
-  // Probabilities bumped post-pre-flight #1 (sum was ~0.70/cycle → ~6
-  // events/game including the 2 fixed bonuses; the show felt sparse).
-  // New sum ≈ 1.00/cycle → ~8 random events + 2 fixed bonuses ≈ 10/game.
-  if (roll("surprise_board_visit", 0.15))   events.push(...(await surpriseBoardVisit(deps, tick)));
-  if (roll("bad_glassdoor_review", 0.15))   events.push(...(await badGlassdoorReview(deps, tick)));
-  if (roll("surprise_promotion", 0.13))     events.push(...(await surprisePromotion(deps, tick)));
-  if (roll("surprise_demo_day", 0.13))      events.push(...(await surpriseDemoDay(deps, tick)));
-  if (roll("budget_cuts", 0.15))            events.push(...(await budgetCuts(deps, tick)));
-  if (roll("viral_linkedin", 0.15))         events.push(...(await viralLinkedIn(deps, tick)));
-  if (roll("printer_sentience", 0.14))      events.push(...(await printerAchievesSentience(deps, tick)));
+  // 2-agents-per-tick mode doubles the cycle frequency (cycle = 5 ticks
+  // instead of 10), so per-cycle probabilities are halved here to keep
+  // total events per game roughly the same as the bumped post-pre-flight-1
+  // values. Sum ≈ 0.50/cycle × 16 cycles = ~8 random events + 2 fixed
+  // bonuses ≈ 10/game.
+  if (roll("surprise_board_visit", 0.08))   events.push(...(await surpriseBoardVisit(deps, tick)));
+  if (roll("bad_glassdoor_review", 0.08))   events.push(...(await badGlassdoorReview(deps, tick)));
+  if (roll("surprise_promotion", 0.07))     events.push(...(await surprisePromotion(deps, tick)));
+  if (roll("surprise_demo_day", 0.07))      events.push(...(await surpriseDemoDay(deps, tick)));
+  if (roll("budget_cuts", 0.08))            events.push(...(await budgetCuts(deps, tick)));
+  if (roll("viral_linkedin", 0.08))         events.push(...(await viralLinkedIn(deps, tick)));
+  if (roll("printer_sentience", 0.07))      events.push(...(await printerAchievesSentience(deps, tick)));
 
   state.lastFiredEvents = fired;
 

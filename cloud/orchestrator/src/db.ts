@@ -318,6 +318,24 @@ export class Db {
     return result.results ?? [];
   }
 
+  /**
+   * Recent actions targeting a specific agent. Used by the LLM prompt
+   * builder to surface a "you just got hit by X" retaliation pull. Filters
+   * to actions whose action_data.target == the given agentId.
+   */
+  async getRecentActionsTargetingAgent(targetId: string, sinceTick: number, limit: number): Promise<any[]> {
+    const result = await this.db
+      .prepare(
+        `SELECT * FROM action_logs
+         WHERE tick > ?
+           AND json_extract(action_data, '$.target') = ?
+         ORDER BY tick DESC, id DESC LIMIT ?`
+      )
+      .bind(sinceTick, targetId, limit)
+      .all<any>();
+    return result.results ?? [];
+  }
+
   async countWorkActionsSince(agentId: string, tickFrom: number): Promise<number> {
     const row = await this.db
       .prepare(

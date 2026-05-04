@@ -11,15 +11,15 @@ This spec is the locked design from the design pass. All numbers are intentional
 
 ## Game shape at a glance
 
-- **Total length:** 30 min
-- **Cycle structure:** round-robin within each cycle — managers act one at a time in randomized turn order
-- **Per-action time:** 20s (Stellar settle ~5s, dashboard animation ~5s, narrator beat ~10s)
-- **Cycle length:** 10 managers × 20s + ~30s for random events = **4 minutes**
-- **Cycles per game:** **8**
-- **Total manager actions:** ~75-80
-- **Total on-chain transactions (incl. random events):** ~85+
+- **Total length:** ~33 min
+- **Cycle structure:** round-robin within each cycle — managers act in randomized turn order, **2 agents per tick** (one shortly after the other inside the same 25-second alarm)
+- **Per-tick time:** 25 seconds (= ~12.5s of dashboard focus per individual action)
+- **Cycle length:** 10 managers ÷ 2 per tick = **5 ticks = 2:05**
+- **Cycles per game:** **16**
+- **Total manager actions:** 80 ticks × 2 = **160** (each manager acts ~16 times)
+- **Total on-chain transactions (incl. random events):** ~120+
 
-This produces a steady transaction drumbeat with cycle-boundary punctuation, instead of big-bang ticks where 10 actions land in 5 seconds.
+The 2-agents-per-tick cadence keeps the dashboard active without forcing 25-second silences between actions, while still giving the host plenty of time to narrate each beat.
 
 ## The 27 actions
 
