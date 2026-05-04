@@ -1461,19 +1461,19 @@
     // optional and used when the action carries a specific detail string
     // (e.g. the consultant report's title).
     const ACTION_NARRATIVE = {
-      spread_rumor:           (t)    => 'spread a rumor about ' + t,
-      file_complaint:         (t)    => 'filed an HR complaint against ' + t,
+      spread_rumor:           (t, d) => 'spread a rumor about ' + t + (d ? ' — ' + d : ''),
+      file_complaint:         (t, d) => 'filed an HR complaint against ' + t + (d ? ' ' + d : ''),
       sensitivity_training:   (t)    => 'sent ' + t + ' to sensitivity training',
       anonymous_pulse_survey: (t)    => 'launched an "anonymous" pulse survey about ' + t,
       strategy_report:        (_, d) => d ? 'got a consultant report titled "' + d + '"' : 'got a consultant report',
-      sabotage_plan:          (t)    => 'built a sabotage dossier on ' + t,
+      sabotage_plan:          (t, d) => 'built a sabotage dossier on ' + t + (d ? ' (with ' + d + ')' : ''),
       move_meeting_early:     (t)    => "moved " + t + "'s meeting to 7:30am",
       schedule_pre_meeting:   (t)    => 'scheduled a pre-meeting on ' + t + "'s calendar",
       schedule_conflict:      (t)    => "cancelled " + t + "'s CEO meeting",
       hostile_takeover:       (t)    => "mounted a hostile takeover of " + t + "'s partnerships",
       slack_bomb:             ()     => 'dropped a Slack bomb in #general',
-      book_ceo_time:          ()     => 'met with the CEO',
-      office_party:           ()     => 'threw an office party',
+      book_ceo_time:          (_, d) => d ? 'met with the CEO and ' + d : 'met with the CEO',
+      office_party:           (_, d) => d ? 'threw an office party — ' + d : 'threw an office party',
       buy_coffee:             ()     => 'bought coffee',
       coffee_chat:            (t)    => 'had a coffee chat with ' + t,
     };

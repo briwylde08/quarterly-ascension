@@ -60,6 +60,58 @@ const RUMOR_FLAVORS = [
   "told the new hire to 'just figure it out' and left the country",
 ];
 
+// Sabotage Dossier contents — what was actually in the dossier.
+const DOSSIER_FLAVORS = [
+  "their unread email count from Q3 (it's six figures)",
+  "a Slack thread where they admit they don't know what 'OKRs' stands for",
+  "every meeting they joined late this quarter (47 of 51)",
+  "their 401k contribution rate (it's nothing)",
+  "the time they cried during the offsite breakout group",
+  "a screenshot of them napping in the meditation room",
+  "an internal memo they accidentally sent to all-staff",
+  "their LinkedIn endorsement history (suspicious)",
+  "receipts from the company card that mention 'team morale' five times",
+  "a calendar block titled 'thinking time' that's been on every Tuesday for a year",
+];
+
+// File Complaint flavor — what was the complaint actually about.
+const COMPLAINT_FLAVORS = [
+  "for hoarding meeting room bookings",
+  "for sending 'just bumping this' messages 47 times in one Slack channel",
+  "for parking in visitor spaces three days in a row",
+  "for microwaving fish in the kitchen, twice",
+  "for taking credit for someone else's slide design",
+  "for repeatedly mispronouncing the new VP's name",
+  "for using exclamation marks in formal emails — pattern of escalation",
+  "for replying-all with a single thumbs-up emoji to a 200-person email",
+  "for booking 'work from home' on the day of the all-hands",
+  "for an unprofessional Slack status set to 'in the void'",
+];
+
+// CEO meeting topics — varies by whether the agent had Has Deliverable.
+const CEO_MEETING_TOPICS_DELIVERABLE = [
+  "presented their Strategic Initiative deck and got a shoulder squeeze",
+  "walked the CEO through their growth-loop framework. Got nodded at.",
+  "previewed Q2 plans and the CEO interrupted to ask 'wait, but what about Q1's?'",
+  "delivered a market-trend update and the CEO said 'great, we should do that'",
+  "showed the consultant deliverable. CEO actually read past slide 3.",
+  "demo'd a roadmap with three real arrows. CEO took a photo of the screen.",
+];
+const CEO_MEETING_TOPICS_EMPTY = [
+  "had nothing to present and tried to wing it. Pre-prep was checking LinkedIn.",
+  "showed up empty-handed. Pretended their laptop was 'still updating.'",
+  "started with 'so, just kicking the tires here' and the CEO checked their watch",
+  "asked questions instead of presenting. The CEO does not enjoy receiving questions.",
+  "presented a one-slide 'high-level overview' that was just a photo of a whiteboard",
+  "talked for 11 minutes without saying anything actionable",
+];
+const CEO_MEETING_TOPICS_BLOCKED = [
+  "the meeting was cancelled — 'calendar conflict,' allegedly",
+  "showed up to find the room booked by Trevor's 'visioning session'",
+  "got bumped by an executive 'priority' that turned out to be golf",
+  "was told to 'reach out to my EA to reschedule' and the EA never responded",
+];
+
 // Slack Bomb flavor — what kind of #general post the agent dropped.
 const SLACK_BOMB_FLAVORS = [
   "Posted a 1,200-word screed in #general about 'team alignment.'",
@@ -242,12 +294,41 @@ export async function processTick(deps: TickDeps, activeAgentIds?: string[]): Pr
   // Phase 5: passive ticks (Inspired bonus + Tired/Problematic decay)
   await applyPassiveStatusDecay(deps, tick);
 
-  // Retreat mode: natural fatigue accrual is dropped. Hit the Wall is now
-  // spread only by the move_meeting_early action as an intentional weapon —
-  // ambient burnout doesn't fit a 30-min show where every cycle wants a
-  // visible paid action.
+  // Phase 5b: ambient fatigue check. Re-added post-game-2: pre-flight #2
+  // had basically nobody hit Hit the Wall because Move Meeting Early was
+  // rarely picked. Now any agent whose last 5 personal actions contain
+  // no recovery action (rest / buy_coffee / cry_in_stairwell) gets Hit
+  // the Wall. Restores the action-economy purpose of buy_coffee and
+  // surfaces the Cry in the Stairwell beat more often.
+  await applyFatigue(deps, tick);
 
   console.log(`\nTick ${tick} complete.\n`);
+}
+
+async function applyFatigue(deps: TickDeps, tick: number): Promise<void> {
+  const { db, emit } = deps;
+  const FATIGUE_WINDOW = 5;
+  const RECOVERY_ACTIONS = new Set(["rest", "buy_coffee", "cry_in_stairwell"]);
+  const agents = await db.getAllAgents();
+  for (const agent of agents) {
+    if (agent.statusEffects.some((e) => e.type === "tired")) continue;
+    const recent = await db.getRecentActionLogsForAgent(agent.id, FATIGUE_WINDOW);
+    if (recent.length < FATIGUE_WINDOW) continue;
+    const noRecovery = recent.every((r) => !RECOVERY_ACTIONS.has(r.action_type));
+    if (!noRecovery) continue;
+    await db.updateAgentStatusEffects(agent.id, [
+      ...agent.statusEffects,
+      { type: "tired", expiresAtTick: tick + 3 },
+    ]);
+    await emit({
+      id: uuid(),
+      tick,
+      timestamp: new Date(),
+      type: "status_effect",
+      agentId: agent.id,
+      description: `${agent.name} hit the wall (${FATIGUE_WINDOW} turns without a break) — now Hit the Wall (-2/cycle for 3 cycles, lifted by Rest, Buy Coffee, or Cry in the Stairwell).`,
+    });
+  }
 }
 
 const MYSTERIOUS_CREDIT_FLAVORS = [
@@ -437,8 +518,13 @@ async function executeAction(
           // Documented targets (from sabotage_plan; internal key "marked")
           // auto-succeed — the dossier is in your hand and the receipts
           // have been pre-disputed.
+          // Questionable Judgment (from spread_rumor) gives a softer
+          // bump: 65% instead of 50%. The credibility hit makes the
+          // target less able to defend a stolen-credit claim.
           const targetIsMarked = target?.statusEffects.some((e) => e.type === "marked") ?? false;
-          const success = targetIsMarked || Math.random() < 0.5;
+          const targetHasQJ = target?.statusEffects.some((e) => e.type === "questionable_judgment") ?? false;
+          const baseRate = targetHasQJ ? 0.65 : 0.5;
+          const success = targetIsMarked || Math.random() < baseRate;
           await recordTargetUse(deps, agent.id, "take_credit", action.target, tick);
           if (success) {
             prestigeChange = 30;
@@ -626,6 +712,7 @@ async function executePaidAction(
 
   let prestigeChange = 0;
   let outcome = "";
+  let actionDetail: string | undefined;
 
   switch (action.type) {
     // === Coffee Cart ===
@@ -662,6 +749,7 @@ async function executePaidAction(
           ]);
           await recordTargetUse(deps, agent.id, "spread_rumor", action.target, tick);
           const rumor = RUMOR_FLAVORS[Math.floor(Math.random() * RUMOR_FLAVORS.length)];
+          actionDetail = `that they ${rumor}`;
           outcome = `Spread a rumor about ${target.name} — that they ${rumor}. -5 prestige + QUESTIONABLE JUDGMENT 2 cycles.`;
         }
       }
@@ -672,9 +760,12 @@ async function executePaidAction(
         // Filer also gets +5 prestige for "managerial diligence." Target
         // gets Under Investigation for 1 cycle (can't retaliate against filer).
         prestigeChange = 5;
-        outcome = `Filed HR complaint against ${action.target}; you receive a "diligence" prestige bonus. Target Under Investigation for 1 cycle.`;
-        await db.updateAgentPrestige(agent.id, prestigeChange);
+        const complaint = COMPLAINT_FLAVORS[Math.floor(Math.random() * COMPLAINT_FLAVORS.length)];
+        actionDetail = complaint;
         const target = await db.getAgent(action.target);
+        const targetName = target?.name ?? action.target;
+        outcome = `Filed HR complaint against ${targetName} ${complaint}. +5 'diligence' prestige to you; target Under Investigation for 1 cycle.`;
+        await db.updateAgentPrestige(agent.id, prestigeChange);
         if (target) {
           await db.updateAgentStatusEffects(action.target, [
             ...target.statusEffects,
@@ -758,14 +849,15 @@ async function executePaidAction(
         }
         await recordTargetUse(deps, agent.id, "sabotage_plan", action.target, tick);
         // Stronger prestige hit + 2-tick Documented debuff. Well-allied
-        // targets halve the prestige damage.
-        const recent = await db.getRecentActionLogsForAgent(action.target, 3);
-        const summary = recent.length > 0
-          ? recent.map((r) => `t${r.tick}:${r.action_type}`).join(", ")
-          : "no recent activity";
+        // targets halve the prestige damage. The dossier flavor surfaces
+        // *what's in the dossier* — punches up what was previously a
+        // generic mechanic into a specific corporate-comedy beat.
         const target = await db.getAgent(action.target);
+        const targetName = target?.name ?? action.target;
         const wellAllied = target ? target.allies.length >= 3 : false;
         const hit = wellAllied ? -5 : -10;
+        const dossierContent = DOSSIER_FLAVORS[Math.floor(Math.random() * DOSSIER_FLAVORS.length)];
+        actionDetail = dossierContent;
         await db.updateAgentPrestige(action.target, hit);
         if (target) {
           await db.updateAgentStatusEffects(action.target, [
@@ -774,8 +866,8 @@ async function executePaidAction(
           ]);
         }
         outcome = wellAllied
-          ? `Sabotage dossier on ${action.target}: ${hit} prestige (alliance bloc absorbed half the hit) + Documented for 2 cycles. Recent moves: ${summary}`
-          : `Sabotage dossier on ${action.target}: ${hit} prestige + Documented for 2 cycles (next take_credit against them auto-succeeds). Recent moves: ${summary}`;
+          ? `Built a dossier on ${targetName} — including ${dossierContent}. ${hit} prestige (their partnerships absorbed half) + Documented for 2 cycles.`
+          : `Built a dossier on ${targetName} — including ${dossierContent}. ${hit} prestige + Documented for 2 cycles (next Take Credit auto-succeeds).`;
       }
       break;
 
@@ -891,14 +983,20 @@ async function executePaidAction(
       const blocked = a.statusEffects.some((e) => e.type === "meeting_blocked");
       if (blocked) {
         prestigeChange = -10;
-        outcome = "CEO meeting blocked — prior schedule conflict couldn't be resolved (-10 prestige)";
+        const topic = CEO_MEETING_TOPICS_BLOCKED[Math.floor(Math.random() * CEO_MEETING_TOPICS_BLOCKED.length)];
+        actionDetail = topic;
+        outcome = `CEO meeting blocked — ${topic}. -10 prestige.`;
       } else if (hasDeliverable) {
         prestigeChange = 40;
-        outcome = "CEO meeting successful — impressed with deliverable (+40 prestige)";
+        const topic = CEO_MEETING_TOPICS_DELIVERABLE[Math.floor(Math.random() * CEO_MEETING_TOPICS_DELIVERABLE.length)];
+        actionDetail = topic;
+        outcome = `Met with the CEO — ${topic}. +40 prestige.`;
         await db.updateAgentStatusEffects(agent.id, a.statusEffects.filter((e) => e.type !== "has_deliverable"));
       } else {
         prestigeChange = -20;
-        outcome = "CEO meeting awkward — had nothing to present (-20 prestige)";
+        const topic = CEO_MEETING_TOPICS_EMPTY[Math.floor(Math.random() * CEO_MEETING_TOPICS_EMPTY.length)];
+        actionDetail = topic;
+        outcome = `CEO meeting awkward — ${topic}. -20 prestige.`;
       }
       await db.updateAgentPrestige(agent.id, prestigeChange);
       break;
@@ -906,8 +1004,10 @@ async function executePaidAction(
 
     // === The Caterer ===
     case "office_party": {
-      // Host gets +15. Every other manager gets +5. Generous play that
-      // visibly helps your rivals — comedy of cost-benefit on the dashboard.
+      // Host gets +15. Every other manager gets +5. The Caterer NPC
+      // returns a `theme` for what kind of party it was; we surface
+      // that as actionDetail so the narrative header reads "threw an
+      // office party (cocktails and tiny appetizers in the lobby)".
       prestigeChange = 15;
       await db.updateAgentPrestige(agent.id, prestigeChange);
       const all = await db.getAllAgents();
@@ -917,7 +1017,9 @@ async function executePaidAction(
         await db.updateAgentPrestige(other.id, 5);
         rippled++;
       }
-      outcome = `Threw an office party. +15 prestige to you; +5 to each of the ${rippled} other managers. Generosity!`;
+      const theme = result.data?.theme || "an office party";
+      actionDetail = theme;
+      outcome = `Threw an office party — ${theme}. +15 prestige to you; +5 to each of the ${rippled} other managers.`;
       break;
     }
 
@@ -925,7 +1027,7 @@ async function executePaidAction(
       outcome = `Completed ${action.type}`;
   }
 
-  return { outcome, prestigeChange, txHash: result.txHash };
+  return { outcome, prestigeChange, txHash: result.txHash, actionDetail };
 }
 
 async function handleSchmooze(deps: TickDeps, agent: Agent, targetId: string): Promise<string> {

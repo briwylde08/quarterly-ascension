@@ -87,7 +87,7 @@ const ALL_ACTIONS = [
   { type: "move_meeting_early", description: "Move target's meeting to 7:30am ($10). Target -5 prestige + Hit the Wall (-2/cycle for 3 cycles = -11 total damage, plus they'll need to spend a turn on Rest or $5 on Buy Coffee — that's stolen value on top of the prestige hit). Underrated cheap attack.", cost: 10, requiresTarget: true },
 
   // === MID PAID ($20 – $25) ===
-  { type: "schedule_pre_meeting", description: "Schedule a pre-meeting for the meeting ($20). Target loses 15 prestige + gains MEETING BLOCKED. Loyal managers (loyalty > 70) are immune — they think this is normal.", cost: 20, requiresTarget: true },
+  { type: "schedule_pre_meeting", description: "Schedule a pre-meeting for the meeting ($20). Target loses 15 prestige (highest single-shot damage at this cost) + gains MEETING BLOCKED for 2 cycles, blocking their Book CEO Time play. Loyal managers (loyalty > 70) think pre-meetings are normal and are immune — but most managers aren't loyal.", cost: 20, requiresTarget: true },
   { type: "file_complaint", description: "File HR complaint (you +5 'diligence' prestige; target gets Under Investigation, can't retaliate against you for 1 tick)", cost: 22, requiresTarget: true },
   { type: "strategy_report", description: "Get consultant report (+35 prestige, gives Has Deliverable for a future +40 CEO meeting)", cost: 30 },
   { type: "slack_bomb", description: "Drop a Slack bomb in #general ($25). Two random other managers each lose 6 prestige (caught in the crossfire). You gain 3 prestige (eyeballs are eyeballs). 15% chance HR flags it — you also lose 5 prestige and gain Problematic. Group damage with random targeting; pure chaos.", cost: 25 },
@@ -98,7 +98,7 @@ const ALL_ACTIONS = [
   { type: "sensitivity_training", description: "Send rival to sensitivity training (you +5 'managerial accountability' prestige; target -20 + Problematic for 4 ticks at -3/tick. Setup play — Bad Glassdoor Review hits Problematic targets for an extra -10.)", cost: 30, requiresTarget: true },
   { type: "schedule_conflict", description: "Cancel target's CEO meeting (clears their Has Deliverable + Meeting-Blocked for 2 ticks)", cost: 30, requiresTarget: true },
   { type: "hostile_takeover", description: "Mount a hostile takeover of target's cross-functional partnerships ($35). Their existing partners become YOUR partners; target's partner list goes to zero. Mid-to-late game power move.", cost: 35, requiresTarget: true },
-  { type: "sabotage_plan", description: "Build dossier on target (-10 prestige to target + 'Documented' for 2 ticks: any take_credit against them auto-succeeds). Setup play.", cost: 40, requiresTarget: true },
+  { type: "sabotage_plan", description: "Commission a dossier on target (-10 prestige + Documented for 2 cycles, meaning the next Take Credit against them is a guaranteed +30 prestige to the attacker). Combined value: $40 cost, ~$70+ prestige swing if you Take Credit on cycle 2. The biggest setup play in the game.", cost: 40, requiresTarget: true },
   { type: "book_ceo_time", description: "Meet with CEO (+40 prestige with Has Deliverable, -20 without; -10 if Meeting-Blocked)", cost: 40 },
 ];
 
