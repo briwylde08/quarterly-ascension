@@ -893,11 +893,12 @@ export class GameOrchestrator {
     const activeAgentId = await this.pickActiveAgentForRoundRobin();
     await this.runTick(activeAgentId);
 
-    // After the tick, refresh the gossip narrative once per cycle (every
-    // 10 ticks = end of each cycle). Cheap (one mini call), failure
-    // shouldn't break the tick loop.
+    // After the tick, refresh the gossip narrative every 5 ticks (twice
+    // per cycle — once mid-cycle and once at the boundary). Pre-flight #1
+    // showed the Water Cooler felt stale at once-per-cycle. Cheap (one
+    // mini call), failure shouldn't break the tick loop.
     const newTick = await db.getCurrentTick();
-    if (newTick > 0 && newTick % 10 === 0) {
+    if (newTick > 0 && newTick % 5 === 0) {
       try {
         await this.runGossipPass(newTick);
       } catch (err) {

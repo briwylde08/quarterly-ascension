@@ -239,7 +239,7 @@ export function buildServiceUrls(npcBase: string): Record<string, { url: string;
     sensitivity_training:    { url: npc("hr-dept",        "/sensitivity-training"),   name: "HR Department",       price: 30 },
 
     // === The Consultant ===
-    strategy_report:         { url: npc("consultant",     "/strategy-report"),        name: "The Consultant",      price: 25 },
+    strategy_report:         { url: npc("consultant",     "/strategy-report"),        name: "The Consultant",      price: 30 },
     sabotage_plan:           { url: npc("consultant",     "/sabotage-plan"),          name: "The Consultant",      price: 40 },
 
     // === Executive Assistant ===
@@ -248,7 +248,7 @@ export function buildServiceUrls(npcBase: string): Record<string, { url: string;
     leak_org_chart:          { url: npc("exec-assistant", "/leak-org-chart"),         name: "Executive Assistant", price: 25 },
     schedule_conflict:       { url: npc("exec-assistant", "/schedule-conflict"),      name: "Executive Assistant", price: 30 },
     hostile_takeover:        { url: npc("exec-assistant", "/hostile-takeover"),       name: "Executive Assistant", price: 35 },
-    book_ceo_time:           { url: npc("exec-assistant", "/book-ceo-time"),          name: "Executive Assistant", price: 50 },
+    book_ceo_time:           { url: npc("exec-assistant", "/book-ceo-time"),          name: "Executive Assistant", price: 40 },
 
     // === The Caterer ===
     office_party:            { url: npc("caterer",        "/office-party"),           name: "The Caterer",         price: 25 },

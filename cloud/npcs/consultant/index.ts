@@ -37,7 +37,7 @@ type Endpoint = {
 
 const ENDPOINTS: Record<string, Endpoint> = {
   "/strategy-report": {
-    price: 25,
+    price: 30,
     needsTarget: false,
     payload: () => {
       const title = pick(REPORT_TITLES);

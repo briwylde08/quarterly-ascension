@@ -1394,6 +1394,25 @@
 
     function enrichPaidRowWithEvent(row, event) {
       const entryId = row.dataset.entryId;
+      // Upgrade the action line to the narrative form once we know what
+      // action this was. Replaces "Actor → Service" with "Actor went to
+      // Service and [verb phrase with target]".
+      if (event.actionType && ACTION_NARRATIVE[event.actionType]) {
+        const actionEl = row.querySelector('.feed-action');
+        if (actionEl && actionEl.querySelector('.arrow')) {
+          const fromAgentName = (actionEl.querySelector('.actor') || {}).textContent || '';
+          const toService = (actionEl.querySelector('.recipient') || {}).textContent || '';
+          const narrative = buildPaidActionLine({
+            fromAgentName,
+            toService,
+            actionType: event.actionType,
+            targetName: event.targetName,
+          });
+          if (narrative) {
+            actionEl.innerHTML = '<span class="actor">' + narrative + '</span>';
+          }
+        }
+      }
       // Pull current ticker fields back out of the DOM (rough but works); the next
       // ticker_update will re-render cleanly. For now, just append outcome + reasoning.
       const existingQuote = row.querySelector('.feed-quote');
@@ -1432,6 +1451,51 @@
       }
     }
 
+    // Map action type → narrative verb phrase. {target} is substituted with
+    // the target manager's name when one exists. Used to render headers like
+    // "Kevin Hustle went to HR and spread a rumor about Diane Process"
+    // instead of the bare "Kevin Hustle → HR Department".
+    const ACTION_NARRATIVE = {
+      spread_rumor:           (t) => 'spread a rumor about ' + t,
+      file_complaint:         (t) => 'filed an HR complaint against ' + t,
+      sensitivity_training:   (t) => 'sent ' + t + ' to sensitivity training',
+      anonymous_pulse_survey: (t) => 'launched an "anonymous" pulse survey about ' + t,
+      strategy_report:        ()  => 'got a consultant report',
+      sabotage_plan:          (t) => 'built a sabotage dossier on ' + t,
+      move_meeting_early:     (t) => "moved " + t + "'s meeting to 7:30am",
+      schedule_pre_meeting:   (t) => 'scheduled a pre-meeting on ' + t + "'s calendar",
+      schedule_conflict:      (t) => "cancelled " + t + "'s CEO meeting",
+      hostile_takeover:       (t) => "mounted a hostile takeover of " + t + "'s partnerships",
+      leak_org_chart:         ()  => 'leaked the org chart',
+      book_ceo_time:          ()  => 'met with the CEO',
+      office_party:           ()  => 'threw an office party',
+      buy_coffee:             ()  => 'bought coffee',
+      coffee_chat:            (t) => 'had a coffee chat with ' + t,
+    };
+    // Service short-names for the header preamble.
+    const SERVICE_SHORT = {
+      'HR Department':       'HR',
+      'The Consultant':      'the Consultant',
+      'Executive Assistant': 'the Exec Assistant',
+      'The Caterer':         'the Caterer',
+      'Coffee Cart':         'the Coffee Cart',
+    };
+
+    /**
+     * Build the narrative action line for paid actions. Returns null when
+     * we don't have actionType yet (initial pending render before the event
+     * arrives) — caller falls back to the bare "Actor → Service" form.
+     */
+    function buildPaidActionLine(t) {
+      if (!t.actionType) return null;
+      const builder = ACTION_NARRATIVE[t.actionType];
+      if (!builder) return null;
+      const targetName = t.targetName || t.targetId || '';
+      const verbPhrase = builder(targetName);
+      const short = SERVICE_SHORT[t.toService] || t.toService;
+      return escape(t.fromAgentName) + ' went to ' + escape(short) + ' and ' + escape(verbPhrase);
+    }
+
     function paidFeedInnerHTML(t, outcomeText) {
       const time = formatTime(t.settledAt || t.submittedAt || Date.now());
       const statusKey = t.status || 'pending';
@@ -1448,17 +1512,25 @@
       const errorHtml = t.error ? '<div class="feed-error">Network response: ' + escape(t.error) + '</div>' : '';
       const outcomeHtml = outcomeText ? '<div class="feed-outcome">' + escape(outcomeText) + '</div>' : '';
 
+      // Narrative line if we know what action was taken; fallback to the
+      // bare actor→service form for the initial pending render.
+      const narrative = buildPaidActionLine(t);
+      const actionLineHtml = narrative
+        ? '<div class="feed-action"><span class="actor">' + narrative + '</span></div>'
+        : ''
+          + '<div class="feed-action">'
+          +   '<span class="actor">' + escape(t.fromAgentName) + '</span>'
+          +   '<span class="arrow">→</span>'
+          +   '<span class="recipient">' + escape(t.toService) + '</span>'
+          + '</div>';
+
       return ''
         + '<div class="feed-head">'
         +   '<span class="cycle">Cycle ' + (t.cycle || currentTick) + '</span>'
         +   '<span>' + time + '</span>'
         +   '<span class="badge-type ' + (statusKey === 'failed' ? 'payment_failed' : 'payment') + '">' + (statusKey === 'failed' ? 'Settlement Failed' : 'Settlement') + '</span>'
         + '</div>'
-        + '<div class="feed-action">'
-        +   '<span class="actor">' + escape(t.fromAgentName) + '</span>'
-        +   '<span class="arrow">→</span>'
-        +   '<span class="recipient">' + escape(t.toService) + '</span>'
-        + '</div>'
+        + actionLineHtml
         + '<div class="feed-mpp">'
         +   '<span class="amount">$' + (t.amount != null ? Number(t.amount).toFixed(2) : '0.00') + ' DLBR</span>'
         +   '<span class="status-badge ' + statusKey + '">' + statusLabel + '</span>'
@@ -1543,18 +1615,30 @@
     // Hover-text for each status type. Surfaces the mechanic so players
     // can read what's happening to their manager without digging through
     // the email or asking.
+    // Display labels override the raw effect type for retreat-renamed
+    // statuses. Internal keys ("tired", "marked") stay stable; the badge
+    // text and tooltip are overridden here.
+    const STATUS_LABEL_OVERRIDE = {
+      tired: 'Hit the Wall',
+      marked: 'Documented',
+      mysterious_influence: 'Mysterious Influence',
+      questionable_judgment: 'Questionable Judgment',
+    };
     const STATUS_TOOLTIPS = {
-      tired: 'Tired: −2 prestige/cycle decay. Removed by rest, coffee, or fancy coffee.',
-      caffeinated: 'Caffeinated: immune to Tired. Wears off after the listed cycle.',
-      inspired: 'Inspired: +5 prestige/cycle bonus.',
-      under_investigation: 'Under Investigation: target cannot retaliate against the filer for the duration.',
-      problematic: 'Problematic: −3 prestige/cycle decay. Removed by birthday cake.',
-      under_review: 'Under Review: cannot book CEO time.',
-      technical_difficulties: 'Technical Difficulties: forced to rest next cycle.',
-      has_deliverable: 'Has Deliverable: next CEO meeting awards +40 prestige.',
-      mandatory_motivation: 'Mandatory Motivation: forced to rest for the duration.',
-      meeting_blocked: 'Meeting-Blocked: cannot book CEO time.',
-      marked: 'Marked: next take_credit against you auto-succeeds (40% → 100%).',
+      tired: 'Hit the Wall: −2 prestige/cycle decay for 3 cycles. Removed by rest, coffee, or cry_in_stairwell. Spread by move_meeting_early.',
+      marked: 'Documented: next take_credit against you auto-succeeds. Lasts 2 cycles.',
+      mysterious_influence: 'Mysterious Influence: +2 prestige/cycle passive. Other agents occasionally get credited for things you did. Acquired after 3× join_meeting_silently.',
+      questionable_judgment: 'Questionable Judgment: public credibility tag for 2 cycles. From spread_rumor.',
+      problematic: 'Problematic: −3 prestige/cycle decay for 4 cycles. Removed by cry_in_stairwell.',
+      under_investigation: 'Under Investigation: cannot take hostile action against the filer for the duration.',
+      has_deliverable: 'Has Deliverable: next CEO meeting awards +40 prestige (instead of -20).',
+      meeting_blocked: 'Meeting-Blocked: cannot book CEO time for the duration.',
+      // Legacy keys (no source in retreat; kept for back-compat with in-flight state).
+      caffeinated: 'Caffeinated (legacy)',
+      inspired: 'Inspired (legacy)',
+      under_review: 'Under Review (legacy)',
+      technical_difficulties: 'Technical Difficulties (legacy)',
+      mandatory_motivation: 'Mandatory Motivation (legacy)',
     };
 
     function managerRowHTML(a, i) {
@@ -1564,7 +1648,8 @@
       const traitText = traits ? ('A' + traits.aggression + ' · G' + traits.greed + ' · C' + traits.caution + ' · L' + traits.loyalty) : '';
       const effectBadges = (a.statusEffects || []).map(e => {
         const tip = STATUS_TOOLTIPS[e.type] || e.type;
-        return '<span class="badge ' + e.type + '" title="' + escape(tip) + '">' + e.type.replace(/_/g, ' ') + '</span>';
+        const label = STATUS_LABEL_OVERRIDE[e.type] || e.type.replace(/_/g, ' ');
+        return '<span class="badge ' + e.type + '" title="' + escape(tip) + '">' + escape(label) + '</span>';
       }).join('');
       const winnerBadge = isWinner
         ? '<span class="badge winner">👑 Promoted to VP</span>'

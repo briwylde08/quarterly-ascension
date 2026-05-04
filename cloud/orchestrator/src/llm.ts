@@ -62,7 +62,7 @@ export async function generateGossip(
 // hostile_takeover, boomerang, cry_in_stairwell, join_meeting_silently.
 const ALL_ACTIONS = [
   // === FREE (12) ===
-  { type: "work", description: "Do actual work (+5 prestige, +$5 base salary, free)", cost: 0 },
+  { type: "work", description: "Do actual work (+5 prestige, +$2 base salary, free). Boring. The audience does not enjoy watching this.", cost: 0 },
   { type: "expense_report", description: "File an expense report (+$10 reimbursed; 20% chance Finance flags it for -5 prestige). Free, no skill required.", cost: 0 },
   { type: "rest", description: "Rest and recover (removes Hit the Wall, free)", cost: 0 },
   { type: "take_credit", description: "Attempt to claim credit for someone's work (50% success: +30 prestige, 50% fail: -20 prestige)", cost: 0, requiresTarget: true },
@@ -89,7 +89,7 @@ const ALL_ACTIONS = [
   // === MID PAID ($20 – $25) ===
   { type: "schedule_pre_meeting", description: "Schedule a pre-meeting for the meeting ($20). Target loses 15 prestige + gains MEETING BLOCKED. Loyal managers (loyalty > 70) are immune — they think this is normal.", cost: 20, requiresTarget: true },
   { type: "file_complaint", description: "File HR complaint (you +5 'diligence' prestige; target gets Under Investigation, can't retaliate against you for 1 tick)", cost: 22, requiresTarget: true },
-  { type: "strategy_report", description: "Get consultant report (+35 prestige, gives Has Deliverable for a future +40 CEO meeting)", cost: 25 },
+  { type: "strategy_report", description: "Get consultant report (+35 prestige, gives Has Deliverable for a future +40 CEO meeting)", cost: 30 },
   { type: "leak_org_chart", description: "Insider intel — top 3 wealth + alliance graph + you gain +5 prestige (positional advantage)", cost: 25 },
   { type: "office_party", description: "Throw an office party ($25). +5 prestige to ALL managers and +15 to you. Generous play that visibly helps your rivals too.", cost: 25 },
   { type: "anonymous_pulse_survey", description: "Launch an 'anonymous' morale survey somehow entirely about the leader ($25). Target loses 50 prestige. Available only when YOU are rank ≥ 4 AND target is rank #1. One shot per game.", cost: 25, requiresTarget: true },
@@ -99,7 +99,7 @@ const ALL_ACTIONS = [
   { type: "schedule_conflict", description: "Cancel target's CEO meeting (clears their Has Deliverable + Meeting-Blocked for 2 ticks)", cost: 30, requiresTarget: true },
   { type: "hostile_takeover", description: "Mount a hostile takeover of target's cross-functional partnerships ($35). Their existing partners become YOUR partners; target's partner list goes to zero. Mid-to-late game power move.", cost: 35, requiresTarget: true },
   { type: "sabotage_plan", description: "Build dossier on target (-10 prestige to target + 'Documented' for 2 ticks: any take_credit against them auto-succeeds). Setup play.", cost: 40, requiresTarget: true },
-  { type: "book_ceo_time", description: "Meet with CEO (+40 prestige with Has Deliverable, -20 without; -10 if Meeting-Blocked)", cost: 50 },
+  { type: "book_ceo_time", description: "Meet with CEO (+40 prestige with Has Deliverable, -20 without; -10 if Meeting-Blocked)", cost: 40 },
 ];
 
 export interface TickCtx {

@@ -85,13 +85,16 @@ export async function processRandomEvents(
     return true;
   };
 
-  if (roll("surprise_board_visit", 0.10))   events.push(...(await surpriseBoardVisit(deps, tick)));
-  if (roll("bad_glassdoor_review", 0.12))   events.push(...(await badGlassdoorReview(deps, tick)));
-  if (roll("surprise_promotion", 0.10))     events.push(...(await surprisePromotion(deps, tick)));
-  if (roll("surprise_demo_day", 0.10))      events.push(...(await surpriseDemoDay(deps, tick)));
-  if (roll("budget_cuts", 0.12))            events.push(...(await budgetCuts(deps, tick)));
-  if (roll("viral_linkedin", 0.10))         events.push(...(await viralLinkedIn(deps, tick)));
-  if (roll("printer_sentience", 0.06))      events.push(...(await printerAchievesSentience(deps, tick)));
+  // Probabilities bumped post-pre-flight #1 (sum was ~0.70/cycle → ~6
+  // events/game including the 2 fixed bonuses; the show felt sparse).
+  // New sum ≈ 1.00/cycle → ~8 random events + 2 fixed bonuses ≈ 10/game.
+  if (roll("surprise_board_visit", 0.15))   events.push(...(await surpriseBoardVisit(deps, tick)));
+  if (roll("bad_glassdoor_review", 0.15))   events.push(...(await badGlassdoorReview(deps, tick)));
+  if (roll("surprise_promotion", 0.13))     events.push(...(await surprisePromotion(deps, tick)));
+  if (roll("surprise_demo_day", 0.13))      events.push(...(await surpriseDemoDay(deps, tick)));
+  if (roll("budget_cuts", 0.15))            events.push(...(await budgetCuts(deps, tick)));
+  if (roll("viral_linkedin", 0.15))         events.push(...(await viralLinkedIn(deps, tick)));
+  if (roll("printer_sentience", 0.14))      events.push(...(await printerAchievesSentience(deps, tick)));
 
   state.lastFiredEvents = fired;
 

@@ -36,6 +36,42 @@ export interface TickDeps {
   emit: (event: GameEvent) => Promise<void>;
 }
 
+// Rumor flavor bank — surfaced inline in the spread_rumor action's
+// outcome string. Keep these specific and audience-funny; generic rumors
+// don't land. Add more freely; selection is uniform random.
+const RUMOR_FLAVORS = [
+  "use Comic Sans in their slide decks",
+  "still have a flip phone (ironically, allegedly)",
+  "schedule a 30-min 'thinking time' block on their calendar daily",
+  "ate someone else's labeled lunch from the office fridge",
+  "got coached on email tone twice this quarter",
+  "asked Bain & Company to do their performance review",
+  "cried during their last 1:1 (the one that was supposed to be casual)",
+  "wrote 'circle back' three times in one Slack message",
+  "had to be reminded what 'mute' does in 2026",
+  "hired their cousin as a 'consultant' for a strategic offsite",
+  "draft LinkedIn thought-leadership posts during standup",
+  "added 'Dr.' to their email signature (it was an honorary degree)",
+  "asked HR what 'PIP' stood for, then claimed they were joking",
+  "have an out-of-office set every Friday afternoon citing 'deep work'",
+  "took the meditation room booking off Slack so they could nap in there",
+  "use 'reach out' as a noun, a verb, and a personality trait",
+  "keep a printed copy of their own LinkedIn profile in a desk drawer",
+  "told the new hire to 'just figure it out' and left the country",
+];
+
+// Schmooze-with-existing-ally flavor. Without variety this read identically
+// every time and the audience clocked it as a bug.
+const SCHMOOZE_ALLY_FLAVORS = (target: string) => [
+  `Caught up with ${target} over coffee. Same-page energy.`,
+  `Pinged ${target} just to vibe-check. They're still in.`,
+  `Did the standing 1:1 with ${target}. Mostly therapy.`,
+  `Reaffirmed the cross-functional alignment with ${target}.`,
+  `Walked-and-talked with ${target}. Nothing of substance discussed.`,
+  `Looped ${target} in on a thread that did not require their input.`,
+  `Slacked ${target} a meme. Both laughed. Productivity unchanged.`,
+];
+
 // Retreat-mode hostile action set. Used by random events that count
 // hostility (e.g. Surprise Board Visit's "scrutinized" pick) and by any
 // future bounty/audit logic.
@@ -254,11 +290,15 @@ async function executeAction(
   try {
     switch (action.type) {
       case "work":
+        // Retreat: salary cut from $3 → $2 (and the long-form "+$5" copy
+        // never matched what was actually sent). Cutting the cash incentive
+        // pushes the LLM away from work-spam toward paid actions for the
+        // MPP visibility the show needs.
         prestigeChange = 5;
         await db.updateAgentPrestige(agent.id, prestigeChange);
-        outcome = "Did actual work (+5 prestige, +$3 base salary)";
+        outcome = "Did actual work (+5 prestige, +$2 base salary)";
         try {
-          await stellar.sendAsset(rewards.hrDeptSecret, agent.publicKey, 3);
+          await stellar.sendAsset(rewards.hrDeptSecret, agent.publicKey, 2);
         } catch (err) {
           console.error(`[work-stipend] HR payout to ${agent.name} failed:`, err);
           outcome = "Did actual work (+5 prestige; salary pending)";
@@ -455,6 +495,15 @@ async function executeAction(
   ]);
   if (HANDLER_EMITS_OWN.has(action.type)) return;
 
+  // Resolve the target's display name when the action has a target. The
+  // dashboard uses this to build the narrative header without needing a
+  // separate agent-name lookup.
+  let targetName: string | undefined;
+  if ("target" in action) {
+    const targetAgent = await db.getAgent(action.target);
+    targetName = targetAgent?.name ?? action.target;
+  }
+
   await emit({
     id: uuid(),
     tick,
@@ -462,10 +511,12 @@ async function executeAction(
     type: txHash ? "payment" : "action",
     agentId: agent.id,
     targetId: "target" in action ? action.target : undefined,
+    targetName,
     description: `${agent.name}: ${outcome}`,
     prestigeChange,
     txHash,
     reasoning,
+    actionType: action.type,
   });
 }
 
@@ -530,7 +581,8 @@ async function executePaidAction(
             ...target.statusEffects.filter((e) => e.type !== "questionable_judgment"),
             { type: "questionable_judgment", expiresAtTick: tick + 2, source: agent.id },
           ]);
-          outcome = `Spread a rumor about ${action.target}. They lose 5 prestige and gain QUESTIONABLE JUDGMENT for 2 cycles.`;
+          const rumor = RUMOR_FLAVORS[Math.floor(Math.random() * RUMOR_FLAVORS.length)];
+          outcome = `Spread a rumor about ${target.name} — that they ${rumor}. -5 prestige + QUESTIONABLE JUDGMENT 2 cycles.`;
         }
       }
       break;
@@ -770,7 +822,8 @@ async function handleSchmooze(deps: TickDeps, agent: Agent, targetId: string): P
   if (!target) return "Target not found";
   if (targetId === agent.id) return "Tried to schmooze yourself. The IT system flagged it.";
   if (me?.allies.includes(targetId) || target.allies.includes(agent.id)) {
-    return `Chatted with ally ${target.name}`;
+    const variants = SCHMOOZE_ALLY_FLAVORS(target.name);
+    return variants[Math.floor(Math.random() * variants.length)];
   }
   // Don't overwrite an existing pending — if target already has someone
   // pending (especially us), no-op.

@@ -119,6 +119,13 @@ export interface GameEvent {
    *  events nested under it on the dashboard. Children carry parentEventId
    *  pointing back to the parent so the renderer can group them. */
   parentEventId?: string;
+  /** Set on type='action' / 'payment' events so the dashboard can render
+   *  action-aware narrative headers ("Kevin went to HR and spread a rumor
+   *  about Diane") instead of the generic "Actor → Service" line. */
+  actionType?: string;
+  /** Display name of the target agent (when the action has one). Resolved
+   *  server-side so the dashboard doesn't need a separate name lookup. */
+  targetName?: string;
 }
 
 export type GameEventType =

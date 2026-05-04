@@ -55,7 +55,7 @@ This produces a steady transaction drumbeat with cycle-boundary punctuation, ins
 |---|---|---|
 | `schedule_pre_meeting` | $20 | Target -15 + Meeting Blocked. Loyalty > 70 immune. |
 | `file_complaint` | $22 | You +5; target Under Investigation 1 cycle |
-| `strategy_report` | $25 | +35 prestige, gains Has Deliverable |
+| `strategy_report` | $30 | +35 prestige, gains Has Deliverable |
 | `leak_org_chart` | $25 | Top 3 wealth + alliance graph + you +5 |
 | `office_party` | $25 | +5 to ALL managers, +15 to you |
 | `anonymous_pulse_survey` | $25 | Target -50 prestige. **Conditional:** you rank ≥ 4, target #1. One shot per game. |
@@ -68,7 +68,7 @@ This produces a steady transaction drumbeat with cycle-boundary punctuation, ins
 | `schedule_conflict` | $30 | Cancels target's CEO meeting + Meeting Blocked 2 cycles |
 | `hostile_takeover` | $35 | Target's cross-functional partnerships transfer to you |
 | `sabotage_plan` | $40 | Target -10 + Documented 2 cycles |
-| `book_ceo_time` | $50 | +40 with Has Deliverable, -20 without, -10 if Meeting Blocked |
+| `book_ceo_time` | $40 | +40 with Has Deliverable, -20 without, -10 if Meeting Blocked |
 
 ## Coaching
 
