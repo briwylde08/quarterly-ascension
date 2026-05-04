@@ -101,10 +101,14 @@ export async function processTick(deps: TickDeps, activeAgentId?: string): Promi
   const tick = (await db.getCurrentTick()) + 1;
   await db.setCurrentTick(tick);
 
-  // Cycle = 10 ticks. Random events fire only at the end of a cycle so the
-  // intra-cycle drumbeat stays clean (one action per tick, no event noise
-  // in between).
+  // Cycle = 10 ticks. Random events fire at:
+  //   - tick 1 (Q1 Kickoff per-agent reactions)
+  //   - cycle boundaries (every 10th tick) for the regular probabilistic
+  //     pool, fixed-cycle bonuses, and the guaranteed cycle-1 closer
+  // Intra-cycle ticks stay clean (one action per tick, no event noise).
   const isCycleBoundary = tick % 10 === 0;
+  const isKickoff = tick === 1;
+  const fireRandomEvents = isKickoff || isCycleBoundary;
 
   console.log(`\n${"=".repeat(60)}`);
   console.log(`TICK ${tick} STARTING`);
@@ -132,9 +136,8 @@ export async function processTick(deps: TickDeps, activeAgentId?: string): Promi
   const balances = new Map(balanceEntries);
   const tickCtx: TickCtx = { allAgents: refreshedAgents, leakedEmails, balances };
 
-  // Phase 2: random events fire only at cycle boundaries (end of every 10
-  // single-agent ticks). On non-boundary ticks this is a no-op.
-  if (isCycleBoundary) {
+  // Phase 2: random events fire at cycle boundaries + tick 1 (kickoff).
+  if (fireRandomEvents) {
     const eventsResult = await processRandomEvents({ db, stellar, rewards, balances }, randomEventsState, tick);
     for (const event of eventsResult.events) await emit(event);
     // skipDecisions (All-Hands) is no longer used in retreat mode — kept the

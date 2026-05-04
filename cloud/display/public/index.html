@@ -181,6 +181,7 @@
     .pause-btn:active { transform: translateY(1px); }
     .pause-btn.resume { background: rgba(241,196,15,0.20); border-color: rgba(241,196,15,0.50); }
     .pause-btn.start  { background: rgba(39,174,96,0.25); border-color: rgba(39,174,96,0.55); }
+    .pause-btn.reset  { background: rgba(192,57,43,0.25);  border-color: rgba(192,57,43,0.55); }
     .meta-item.countdown .meta-value.tick { animation: countdownTick 1s ease-out; }
     @keyframes countdownTick {
       0% { transform: scale(1.05); color: #ffffff; }
@@ -2115,7 +2116,7 @@
     //   ended    → hidden (post-game cleanup runs automatically in ~5 min)
     function syncPauseLabel(status) {
       if (!pauseBtn) return;
-      pauseBtn.classList.remove('resume', 'start');
+      pauseBtn.classList.remove('resume', 'start', 'reset');
       if (status === 'halted') {
         pauseBtn.textContent = '▶ Resume';
         pauseBtn.classList.add('resume');
@@ -2125,7 +2126,9 @@
         pauseBtn.classList.add('start');
         pauseBtn.style.display = '';
       } else if (status === 'ended') {
-        pauseBtn.style.display = 'none';
+        pauseBtn.textContent = '🔄 Reset Game';
+        pauseBtn.classList.add('reset');
+        pauseBtn.style.display = '';
       } else {
         pauseBtn.textContent = '⏸ Pause';
         pauseBtn.style.display = '';
@@ -2159,6 +2162,13 @@
       }
     }
     async function callPauseResume(intent) {
+      if (intent === 'reset') {
+        // Full reset: normalize balances back to $200 AND clear claims so
+        // the next pre-flight starts from a totally clean slate.
+        if (!confirm('Reset the game? This wipes events/ticker/action_logs, drops all claims, and normalizes every balance back to $200. Continue?')) return;
+        await callAdmin('/admin/reset?normalize=true&wipe_claims=true', 'Reset');
+        return;
+      }
       const path = intent === 'resume' ? '/admin/resume'
                   : intent === 'start' ? '/admin/start'
                   : '/admin/halt';
@@ -2168,6 +2178,7 @@
     pauseBtn?.addEventListener('click', async () => {
       const intent = pauseBtn.classList.contains('start') ? 'start'
                    : pauseBtn.classList.contains('resume') ? 'resume'
+                   : pauseBtn.classList.contains('reset') ? 'reset'
                    : 'halt';
       pauseBtn.disabled = true;
       try { await callPauseResume(intent); }

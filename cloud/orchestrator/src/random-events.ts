@@ -62,9 +62,33 @@ export async function processRandomEvents(
 ): Promise<RandomEventsResult> {
   const events: GameEvent[] = [];
 
-  // Quarterly Bonus at fixed cycle boundaries: halftime (cycle 4 = tick 40)
-  // and finale (cycle 8 = tick 80, also game-end).
-  if (tick === 40) {
+  // Tick 1: Q1 KICKOFF — a per-agent reaction event the moment the game
+  // starts. Pure flavor + tiny prestige movements, but it gives the host
+  // 10 names to call out before any action has even fired.
+  if (tick === 1) {
+    events.push(...(await q1Kickoff(deps, tick)));
+    return { events, skipDecisions: false };
+  }
+
+  // Tick 10: GUARANTEED first-cycle closer. The probabilistic pool can
+  // produce a "nothing happened in cycle 1" silence by chance; force one
+  // high-energy event here so the host always has narration material in
+  // the first 5 minutes. Skips the regular probabilistic rolls for this
+  // cycle boundary so we don't double-fire.
+  if (tick === 10) {
+    const openers = [surpriseDemoDay, surpriseBoardVisit, viralLinkedIn, badGlassdoorReview];
+    const fn = openers[Math.floor(Math.random() * openers.length)];
+    events.push(...(await fn(deps, tick)));
+    state.lastFiredEvents = new Set(["cycle1_opener"]);
+    return { events, skipDecisions: false };
+  }
+
+  // Quarterly Bonus at fixed cycle boundaries:
+  //   Halftime (cycle 3 = tick 30, ~12 min in) — moved earlier from cycle 4
+  //     so the most cinematic mid-show beat lands inside the host's 15-min
+  //     narration window.
+  //   Finale (cycle 8 = tick 80, also game-end).
+  if (tick === 30) {
     events.push(...(await quarterlyBonus(deps, tick, [50, 30, 20], "Halftime")));
   } else if (tick === 80) {
     events.push(...(await quarterlyBonus(deps, tick, [100, 60, 40], "Finale")));
@@ -99,6 +123,71 @@ export async function processRandomEvents(
   state.lastFiredEvents = fired;
 
   return { events, skipDecisions: false };
+}
+
+// === Q1 Kickoff (opening event, fires once at tick 1) ====================
+
+async function q1Kickoff(deps: EventDeps, tick: number): Promise<GameEvent[]> {
+  // Per-agent reactions to the CEO's morning all-hands. Tiny prestige moves
+  // (-2 to +2) flavored by personality. The point isn't the stakes — it's
+  // 10 nested children rendering instantly so the host has names to talk
+  // about from minute zero of the show.
+  const agents = await deps.db.getAllAgents();
+  const parentId = uuid();
+  const events: GameEvent[] = [{
+    id: parentId,
+    tick,
+    timestamp: new Date(),
+    type: "random_event",
+    description: "Q1 KICKOFF: The CEO stood up at the morning all-hands and announced 'this is going to be our quarter.' The room reacted differently.",
+  }];
+
+  for (const a of agents) {
+    const persona = getPersona(a.personaId);
+    const aggression = persona?.traits.aggression ?? 50;
+    const greed = persona?.traits.greed ?? 50;
+    const caution = persona?.traits.caution ?? 50;
+    const loyalty = persona?.traits.loyalty ?? 50;
+
+    let flavor = "";
+    let prestigeDelta = 0;
+
+    if (loyalty > 75) {
+      flavor = "led the applause when the CEO finished. Maybe a beat too long. CEO seemed pleased.";
+      prestigeDelta = 2;
+    } else if (aggression > 75) {
+      flavor = "is already plotting their first attack of the day. Visibly noted who came in late.";
+      prestigeDelta = 1;
+    } else if (caution > 75) {
+      flavor = "took meticulous notes. Took photos of every slide. Will summarize for the team later.";
+      prestigeDelta = 1;
+    } else if (greed > 75) {
+      flavor = "asked about Q1 bonus structure before the CEO finished speaking. Read the room poorly.";
+      prestigeDelta = -2;
+    } else if (loyalty < 25) {
+      flavor = "checked LinkedIn during the speech. Was visibly browsing a recruiter DM.";
+      prestigeDelta = -1;
+    } else {
+      flavor = "nodded thoughtfully and said 'great speech, John.' (CEO's name is Jim.)";
+      prestigeDelta = 0;
+    }
+
+    if (prestigeDelta !== 0) {
+      await deps.db.updateAgentPrestige(a.id, prestigeDelta);
+    }
+    const sign = prestigeDelta > 0 ? `(+${prestigeDelta})` : prestigeDelta < 0 ? `(${prestigeDelta})` : "";
+    events.push({
+      id: uuid(),
+      tick,
+      timestamp: new Date(),
+      type: "random_event",
+      agentId: a.id,
+      prestigeChange: prestigeDelta,
+      description: `${a.name} ${flavor} ${sign}`.trim(),
+      parentEventId: parentId,
+    });
+  }
+  return events;
 }
 
 // === Quarterly Bonus =======================================================
