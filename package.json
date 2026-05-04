@@ -9,7 +9,8 @@
   ],
   "scripts": {
     "setup": "tsx src/setup.ts",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "deploy:display": "[ \"$(git branch --show-current)\" = \"main\" ] || { echo 'Refusing: deploy:display must run on main (the Pages project is Direct Upload, so this script uploads whatever is on disk).'; exit 1; } && npx wrangler pages deploy cloud/display/public --project-name=quarterly-ascension --branch=main"
   },
   "dependencies": {
     "@stellar/mpp": "^0.5.0",
