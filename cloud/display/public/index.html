@@ -2117,21 +2117,40 @@
     function syncPauseLabel(status) {
       if (!pauseBtn) return;
       pauseBtn.classList.remove('resume', 'start', 'reset');
+      // Reset companion button shown in 'halted' state alongside Resume.
+      let resetCompanion = document.getElementById('reset-companion-btn');
+      const removeCompanion = () => { if (resetCompanion) { resetCompanion.remove(); resetCompanion = null; } };
       if (status === 'halted') {
         pauseBtn.textContent = '▶ Resume';
         pauseBtn.classList.add('resume');
         pauseBtn.style.display = '';
+        if (!resetCompanion) {
+          resetCompanion = document.createElement('button');
+          resetCompanion.id = 'reset-companion-btn';
+          resetCompanion.className = 'pause-btn reset';
+          resetCompanion.textContent = '🔄 Reset Game';
+          resetCompanion.style.marginLeft = '8px';
+          resetCompanion.addEventListener('click', async () => {
+            resetCompanion.disabled = true;
+            try { await callPauseResume('reset'); }
+            finally { resetCompanion.disabled = false; }
+          });
+          pauseBtn.parentElement.insertBefore(resetCompanion, pauseBtn.nextSibling);
+        }
       } else if (status === 'setup') {
         pauseBtn.textContent = '▶ Start Game';
         pauseBtn.classList.add('start');
         pauseBtn.style.display = '';
+        removeCompanion();
       } else if (status === 'ended') {
         pauseBtn.textContent = '🔄 Reset Game';
         pauseBtn.classList.add('reset');
         pauseBtn.style.display = '';
+        removeCompanion();
       } else {
         pauseBtn.textContent = '⏸ Pause';
         pauseBtn.style.display = '';
+        removeCompanion();
       }
     }
     function getAdminSecret() {
