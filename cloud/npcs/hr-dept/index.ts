@@ -39,24 +39,27 @@ const ENDPOINTS: Record<string, Endpoint> = {
       statusEffect: { type: "problematic", target, duration: null },
     }),
   },
-  "/check-status": {
-    price: 5,
-    needsTarget: false,
-    payload: () => ({
-      action: "status_check",
-      description: "HR status inquiry completed",
-      corporateSpeak: "Your inquiry has been logged. Someone will follow up within 3-5 business days.",
-      complaints: [],
-    }),
-  },
-  "/whistleblower": {
+  "/spread-rumor": {
     price: 10,
     needsTarget: true,
     payload: (target) => ({
-      action: "whistleblower_filed",
+      action: "rumor_spread",
       target,
-      description: `Whistleblower complaint filed against ${target}. HR will review whether the complaint has merit.`,
-      corporateSpeak: "MegaCorp values integrity. Substantiated reports are eligible for our Ethics & Compliance Bounty.",
+      description: `A rumor about ${target} is now circulating. Optics matter, even when there's no evidence.`,
+      corporateSpeak: "We have no comment on personnel matters.",
+      prestigeChange: -5,
+      statusEffect: { type: "questionable_judgment", target, duration: 2 },
+    }),
+  },
+  "/anonymous-pulse-survey": {
+    price: 25,
+    needsTarget: true,
+    payload: (target) => ({
+      action: "pulse_survey_launched",
+      target,
+      description: `Launched an 'anonymous' org pulse survey somehow entirely about ${target}.`,
+      corporateSpeak: "Your candid feedback helps us identify areas for leadership growth.",
+      prestigeChange: -50,
     }),
   },
 };

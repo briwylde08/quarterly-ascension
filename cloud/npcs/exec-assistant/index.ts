@@ -58,6 +58,40 @@ const ENDPOINTS: Record<string, Endpoint> = {
       excuse: "An urgent matter came up that required immediate attention",
     }),
   },
+  "/move-meeting-early": {
+    price: 10,
+    needsTarget: true,
+    payload: (target) => ({
+      action: "meeting_moved_early",
+      target,
+      description: `${target}'s next meeting is now at 7:30am. The room is freezing.`,
+      assistantNote: "I told them it was the only window the CEO had.",
+      prestigeChange: -5,
+      statusEffect: { type: "tired", target, duration: 3 },
+    }),
+  },
+  "/schedule-pre-meeting": {
+    price: 20,
+    needsTarget: true,
+    payload: (target) => ({
+      action: "pre_meeting_scheduled",
+      target,
+      description: `Booked a pre-meeting for ${target}'s next meeting. And a pre-pre-meeting.`,
+      assistantNote: "I've added a 'syncs to align' to their calendar through Q2.",
+      prestigeChange: -15,
+      statusEffect: { type: "meeting_blocked", target, duration: 2 },
+    }),
+  },
+  "/hostile-takeover": {
+    price: 35,
+    needsTarget: true,
+    payload: (target) => ({
+      action: "hostile_takeover_executed",
+      target,
+      description: `Mounted a hostile takeover of ${target}'s cross-functional partnerships.`,
+      assistantNote: "I've sent the kickoff invites. Their old partners are now your old partners.",
+    }),
+  },
 };
 
 export default {

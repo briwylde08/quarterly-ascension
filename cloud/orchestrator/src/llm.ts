@@ -54,44 +54,52 @@ export async function generateGossip(
   return (response.choices[0]?.message?.content || "").trim();
 }
 
+// Retreat-mode 27-action menu. Cuts from long-form: buy_fancy_coffee,
+// check_hr_status, competitive_intel, recover_emails, calendar_conflict,
+// team_lunch, poison_meeting, birthday_cake, book_motivation, send_motivation,
+// whistleblower_bounty, mentorship, fix_laptop. Adds: spread_rumor,
+// move_meeting_early, schedule_pre_meeting, office_party, anonymous_pulse_survey,
+// hostile_takeover, boomerang, cry_in_stairwell, join_meeting_silently.
 const ALL_ACTIONS = [
-  { type: "work", description: "Do actual work (+5 prestige, +$3 base salary, free)", cost: 0 },
+  // === FREE (12) ===
+  { type: "work", description: "Do actual work (+5 prestige, +$5 base salary, free)", cost: 0 },
   { type: "expense_report", description: "File an expense report (+$10 reimbursed; 20% chance Finance flags it for -5 prestige). Free, no skill required.", cost: 0 },
-  { type: "rest", description: "Rest and recover (removes Tired debuff, free)", cost: 0 },
-  { type: "schmooze", description: "Build relationship with another manager (may form alliance)", cost: 0, requiresTarget: true },
-  { type: "take_credit", description: "Attempt to claim credit for someone's work (40% success: +30 prestige, 60% fail: -20 prestige)", cost: 0, requiresTarget: true },
+  { type: "rest", description: "Rest and recover (removes Hit the Wall, free)", cost: 0 },
+  { type: "take_credit", description: "Attempt to claim credit for someone's work (50% success: +30 prestige, 50% fail: -20 prestige)", cost: 0, requiresTarget: true },
 
-  { type: "accept_alliance", description: "Accept a pending alliance proposal (+5 prestige to both)", cost: 0, requiresTarget: true },
-  { type: "reject_alliance", description: "Reject a pending alliance proposal (proposer loses 10 prestige)", cost: 0, requiresTarget: true },
-  { type: "break_alliance", description: "Betray an ally (-15 prestige for you; ex-ally gets Under Investigation 1 tick — can't retaliate immediately). Calculated nuke.", cost: 0, requiresTarget: true },
+  { type: "schmooze", description: "Schmooze another manager — propose a cross-functional partnership (free)", cost: 0, requiresTarget: true },
+  { type: "accept_alliance", description: "Accept a pending cross-functional partnership (+5 prestige to both)", cost: 0, requiresTarget: true },
+  { type: "reject_alliance", description: "Reject a pending cross-functional partnership (proposer loses 10 prestige)", cost: 0, requiresTarget: true },
+  { type: "break_alliance", description: "End a cross-functional partnership (-15 prestige for you; ex-partner gets Under Investigation 1 tick — can't retaliate immediately). Calculated nuke.", cost: 0, requiresTarget: true },
 
-  { type: "buy_coffee", description: "Buy coffee (removes Tired). Tired accumulates after 6 cycles without rest.", cost: 5 },
-  { type: "buy_fancy_coffee", description: "Buy fancy coffee (Caffeinated for 2 ticks; immune to Tired)", cost: 10 },
-  { type: "file_complaint", description: "File HR complaint (you +5 'diligence' prestige; target gets Under Investigation, can't retaliate against you for 1 tick)", cost: 22, requiresTarget: true },
-  { type: "sensitivity_training", description: "Send rival to sensitivity training (target -20 prestige + Problematic for 4 ticks: -3 prestige/tick decay)", cost: 30, requiresTarget: true },
-  { type: "check_hr_status", description: "See who has filed complaints against you", cost: 5 },
-  { type: "strategy_report", description: "Get consultant report (+35 prestige, gives Deliverable for a future +40 CEO meeting; halved to +18 after a New Initiative pivot)", cost: 25 },
-  { type: "competitive_intel", description: "Learn top 3 agents' last action AND spread rumors that nick the leader for -3 prestige", cost: 25 },
-  { type: "sabotage_plan", description: "Build dossier on target (-10 prestige to target + 'Marked' for 2 ticks: any take_credit against them auto-succeeds). Setup play.", cost: 40, requiresTarget: true },
-  { type: "fix_laptop", description: "Sabotage target's laptop (forced to rest next tick)", cost: 12, requiresTarget: true },
-  { type: "recover_emails", description: "See target's last 3 actions; 30% chance to expose & nuke their pending alliance", cost: 20, requiresTarget: true },
-  { type: "calendar_conflict", description: "Triple-book target's calendar (always Meeting-Blocked for 1 tick + clears their Deliverable + pending alliance)", cost: 15, requiresTarget: true },
-  { type: "book_ceo_time", description: "Meet with CEO (+40 prestige with Deliverable, -20 without; -10 if Meeting-Blocked)", cost: 50 },
-  { type: "leak_org_chart", description: "Insider intel — top 3 wealth + alliance graph + you gain +5 prestige (positional advantage)", cost: 25 },
-  { type: "schedule_conflict", description: "Cancel target's CEO meeting (clears their Deliverable + Meeting-Blocked for 2 ticks)", cost: 30, requiresTarget: true },
-  { type: "team_lunch", description: "Host team lunch (+15 prestige; only one host per cycle)", cost: 25 },
-  { type: "poison_meeting", description: "Sabotage target's catered meeting (target -10 prestige)", cost: 35, requiresTarget: true },
-  { type: "birthday_cake", description: "Bring cake (+5 prestige, removes own Problematic)", cost: 12 },
-  { type: "book_motivation", description: "Attend motivation session (+20 prestige, Inspired for 2 ticks: +5/tick)", cost: 30 },
-  { type: "send_motivation", description: "Send rival to mandatory motivation (target forced to rest for 2 ticks)", cost: 25, requiresTarget: true },
-
-  // Earning paths (Phase 5)
-  { type: "whistleblower_bounty", description: "Report target to HR ($10 cost). If target had hostile actions in last 3 ticks → +30 prestige + $25 bounty. If false → -3 prestige; target gets +5 wrongful-report bonus.", cost: 10, requiresTarget: true },
-  { type: "mentorship", description: "Mentor target ($15 cost; non-self target). Self +5 prestige + $30 stipend; target +10 prestige. Wholesome alternative to take_credit.", cost: 15, requiresTarget: true },
-  { type: "coffee_chat", description: "Casual coffee with target ($5; non-self). Both gain +3 prestige. No alliance proposed. Low-stakes networking.", cost: 5, requiresTarget: true },
-
-  // Comeback path — only surfaces when you're truly cooked.
+  // Underdog comeback paths — gated by prestige thresholds in the filter below.
+  { type: "boomerang", description: "Quit and come back (free). Resets your prestige to 100, clears all status effects. Massive visual moment, one shot per game. Available only when prestige < 50.", cost: 0 },
+  { type: "cry_in_stairwell", description: "Cry in the stairwell (free). Removes Problematic and Hit the Wall. 20% chance the VP sees and grants +20 sympathy prestige. Available only when prestige ≤ 30.", cost: 0 },
   { type: "hail_mary_idea", description: "Pitch a wild idea at the next all-hands (free). Lottery: 30% +50 prestige (CEO loved it), 50% +5 (polite nodding), 20% -5 (sounded unhinged). One use per game.", cost: 0 },
+
+  // Passive accumulation — capped at 3 uses per game; 3rd use grants Mysterious Influence.
+  { type: "join_meeting_silently", description: "Join a meeting and say nothing (free, +4 prestige). Do this 3 times in one game and you'll get a MYSTERIOUS INFLUENCE public tag — people start crediting you with things you didn't do.", cost: 0 },
+
+  // === CHEAP PAID ($5 – $10) ===
+  { type: "coffee_chat", description: "Casual coffee with target ($5; non-self). Both gain +3 prestige. No alliance proposed. Low-stakes networking.", cost: 5, requiresTarget: true },
+  { type: "buy_coffee", description: "Buy coffee (removes Hit the Wall).", cost: 5 },
+  { type: "spread_rumor", description: "Spread a rumor about target ($10). Target loses 5 prestige and gets QUESTIONABLE JUDGMENT public tag for 2 cycles. Cheap social warfare with real teeth.", cost: 10, requiresTarget: true },
+  { type: "move_meeting_early", description: "Move target's meeting to 7:30am ($10). Target loses 5 prestige and becomes Hit the Wall. The room is freezing.", cost: 10, requiresTarget: true },
+
+  // === MID PAID ($20 – $25) ===
+  { type: "schedule_pre_meeting", description: "Schedule a pre-meeting for the meeting ($20). Target loses 15 prestige + gains MEETING BLOCKED. Loyal managers (loyalty > 70) are immune — they think this is normal.", cost: 20, requiresTarget: true },
+  { type: "file_complaint", description: "File HR complaint (you +5 'diligence' prestige; target gets Under Investigation, can't retaliate against you for 1 tick)", cost: 22, requiresTarget: true },
+  { type: "strategy_report", description: "Get consultant report (+35 prestige, gives Has Deliverable for a future +40 CEO meeting)", cost: 25 },
+  { type: "leak_org_chart", description: "Insider intel — top 3 wealth + alliance graph + you gain +5 prestige (positional advantage)", cost: 25 },
+  { type: "office_party", description: "Throw an office party ($25). +5 prestige to ALL managers and +15 to you. Generous play that visibly helps your rivals too.", cost: 25 },
+  { type: "anonymous_pulse_survey", description: "Launch an 'anonymous' morale survey somehow entirely about the leader ($25). Target loses 50 prestige. Available only when YOU are rank ≥ 4 AND target is rank #1. One shot per game.", cost: 25, requiresTarget: true },
+
+  // === EXPENSIVE ($30 – $50) ===
+  { type: "sensitivity_training", description: "Send rival to sensitivity training (target -20 prestige + Problematic for 4 ticks: -3 prestige/tick decay)", cost: 30, requiresTarget: true },
+  { type: "schedule_conflict", description: "Cancel target's CEO meeting (clears their Has Deliverable + Meeting-Blocked for 2 ticks)", cost: 30, requiresTarget: true },
+  { type: "hostile_takeover", description: "Mount a hostile takeover of target's cross-functional partnerships ($35). Their existing partners become YOUR partners; target's partner list goes to zero. Mid-to-late game power move.", cost: 35, requiresTarget: true },
+  { type: "sabotage_plan", description: "Build dossier on target (-10 prestige to target + 'Documented' for 2 ticks: any take_credit against them auto-succeeds). Setup play.", cost: 40, requiresTarget: true },
+  { type: "book_ceo_time", description: "Meet with CEO (+40 prestige with Has Deliverable, -20 without; -10 if Meeting-Blocked)", cost: 50 },
 ];
 
 export interface TickCtx {
@@ -110,22 +118,31 @@ interface DecisionContext {
   allAgents: Agent[];
   recentActions: any[];
   leakedEmails: Array<{ fromAgent: string; toAgent: string; subject: string; body: string }>;
-  /** Free-form directive set by the human adopter at the most recent
-   *  coaching window. Persists for the rest of this game cycle. */
+  /** Free-form directive set by the human adopter. In retreat mode this is
+   *  always-open and persistent — the LLM sees whatever is currently set. */
   directive: string | null;
   /** True once this agent has used their one-shot hail_mary_idea this game. */
   hailMaryUsed: boolean;
+  /** True once this agent has burned their one-shot boomerang. */
+  boomerangUsed: boolean;
+  /** True once this agent has launched their one-shot anonymous_pulse_survey. */
+  pulseSurveyUsed: boolean;
+  /** Number of times the agent has used join_meeting_silently this game.
+   *  Capped at 3 — the 3rd use grants Mysterious Influence. */
+  joinMeetingCount: number;
 }
 
 function buildContextPrompt(ctx: DecisionContext): string {
-  const { agent, balance, currentTick, allAgents, recentActions, leakedEmails, directive, hailMaryUsed } = ctx;
+  const { agent, balance, currentTick, allAgents, recentActions, leakedEmails, directive, hailMaryUsed, boomerangUsed, pulseSurveyUsed, joinMeetingCount } = ctx;
+  // Rank used by the anonymous_pulse_survey gate (only available when underdog).
+  const currentRank = allAgents.findIndex((a) => a.id === agent.id) + 1;
 
   // Public-visible statuses on rivals — info other agents can act on
   // (e.g. a Marked agent is auto-take_credit-able). Most internal statuses
   // are hidden from peers; this whitelist surfaces only the actionable ones.
   const PUBLIC_STATUSES = new Set([
-    "marked", "problematic", "under_review", "tired",
-    "technical_difficulties", "meeting_blocked", "mandatory_motivation",
+    "marked", "problematic", "tired", "meeting_blocked",
+    "mysterious_influence", "questionable_judgment",
   ]);
   const otherAgents = allAgents
     .filter((a) => a.id !== agent.id)
@@ -156,22 +173,37 @@ function buildContextPrompt(ctx: DecisionContext): string {
     // Hail Mary only surfaces when the agent is truly cornered: low prestige
     // AND low cash AND hasn't already burned the one-shot this game.
     if (action.type === "hail_mary_idea" && (agent.prestige > 10 || balance >= 5 || hailMaryUsed)) return false;
+    // Retreat-mode comeback gates.
+    if (action.type === "boomerang" && (agent.prestige >= 50 || boomerangUsed)) return false;
+    if (action.type === "cry_in_stairwell" && agent.prestige > 30) return false;
+    // Anonymous pulse survey: underdog tool, one-shot, target #1 only.
+    // Per-agent gate here; per-target #1 check happens at execution.
+    if (action.type === "anonymous_pulse_survey" && (currentRank < 4 || pulseSurveyUsed)) return false;
+    // Join meeting silently caps at 3 uses per game; 3rd grants Mysterious Influence.
+    if (action.type === "join_meeting_silently" && joinMeetingCount >= 3) return false;
     return true;
   });
 
   const statusDescriptions = agent.statusEffects.map((s) => {
     switch (s.type) {
-      case "tired": return "Tired (-2 prestige/tick decay; removed by coffee or rest)";
-      case "caffeinated": return `Caffeinated (immune to Tired; expires tick ${s.expiresAtTick})`;
-      case "inspired": return `Inspired (+5 prestige/tick; expires tick ${s.expiresAtTick})`;
+      // Retreat renames: internal key stays stable; user-facing label is updated.
+      case "tired": return "Hit the Wall (-2 prestige/tick decay; removed by coffee, rest, or cry_in_stairwell)";
+      case "marked": return `Documented (sabotaged — next take_credit against you auto-succeeds; expires tick ${s.expiresAtTick})`;
+      // Retreat additions:
+      case "mysterious_influence": return "Mysterious Influence (+2 prestige/cycle passive; people occasionally credit you for things you didn't do)";
+      case "questionable_judgment": return `Questionable Judgment (public credibility tag; expires tick ${s.expiresAtTick})`;
+      // Carryover from long-form:
       case "under_investigation": return `Under Investigation (can't take hostile action against ${s.source}; expires tick ${s.expiresAtTick})`;
-      case "problematic": return `Problematic (-3 prestige/tick decay; expires tick ${s.expiresAtTick} — or removed by bringing birthday cake)`;
-      case "under_review": return `Under Review (can't book CEO time; expires tick ${s.expiresAtTick})`;
-      case "technical_difficulties": return "Technical Difficulties (forced to rest this cycle)";
+      case "problematic": return `Problematic (-3 prestige/tick decay; expires tick ${s.expiresAtTick})`;
       case "has_deliverable": return "Has Deliverable (CEO meeting will succeed and award +40)";
-      case "mandatory_motivation": return "Stuck in Mandatory Motivation (forced to rest)";
       case "meeting_blocked": return `Meeting-Blocked (can't book CEO time; expires tick ${s.expiresAtTick})`;
-      case "marked": return `Marked (sabotaged — next take_credit against you auto-succeeds; expires tick ${s.expiresAtTick})`;
+      // Cut effects (no source remaining in retreat) — keep cases for backward
+      // compatibility with any in-flight game state until DB is reset.
+      case "caffeinated": return `Caffeinated (legacy; expires tick ${s.expiresAtTick})`;
+      case "inspired": return `Inspired (legacy; expires tick ${s.expiresAtTick})`;
+      case "under_review": return `Under Review (legacy; expires tick ${s.expiresAtTick})`;
+      case "technical_difficulties": return "Technical Difficulties (legacy; forced to rest)";
+      case "mandatory_motivation": return "Stuck in Mandatory Motivation (legacy; forced to rest)";
       default: return s.type;
     }
   });
@@ -441,12 +473,15 @@ export async function getAgentDecision(
   const leakedEmails = tickCtx.leakedEmails;
   const recentActions = await deps.db.getAgentActionLogs(agent.id, Math.max(0, currentTick - 10), currentTick);
 
-  // Stakeholder directive (set by the human adopter at coaching windows).
-  // Injected high in the prompt as guidance the LLM should bias toward.
+  // Stakeholder directive (set by the human adopter, always-open in retreat
+  // mode). Injected high in the prompt as guidance the LLM should bias toward.
   const directive = await deps.db.getGameStateValue(`directive_${agent.id}`);
   const hailMaryUsed = (await deps.db.getGameStateValue(`hail_mary_used_${agent.id}`)) === "yes";
+  const boomerangUsed = (await deps.db.getGameStateValue(`boomerang_used_${agent.id}`)) === "yes";
+  const pulseSurveyUsed = (await deps.db.getGameStateValue(`pulse_survey_used_${agent.id}`)) === "yes";
+  const joinMeetingCount = parseInt((await deps.db.getGameStateValue(`join_meeting_count_${agent.id}`)) ?? "0", 10);
 
-  const context: DecisionContext = { agent, balance, currentTick, allAgents, recentActions, leakedEmails, directive, hailMaryUsed };
+  const context: DecisionContext = { agent, balance, currentTick, allAgents, recentActions, leakedEmails, directive, hailMaryUsed, boomerangUsed, pulseSurveyUsed, joinMeetingCount };
 
   const openai = new OpenAI({
     apiKey: deps.openaiApiKey,

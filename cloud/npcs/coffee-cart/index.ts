@@ -4,9 +4,9 @@ import { createCharge, WorkerEnv } from "../../shared/mpp-worker.js";
  * Coffee Cart NPC service. Sells corporate caffeine for DLBR.
  *
  * Routes:
- *   GET  /health                   — uptime/identity ping (no payment)
- *   POST /buy           ($8 DLBR)  — generic coffee, removes Tired
- *   POST /buy-fancy     ($15 DLBR) — fancy coffee, grants Caffeinated
+ *   GET  /health                — uptime/identity ping (no payment)
+ *   POST /buy         ($5 DLBR) — generic coffee, removes Hit the Wall
+ *   POST /coffee-chat ($5 DLBR) — coffee chat with another manager, both +3 prestige
  *
  * MPP charge mode: client agent gets a 402 with payment params on first hit,
  * signs a Stellar Soroban transfer to RECIPIENT_ADDRESS, retries with the
@@ -25,16 +25,6 @@ const ENDPOINTS = {
       description: "A mediocre cup of corporate coffee",
       flavor: "Hints of burnt beans and existential dread",
       statusEffect: { type: "removes_tired", duration: null },
-    },
-  },
-  "/buy-fancy": {
-    price: 10,
-    payload: {
-      item: "fancy_coffee",
-      effect: "caffeinated",
-      description: "An artisanal pour-over that costs more than your hourly wage",
-      flavor: "Notes of superiority and oat milk",
-      statusEffect: { type: "caffeinated", duration: 2 },
     },
   },
   "/coffee-chat": {

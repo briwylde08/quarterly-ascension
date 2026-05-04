@@ -87,7 +87,17 @@ export type Action =
   | { type: "mentorship"; target: string }
   | { type: "coffee_chat"; target: string }
   | { type: "hail_mary_idea" }
-  | { type: "expense_report" };
+  | { type: "expense_report" }
+  // === Retreat-mode additions (handlers in tick.ts land in #87) ===
+  | { type: "spread_rumor"; target: string }
+  | { type: "move_meeting_early"; target: string }
+  | { type: "schedule_pre_meeting"; target: string }
+  | { type: "office_party" }
+  | { type: "anonymous_pulse_survey"; target: string }
+  | { type: "hostile_takeover"; target: string }
+  | { type: "boomerang" }
+  | { type: "cry_in_stairwell" }
+  | { type: "join_meeting_silently" };
 
 export interface GameEvent {
   id: string;

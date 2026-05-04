@@ -58,16 +58,6 @@ const ENDPOINTS: Record<string, Endpoint> = {
       };
     },
   },
-  "/competitive-intel": {
-    price: 25,
-    needsTarget: false,
-    payload: () => ({
-      action: "competitive_intel_delivered",
-      description: "Received intelligence on top performers",
-      consultantQuote: "Our proprietary research methodology reveals some interesting patterns...",
-      intel: [],
-    }),
-  },
   "/sabotage-plan": {
     price: 40,
     needsTarget: true,

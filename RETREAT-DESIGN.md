@@ -23,7 +23,7 @@ This produces a steady transaction drumbeat with cycle-boundary punctuation, ins
 
 ## The 27 actions
 
-### Free (11)
+### Free (12)
 
 | Action | Notes |
 |---|---|
