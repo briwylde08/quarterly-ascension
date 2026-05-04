@@ -196,13 +196,15 @@ export class GameOrchestrator {
     }
 
     if (path === "/tick" && request.method === "POST") {
-      // Manual tick trigger, useful for smoke-testing without waiting for
-      // the alarm interval. Doesn't change game status.
+      // Manual tick trigger for smoke testing without waiting for the alarm.
+      // Uses the same round-robin picker as the alarm so manual ticks stay
+      // in turn-order with whatever the alarm has done.
       if (this.tickInFlight) {
         return Response.json({ error: "Tick already in progress" }, { status: 409 });
       }
-      await this.runTick();
-      return Response.json({ ok: true, tick: await db.getCurrentTick() });
+      const activeAgentId = await this.pickActiveAgentForRoundRobin();
+      await this.runTick(activeAgentId);
+      return Response.json({ ok: true, tick: await db.getCurrentTick(), activeAgent: activeAgentId });
     }
 
     // Reset the game: clears events/ticker/action_logs/leaked_emails, resets
@@ -836,12 +838,20 @@ export class GameOrchestrator {
     if (tick >= maxTicks) {
       await db.setGameStatus("ended");
 
-      // Clear stakeholder directives — they only apply within a game cycle.
-      // Each new game starts fresh; persona traits are the only baseline.
+      // Clear all per-game ephemeral state. Each new game starts fresh;
+      // persona traits + on-chain balances are the only carryover.
       try {
-        await this.env.DB.prepare("DELETE FROM game_state WHERE key LIKE 'directive_%'").run();
+        await this.env.DB.prepare(`
+          DELETE FROM game_state WHERE
+            key LIKE 'directive_%' OR
+            key LIKE 'hail_mary_used_%' OR
+            key LIKE 'boomerang_used_%' OR
+            key LIKE 'pulse_survey_used_%' OR
+            key LIKE 'join_meeting_count_%' OR
+            key IN ('turn_order', 'turn_index')
+        `).run();
       } catch (err) {
-        console.error("[alarm] failed to clear directives on end-of-game:", err);
+        console.error("[alarm] failed to clear per-game state on end-of-game:", err);
       }
 
       // Clear adoption claims so the next game's intro page shows everyone as
@@ -889,25 +899,16 @@ export class GameOrchestrator {
       return;
     }
 
-    await this.runTick();
+    // Retreat round-robin: each alarm fires for ONE agent's turn. Picks
+    // the next agent from the rolling turn-order queue.
+    const activeAgentId = await this.pickActiveAgentForRoundRobin();
+    await this.runTick(activeAgentId);
 
-    // After the tick, fire scheduled emails for quarter-points.
+    // After the tick, refresh the gossip narrative once per cycle (every
+    // 10 ticks = end of each cycle). Cheap (one mini call), failure
+    // shouldn't break the tick loop.
     const newTick = await db.getCurrentTick();
-    const isProgressMilestone = newTick === 12 || newTick === 24 || newTick === 36;
-    const isFinale = newTick === maxTicks;
-    if (isProgressMilestone || isFinale) {
-      try {
-        if (isFinale) await this.sendFinaleEmails();
-        else await this.sendProgressEmails(newTick);
-      } catch (err) {
-        console.error(`[alarm] scheduled email batch at tick ${newTick} failed:`, err);
-      }
-    }
-
-    // Refresh the gossip narrative every 4 ticks. Cached in game_state and
-    // served by /api/gossip; cheap (one mini call), but failure shouldn't
-    // break the tick loop.
-    if (newTick > 0 && newTick % 4 === 0) {
+    if (newTick > 0 && newTick % 10 === 0) {
       try {
         await this.runGossipPass(newTick);
       } catch (err) {
@@ -1026,7 +1027,7 @@ export class GameOrchestrator {
     }
   }
 
-  private async runTick(): Promise<void> {
+  private async runTick(activeAgentId?: string): Promise<void> {
     if (this.tickInFlight) return;
     this.tickInFlight = true;
     try {
@@ -1074,12 +1075,39 @@ export class GameOrchestrator {
         },
       };
 
-      await processTick(deps);
+      await processTick(deps, activeAgentId);
     } catch (err) {
       console.error("[tick] FAILED:", err);
     } finally {
       this.tickInFlight = false;
     }
+  }
+
+  /**
+   * Round-robin turn picker. Each cycle (10 ticks) operates on a randomized
+   * permutation of the 10 agents. Stored in game_state as `turn_order`
+   * (JSON string array) and `turn_index` (next position to consume). When
+   * the index reaches the end, the order is cleared and a fresh one is
+   * generated on the next call.
+   */
+  private async pickActiveAgentForRoundRobin(): Promise<string | undefined> {
+    const db = new Db(this.env.DB);
+    const orderRaw = await db.getGameStateValue("turn_order");
+    const indexRaw = await db.getGameStateValue("turn_index");
+    let order: string[] = orderRaw ? JSON.parse(orderRaw) : [];
+    let index = indexRaw ? parseInt(indexRaw, 10) : 0;
+
+    if (order.length === 0 || index >= order.length) {
+      // Generate a fresh randomized turn order from the live agent list.
+      const agents = await db.getAllAgents();
+      order = agents.map((a) => a.id).sort(() => Math.random() - 0.5);
+      index = 0;
+      await db.setGameStateValue("turn_order", JSON.stringify(order));
+    }
+
+    const activeId = order[index];
+    await db.setGameStateValue("turn_index", String(index + 1));
+    return activeId;
   }
 
   /**

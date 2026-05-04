@@ -52,11 +52,23 @@ const HOSTILE_ACTIONS = new Set([
   "sabotage_plan",
 ]);
 
-export async function processTick(deps: TickDeps): Promise<void> {
+/**
+ * Runs one tick of the simulation. In retreat round-robin mode, the caller
+ * passes a single `activeAgentId` so only that one agent gets a decision
+ * and side effects this tick. Random events fire only at cycle boundaries
+ * (every 10th tick), giving the show a steady drumbeat of single actions
+ * punctuated by big-moment events.
+ */
+export async function processTick(deps: TickDeps, activeAgentId?: string): Promise<void> {
   const { db, stellar, mpp, npcBase, llm, randomEventsState, emit, rewards } = deps;
 
   const tick = (await db.getCurrentTick()) + 1;
   await db.setCurrentTick(tick);
+
+  // Cycle = 10 ticks. Random events fire only at the end of a cycle so the
+  // intra-cycle drumbeat stays clean (one action per tick, no event noise
+  // in between).
+  const isCycleBoundary = tick % 10 === 0;
 
   console.log(`\n${"=".repeat(60)}`);
   console.log(`TICK ${tick} STARTING`);
@@ -84,46 +96,26 @@ export async function processTick(deps: TickDeps): Promise<void> {
   const balances = new Map(balanceEntries);
   const tickCtx: TickCtx = { allAgents: refreshedAgents, leakedEmails, balances };
 
-  // Phase 2: random events. processRandomEvents now returns events + signals
-  // (e.g. skipDecisions when All-Hands fires).
-  const eventsResult = await processRandomEvents({ db, stellar, rewards, balances }, randomEventsState, tick);
-  for (const event of eventsResult.events) await emit(event);
-
-  // Phase 3: if All-Hands fired, every agent's action this tick is replaced
-  // with a synthetic "stuck in the meeting" event. No decisions, no payments.
-  if (eventsResult.skipDecisions) {
-    const skipping = await db.getAllAgents();
-    for (const a of skipping) {
-      await emit({
-        id: uuid(),
-        tick,
-        timestamp: new Date(),
-        type: "action",
-        agentId: a.id,
-        description: `${a.name}: trapped in the All-Hands. Took notes that nobody will read.`,
-        prestigeChange: 0,
-        reasoning: "All-Hands meeting consumed the entire cycle.",
-      });
-    }
-    await applyPassiveStatusDecay(deps, tick);
-    console.log(`\nTick ${tick} complete (All-Hands skipped decisions).\n`);
-    return;
+  // Phase 2: random events fire only at cycle boundaries (end of every 10
+  // single-agent ticks). On non-boundary ticks this is a no-op.
+  if (isCycleBoundary) {
+    const eventsResult = await processRandomEvents({ db, stellar, rewards, balances }, randomEventsState, tick);
+    for (const event of eventsResult.events) await emit(event);
+    // skipDecisions (All-Hands) is no longer used in retreat mode — kept the
+    // signal in random-events for compat but ignored here.
   }
 
-  // Phase 3b: get decisions
+  // Phase 3: get a decision for the single active agent this tick.
+  // (In retreat round-robin mode, activeAgentId is always set. The
+  // legacy branch — process all agents — runs only if no activeAgentId
+  // is provided, which shouldn't happen in retreat play.)
   const freshAgents = await db.getAllAgents();
+  const actingAgents = activeAgentId
+    ? freshAgents.filter((a) => a.id === activeAgentId)
+    : freshAgents;
   const decisions: { agent: Agent; action: Action; reasoning: string }[] = [];
 
-  for (const agent of freshAgents) {
-    if (agent.statusEffects.some((s) => s.type === "technical_difficulties")) {
-      decisions.push({ agent, action: { type: "rest" }, reasoning: "Technical difficulties - forced to rest" });
-      continue;
-    }
-    if (agent.statusEffects.some((s) => s.type === "mandatory_motivation")) {
-      decisions.push({ agent, action: { type: "rest" }, reasoning: "Stuck in mandatory motivation session" });
-      continue;
-    }
-
+  for (const agent of actingAgents) {
     const { action, reasoning } = await getAgentDecision(llm, agent, tick, tickCtx);
     decisions.push({ agent, action, reasoning });
     console.log(`${agent.name}: ${action.type}${("target" in action) ? ` → ${action.target}` : ""}`);
