@@ -435,6 +435,9 @@ export class GameOrchestrator {
       const enriched = await Promise.all(
         agents.map(async (a, idx) => {
           const persona = getPersona(a.personaId);
+          // Directive is public on the dashboard / directive screen in
+          // retreat mode (no longer a private "owner-only" field).
+          const directive = (await db.getGameStateValue(`directive_${a.id}`)) || null;
           return {
             id: a.id,
             name: a.name,
@@ -447,8 +450,9 @@ export class GameOrchestrator {
             balance: await stellar.getAssetBalance(a.publicKey),
             statusEffects: a.statusEffects,
             allies: a.allies,
-            claimed: !!a.claimedBy,
+            claimed: !!a.claimedByName,
             claimedByName: a.claimedByName,
+            directive,
             rank: idx + 1,
             total,
             explorerUrl: stellar.getExplorerAccountUrl(a.publicKey),
