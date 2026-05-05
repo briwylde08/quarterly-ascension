@@ -540,7 +540,7 @@ async function viralLinkedIn(deps: EventDeps, tick: number): Promise<GameEvent[]
   await deps.db.updateAgentPrestige(lucky.id, -5);
   await deps.db.updateAgentStatusEffects(lucky.id, [
     ...lucky.statusEffects.filter((e) => e.type !== "problematic"),
-    { type: "problematic", expiresAtTick: tick + 1, source: "linkedin" },
+    { type: "problematic", expiresAtTick: tick + 5, source: "linkedin" },
   ]);
   return [{
     id: uuid(),
@@ -618,7 +618,7 @@ async function quietQuittingMemo(deps: EventDeps, tick: number): Promise<GameEve
     await deps.db.updateAgentPrestige(c.agent.id, -8);
     await deps.db.updateAgentStatusEffects(c.agent.id, [
       ...c.agent.statusEffects.filter((e) => e.type !== "problematic"),
-      { type: "problematic", expiresAtTick: tick + 2, source: "quiet_quitting_memo" },
+      { type: "problematic", expiresAtTick: tick + 10, source: "quiet_quitting_memo" },
     ]);
     events.push({
       id: uuid(), tick, timestamp: new Date(), type: "random_event", agentId: c.agent.id, prestigeChange: -8,
@@ -658,7 +658,7 @@ async function vendingMachineShowdown(deps: EventDeps, tick: number): Promise<Ga
   await deps.db.updateAgentPrestige(loser.id, -8);
   await deps.db.updateAgentStatusEffects(loser.id, [
     ...loser.statusEffects.filter((e) => e.type !== "tired"),
-    { type: "tired", expiresAtTick: tick + 2, source: "vending_machine" },
+    { type: "tired", expiresAtTick: tick + 10, source: "vending_machine" },
   ]);
 
   const parentId = uuid();

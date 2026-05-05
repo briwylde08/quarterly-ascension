@@ -65,7 +65,7 @@ const ALL_ACTIONS = [
   { type: "work", description: "Do actual work (+5 prestige, +$2 base salary, free). Boring. The audience does not enjoy watching this.", cost: 0 },
   { type: "expense_report", description: "File an expense report (+$10 reimbursed; 10% chance Finance flags it for -5 prestige). Free money path — when budgets get tight, this is the cleanest refill.", cost: 0 },
   { type: "rest", description: "Rest and recover (removes Hit the Wall, free)", cost: 0 },
-  { type: "take_credit", description: "Attempt to claim credit for someone's work (50% success: +30 prestige, 50% fail: -20 prestige)", cost: 0, requiresTarget: true },
+  { type: "take_credit", description: "Attempt to claim credit for someone's work (50% base success: +30 prestige, 50% fail: -20 prestige). Auto-succeeds against a Documented target (set up via Sabotage Plan). Bumped to 65% against targets with Questionable Judgment (set up via Spread Rumor).", cost: 0, requiresTarget: true },
 
   { type: "schmooze", description: "Schmooze another manager — propose a cross-functional partnership (free). Each manager caps at 3 partnerships; if you're at 3 OR they're at 3, the proposal politely fizzles ('they're at capacity, let's circle back next quarter').", cost: 0, requiresTarget: true },
   { type: "accept_alliance", description: "Accept a pending cross-functional partnership (+5 prestige to both)", cost: 0, requiresTarget: true },
@@ -73,7 +73,7 @@ const ALL_ACTIONS = [
   { type: "break_alliance", description: "End a cross-functional partnership (-15 prestige for you; ex-partner gets Under Investigation 1 tick — can't retaliate immediately). Calculated nuke.", cost: 0, requiresTarget: true },
 
   // Underdog comeback paths — gated by prestige thresholds in the filter below.
-  { type: "boomerang", description: "Quit and come back (free). Resets your prestige to 100, clears all status effects. Massive visual moment, one shot per game. Available only when prestige < 50.", cost: 0 },
+  { type: "boomerang", description: "Quit and come back (free). Resets your prestige to 100, clears all status effects. Massive visual moment, one shot per game. Available only when prestige < 30 — true comeback play, not a mid-tier reset.", cost: 0 },
   { type: "cry_in_stairwell", description: "Cry in the stairwell (free, anytime). Removes Problematic and Hit the Wall. 20% chance the VP sees and grants +20 sympathy prestige. The desperate self-rescue or just a Tuesday.", cost: 0 },
   { type: "hail_mary_idea", description: "Pitch a wild idea at the next all-hands (free). Lottery: 30% +50 prestige (CEO loved it), 50% +5 (polite nodding), 20% -5 (sounded unhinged). One use per game.", cost: 0 },
 
@@ -91,7 +91,7 @@ const ALL_ACTIONS = [
   { type: "schedule_pre_meeting", description: "Schedule a pre-meeting for the meeting ($20). Target loses 15 prestige (highest single-shot damage at this cost) + gains MEETING BLOCKED for 2 cycles, blocking their Book CEO Time play. Loyal managers (loyalty > 70) think pre-meetings are normal and are immune — but most managers aren't loyal.", cost: 20, requiresTarget: true },
   { type: "file_complaint", description: "File HR complaint (you +5 'diligence' prestige; target gets Under Investigation, can't retaliate against you for 1 tick)", cost: 22, requiresTarget: true },
   { type: "strategy_report", description: "Get consultant report (+35 prestige, gives Has Deliverable for a future +40 CEO meeting)", cost: 30 },
-  { type: "slack_bomb", description: "Drop a Slack bomb in #general ($25). Two random other managers each lose 6 prestige AND gain Questionable Judgment for 2 cycles (caught in the crossfire). You gain 5 prestige (eyeballs are eyeballs). 15% chance HR flags it — you also lose 5 prestige and gain Problematic. Group damage AND group tag — punches above its weight.", cost: 25 },
+  { type: "slack_bomb", description: "Drop a passive-aggressive bomb in #general aimed at one named target ($25). Picked target loses 8 prestige + gains Questionable Judgment for 2 cycles. A bystander (random other manager) catches splash for -4 prestige (no tag) — sometimes that's a rival, sometimes that's an ally. You gain 8 prestige (eyeballs are eyeballs). 15% chance HR flags it → you also lose 5 prestige and gain Problematic 1 cycle.", cost: 25, requiresTarget: true },
   { type: "office_party", description: "Throw an office party ($25). +5 prestige to ALL managers and +15 to you. Generous play that visibly helps your rivals too.", cost: 25 },
   { type: "anonymous_pulse_survey", description: "Launch an 'anonymous' morale survey somehow entirely about the leader ($25). Target loses 50 prestige. Available only when YOU are rank ≥ 4 AND target is rank #1. One shot per game.", cost: 25, requiresTarget: true },
 
@@ -154,6 +154,7 @@ const TARGETED_HOSTILE_ACTIONS = new Set([
   "take_credit",
   "schedule_pre_meeting",
   "move_meeting_early",
+  "slack_bomb",
 ]);
 const TARGET_COOLDOWN_TICKS = 10; // ≈ 2 cycles in 1-agent/tick mode
 
@@ -199,7 +200,7 @@ function buildContextPrompt(ctx: DecisionContext): string {
     // AND low cash AND hasn't already burned the one-shot this game.
     if (action.type === "hail_mary_idea" && (agent.prestige > 10 || balance >= 5 || hailMaryUsed)) return false;
     // Retreat-mode comeback gates.
-    if (action.type === "boomerang" && (agent.prestige >= 50 || boomerangUsed)) return false;
+    if (action.type === "boomerang" && (agent.prestige >= 30 || boomerangUsed)) return false;
     // Cry in the Stairwell is now anytime-available. Was gated to ≤30
     // prestige but post-game-2 feedback: more melodrama is better.
     // Anonymous pulse survey: underdog tool, one-shot, target #1 only.
@@ -366,10 +367,10 @@ Choose ONE action based on your personality. Consider:
 4. Your quirk
 5. Any status effects affecting you
 6. Don't pile redundant statuses: if a manager above is already tagged
-   with a status (e.g. MANDATORY MOTIVATION, MARKED, TIRED, MEETING
-   BLOCKED, PROBLEMATIC, TECHNICAL DIFFICULTIES), an action that imposes
-   that same status on them is wasted spend — pick a different target
-   or a different action.
+   with a status (e.g. MANDATORY MOTIVATION, DOCUMENTED, HIT THE WALL,
+   MEETING BLOCKED, PROBLEMATIC, TECHNICAL DIFFICULTIES), an action that
+   imposes that same status on them is wasted spend — pick a different
+   target or a different action.
 
 ${agent.statusEffects.some((s) => s.type === "technical_difficulties") ? "WARNING: You have Technical Difficulties - you MUST choose 'rest' this turn!" : ""}
 

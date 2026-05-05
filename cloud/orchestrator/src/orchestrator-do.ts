@@ -230,6 +230,9 @@ export class GameOrchestrator {
       // we just log and surface in the response for visibility.
       const hrFunding = await this.ensureHrFunded();
       await db.setGameStatus("running");
+      // Pin game-start time so the alarm handler can target a fixed wall-clock
+      // cadence (gameStartedAt + tick * interval) instead of drifting on work time.
+      await db.setGameStateValue("game_started_at", String(Date.now()));
       // First tick fires immediately; subsequent ones are alarm-scheduled.
       await this.state.storage.setAlarm(Date.now() + 100);
       return Response.json({
@@ -255,6 +258,11 @@ export class GameOrchestrator {
         return Response.json({ error: `Cannot resume game in ${current} state` }, { status: 400 });
       }
       await db.setGameStatus("running");
+      // Realign game-start time so cadence resumes from where we left off
+      // (rather than racing forward to "catch up" the pause duration).
+      const interval = parseInt(this.env.TICK_INTERVAL_MS, 10);
+      const tick = await db.getCurrentTick();
+      await db.setGameStateValue("game_started_at", String(Date.now() - tick * interval));
       await this.state.storage.setAlarm(Date.now() + 100);
       return Response.json({ status: "running" });
     }
@@ -315,7 +323,7 @@ export class GameOrchestrator {
     if (path === "/snapshot" && request.method === "GET") {
       const [actionsRes, eventsRes, agentsRes, statusVal, tickVal] = await Promise.all([
         this.env.DB.prepare("SELECT id, tick, agent_id, action_type, action_data, reasoning, outcome, prestige_change, tx_hash, created_at FROM action_logs ORDER BY tick ASC, id ASC").all(),
-        this.env.DB.prepare("SELECT id, tick, timestamp, type, agent_id, target_id, description, prestige_change, tx_hash, settlement_time, reasoning FROM events ORDER BY tick ASC, timestamp ASC").all(),
+        this.env.DB.prepare("SELECT id, tick, timestamp, type, agent_id, target_id, description, prestige_change, tx_hash, settlement_time, reasoning, parent_event_id, action_type, target_name, action_detail FROM events ORDER BY tick ASC, timestamp ASC").all(),
         this.env.DB.prepare("SELECT id, persona_id, name, title, prestige, status_effects, allies, pending_alliance, claimed_by_name FROM agents").all(),
         db.getGameStatus(),
         db.getCurrentTick(),
@@ -924,10 +932,20 @@ export class GameOrchestrator {
     }
 
     // Reschedule the next alarm if we're still running.
+    // Game-4 fix: target a fixed wall-clock cadence (gameStartedAt + tick * interval)
+    // instead of "now + interval". The latter caused work-time drift — each tick's
+    // LLM + Stellar settlement added ~20s to the gap, blowing 33min games to 60min.
     const stillRunning = (await db.getGameStatus()) === "running";
     if (stillRunning) {
       const interval = parseInt(this.env.TICK_INTERVAL_MS, 10);
-      await this.state.storage.setAlarm(Date.now() + interval);
+      const startedAtRaw = await db.getGameStateValue("game_started_at");
+      const startedAt = startedAtRaw ? parseInt(startedAtRaw, 10) : Date.now();
+      // newTick = the tick we just finished. Next alarm fires for tick newTick+1,
+      // which should land at startedAt + newTick*interval (so tick 1 fires near
+      // startedAt+0, tick 2 near startedAt+interval, etc.).
+      const targetTime = startedAt + newTick * interval;
+      const delay = Math.max(targetTime - Date.now(), 1000);
+      await this.state.storage.setAlarm(Date.now() + delay);
     }
   }
 

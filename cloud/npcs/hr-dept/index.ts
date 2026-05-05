@@ -64,10 +64,10 @@ const ENDPOINTS: Record<string, Endpoint> = {
   },
   "/slack-bomb": {
     price: 25,
-    needsTarget: false,
-    payload: () => ({
+    needsTarget: true,
+    payload: (target) => ({
       action: "slack_bomb_dropped",
-      description: "Dropped a passive-aggressive bomb in #general. Two random managers caught in the crossfire.",
+      description: `Dropped a passive-aggressive bomb in #general targeting ${target}. A bystander caught splash damage.`,
       corporateSpeak: "We trust managers to communicate constructively in shared channels.",
     }),
   },

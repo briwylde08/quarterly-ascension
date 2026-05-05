@@ -341,7 +341,10 @@ export async function processTick(deps: TickDeps, activeAgentIds?: string[]): Pr
 async function applyFatigue(deps: TickDeps, tick: number): Promise<void> {
   const { db, emit } = deps;
   const FATIGUE_WINDOW = 5;
-  const TIRED_DURATION = 4; // bumped from 3 post-game-3 — the previous -6 total wasn't enough to make agents care
+  // Hit the Wall now fires on cycle boundaries only (every 5 ticks) — see
+  // applyPassiveStatusDecay. So duration is in *ticks* but represents 4 cycles.
+  const TIRED_CYCLES = 4;
+  const TIRED_DURATION = TIRED_CYCLES * 5;
   const RECOVERY_ACTIONS = new Set(["rest", "buy_coffee", "cry_in_stairwell"]);
   const agents = await db.getAllAgents();
 
@@ -370,7 +373,7 @@ async function applyFatigue(deps: TickDeps, tick: number): Promise<void> {
     tick,
     timestamp: new Date(),
     type: "status_effect",
-    description: `${newlyTired.length === 1 ? namesList + " has" : namesList + " have"} Hit the Wall (-3 prestige/cycle for ${TIRED_DURATION} cycles; lifted by Rest, Buy Coffee, or Cry in the Stairwell).`,
+    description: `${newlyTired.length === 1 ? namesList + " has" : namesList + " have"} Hit the Wall (-3 prestige/cycle for ${TIRED_CYCLES} cycles; lifted by Rest, Buy Coffee, or Cry in the Stairwell).`,
   });
   for (const a of newlyTired) {
     await emit({
@@ -437,11 +440,13 @@ async function applyMysteriousInfluenceMisattribution(
  */
 async function applyPassiveStatusDecay(deps: TickDeps, tick: number): Promise<void> {
   const { db, emit } = deps;
-  // Collect all status-driven prestige changes this tick, then emit a
-  // single parent event with per-agent children. Pre-game-3 had each
-  // agent's decay as a separate row in the activity stream — visually
-  // noisy. Now: "5 managers had passive status effects fire this cycle"
-  // with the per-name details collapsed underneath.
+  // Game-4 fix: passive decay (Hit the Wall, Problematic, Mysterious Influence,
+  // Inspired) was firing every tick instead of every cycle, blowing up
+  // intended -3/cycle into -3/tick (5x over-application). Gate to cycle
+  // boundaries — every 5 ticks, since round-robin runs 2 agents/tick × 5 ticks
+  // = each agent acts once per cycle.
+  if (tick % 5 !== 0) return;
+
   const changes: Array<{ agentId: string; name: string; net: number; reasons: string[] }> = [];
   for (const agent of await db.getAllAgents()) {
     let net = 0;
@@ -877,7 +882,8 @@ async function executePaidAction(
           await db.updateAgentPrestige(action.target, -3);
           await db.updateAgentStatusEffects(action.target, [
             ...target.statusEffects.filter((e) => e.type !== "problematic"),
-            { type: "problematic", expiresAtTick: tick + 2, source: agent.id },
+            // 2 cycles × 5 ticks/cycle (per-cycle decay gate, see applyPassiveStatusDecay)
+            { type: "problematic", expiresAtTick: tick + 10, source: agent.id },
           ]);
           const sections = [
             "section 4.7.b ('Decorum in Shared Spaces')",
@@ -938,7 +944,8 @@ async function executePaidAction(
           await db.updateAgentPrestige(action.target, hit);
           await db.updateAgentStatusEffects(action.target, [
             ...target.statusEffects,
-            { type: "problematic", expiresAtTick: tick + 4, source: agent.id },
+            // 4 cycles × 5 ticks/cycle
+            { type: "problematic", expiresAtTick: tick + 20, source: agent.id },
           ]);
         }
       }
@@ -1005,9 +1012,10 @@ async function executePaidAction(
           await db.updateAgentPrestige(action.target, -5);
           await db.updateAgentStatusEffects(action.target, [
             ...target.statusEffects.filter((e) => e.type !== "tired"),
-            { type: "tired", expiresAtTick: tick + 3, source: agent.id },
+            // 3 cycles × 5 ticks/cycle
+            { type: "tired", expiresAtTick: tick + 15, source: agent.id },
           ]);
-          outcome = `Moved ${target.name}'s meeting to 7:30am. They lose 5 prestige and become Hit the Wall (-2/cycle for 3 cycles). The room is freezing.`;
+          outcome = `Moved ${target.name}'s meeting to 7:30am. They lose 5 prestige and become Hit the Wall (-3/cycle for 3 cycles). The room is freezing.`;
         }
       }
       break;
@@ -1042,37 +1050,54 @@ async function executePaidAction(
       break;
 
     case "slack_bomb": {
-      // $25 group attack. System randomly picks 2 OTHER managers; each
-      // takes -6 prestige AND gains Questionable Judgment for 2 cycles.
-      // Attacker gains +5 (was +3, bumped post-game-3 since LLM never
-      // picked it). 15% chance HR flags the post → attacker also -5 +
-      // Problematic 1 cycle.
-      const all = await db.getAllAgents();
-      const others = all.filter((a) => a.id !== agent.id).sort(() => Math.random() - 0.5);
-      const victims = others.slice(0, 2);
-      for (const v of victims) {
-        await db.updateAgentPrestige(v.id, -6);
-        await db.updateAgentStatusEffects(v.id, [
-          ...v.statusEffects.filter((e) => e.type !== "questionable_judgment"),
-          { type: "questionable_judgment", expiresAtTick: tick + 2, source: agent.id },
-        ]);
+      // $25 targeted attack with splash. Post-game-4 redesign: was random-2-victims
+      // for $5/+5 self / -6 each + QJ; LLM picked it 0/40 ticks because random
+      // targeting prevented strategic chaining. Now: pick a primary, splash a
+      // bystander. Primary takes -8 + QJ 2 cycles; bystander -4 (no tag).
+      // Self +8. 15% backfire: -5 + Problematic 1 cycle.
+      if (!("target" in action)) break;
+      const target = await db.getAgent(action.target);
+      if (!target) break;
+      const cd = await checkTargetCooldown(deps, agent.id, "slack_bomb", action.target, tick);
+      if (cd.onCooldown) {
+        outcome = fizzleOutcome("slack_bomb", target.name);
+        break;
       }
-      let selfDelta = 5;
+      await recordTargetUse(deps, agent.id, "slack_bomb", action.target, tick);
+
+      // Primary: -8 + QJ 2 cycles
+      await db.updateAgentPrestige(action.target, -8);
+      await db.updateAgentStatusEffects(action.target, [
+        ...target.statusEffects.filter((e) => e.type !== "questionable_judgment"),
+        // 2 cycles × 5 ticks/cycle
+        { type: "questionable_judgment", expiresAtTick: tick + 10, source: agent.id },
+      ]);
+
+      // Splash bystander: -4, no tag. Random pick from non-attacker, non-target.
+      const all = await db.getAllAgents();
+      const bystanderPool = all.filter((a) => a.id !== agent.id && a.id !== action.target);
+      const bystander = bystanderPool[Math.floor(Math.random() * bystanderPool.length)];
+      if (bystander) {
+        await db.updateAgentPrestige(bystander.id, -4);
+      }
+
+      let selfDelta = 8;
       let backfire = "";
       if (Math.random() < 0.15) {
-        selfDelta = -5 + 5; // net 0: gain +5 then -5
+        selfDelta = 8 - 5; // net +3: keep the gain but eat the HR slap
         const me = (await db.getAgent(agent.id))!;
         await db.updateAgentStatusEffects(agent.id, [
           ...me.statusEffects.filter((e) => e.type !== "problematic"),
-          { type: "problematic", expiresAtTick: tick + 1, source: "slack_bomb_backfire" },
+          // 1 cycle × 5 ticks/cycle
+          { type: "problematic", expiresAtTick: tick + 5, source: "slack_bomb_backfire" },
         ]);
         backfire = " HR flagged the post — you also lose 5 prestige and gain Problematic for 1 cycle.";
       }
       prestigeChange = selfDelta;
       await db.updateAgentPrestige(agent.id, selfDelta);
       const flavor = SLACK_BOMB_FLAVORS[Math.floor(Math.random() * SLACK_BOMB_FLAVORS.length)];
-      const victimNames = victims.map((v) => v.name).join(" and ");
-      outcome = `${flavor} ${victimNames} caught in the crossfire (-6 each + Questionable Judgment 2 cycles).${backfire}`;
+      const splash = bystander ? ` ${bystander.name} caught splash (-4 prestige).` : "";
+      outcome = `${flavor} ${target.name} took the brunt (-8 prestige + Questionable Judgment 2 cycles).${splash}${backfire}`;
       break;
     }
 
