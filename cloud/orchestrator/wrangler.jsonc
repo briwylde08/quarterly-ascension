@@ -26,7 +26,8 @@
     {
       "binding": "DB",
       "database_name": "quarterly-ascension",
-      "database_id": "33bf069f-8265-42a7-ad37-4a1fe6798d85"
+      "database_id": "33bf069f-8265-42a7-ad37-4a1fe6798d85",
+      "migrations_dir": "../db/migrations"
     }
   ],
 

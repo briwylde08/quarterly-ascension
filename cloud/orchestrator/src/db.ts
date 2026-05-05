@@ -138,8 +138,8 @@ export class Db {
   async saveEvent(event: GameEvent): Promise<void> {
     await this.db
       .prepare(
-        `INSERT INTO events (id, tick, timestamp, type, agent_id, target_id, description, prestige_change, tx_hash, settlement_time, reasoning)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+        `INSERT INTO events (id, tick, timestamp, type, agent_id, target_id, description, prestige_change, tx_hash, settlement_time, reasoning, parent_event_id, action_type, target_name, action_detail)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
       )
       .bind(
         event.id,
@@ -152,7 +152,11 @@ export class Db {
         event.prestigeChange ?? null,
         event.txHash ?? null,
         event.settlementTime ?? null,
-        event.reasoning ?? null
+        event.reasoning ?? null,
+        event.parentEventId ?? null,
+        event.actionType ?? null,
+        event.targetName ?? null,
+        event.actionDetail ?? null
       )
       .run();
   }
@@ -178,6 +182,10 @@ export class Db {
       txHash: row.tx_hash,
       settlementTime: row.settlement_time,
       reasoning: row.reasoning,
+      parentEventId: row.parent_event_id ?? undefined,
+      actionType: row.action_type ?? undefined,
+      targetName: row.target_name ?? undefined,
+      actionDetail: row.action_detail ?? undefined,
     };
   }
 
