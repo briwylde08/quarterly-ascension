@@ -71,6 +71,18 @@ const ENDPOINTS: Record<string, Endpoint> = {
       corporateSpeak: "We trust managers to communicate constructively in shared channels.",
     }),
   },
+  "/invoke-handbook": {
+    price: 15,
+    needsTarget: true,
+    payload: (target) => ({
+      action: "handbook_invoked",
+      target,
+      description: `Cited a section of the Employee Handbook against ${target}. Compliance is a journey, not a destination.`,
+      corporateSpeak: "We expect all managers to familiarize themselves with company policy.",
+      prestigeChange: -3,
+      statusEffect: { type: "problematic", target, duration: 2 },
+    }),
+  },
 };
 
 export default {

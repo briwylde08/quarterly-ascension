@@ -102,7 +102,8 @@ export type Action =
   | { type: "boomerang" }
   | { type: "cry_in_stairwell" }
   | { type: "join_meeting_silently" }
-  | { type: "slack_bomb" };
+  | { type: "slack_bomb" }
+  | { type: "invoke_handbook"; target: string };
 
 export interface GameEvent {
   id: string;

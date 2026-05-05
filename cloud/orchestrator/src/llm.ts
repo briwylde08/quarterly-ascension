@@ -67,7 +67,7 @@ const ALL_ACTIONS = [
   { type: "rest", description: "Rest and recover (removes Hit the Wall, free)", cost: 0 },
   { type: "take_credit", description: "Attempt to claim credit for someone's work (50% success: +30 prestige, 50% fail: -20 prestige)", cost: 0, requiresTarget: true },
 
-  { type: "schmooze", description: "Schmooze another manager — propose a cross-functional partnership (free)", cost: 0, requiresTarget: true },
+  { type: "schmooze", description: "Schmooze another manager — propose a cross-functional partnership (free). Each manager caps at 3 partnerships; if you're at 3 OR they're at 3, the proposal politely fizzles ('they're at capacity, let's circle back next quarter').", cost: 0, requiresTarget: true },
   { type: "accept_alliance", description: "Accept a pending cross-functional partnership (+5 prestige to both)", cost: 0, requiresTarget: true },
   { type: "reject_alliance", description: "Reject a pending cross-functional partnership (proposer loses 10 prestige)", cost: 0, requiresTarget: true },
   { type: "break_alliance", description: "End a cross-functional partnership (-15 prestige for you; ex-partner gets Under Investigation 1 tick — can't retaliate immediately). Calculated nuke.", cost: 0, requiresTarget: true },
@@ -87,10 +87,11 @@ const ALL_ACTIONS = [
   { type: "move_meeting_early", description: "Move target's meeting to 7:30am ($10). Target -5 prestige + Hit the Wall (-2/cycle for 3 cycles = -11 total damage, plus they'll need to spend a turn on Rest or $5 on Buy Coffee — that's stolen value on top of the prestige hit). Underrated cheap attack.", cost: 10, requiresTarget: true },
 
   // === MID PAID ($20 – $25) ===
+  { type: "invoke_handbook", description: "Invoke the Employee Handbook against target ($15). Cite a policy section. Target loses 3 prestige and gains Problematic for 2 cycles. The cheap source of Problematic — combine with Bad Glassdoor Review for compound damage.", cost: 15, requiresTarget: true },
   { type: "schedule_pre_meeting", description: "Schedule a pre-meeting for the meeting ($20). Target loses 15 prestige (highest single-shot damage at this cost) + gains MEETING BLOCKED for 2 cycles, blocking their Book CEO Time play. Loyal managers (loyalty > 70) think pre-meetings are normal and are immune — but most managers aren't loyal.", cost: 20, requiresTarget: true },
   { type: "file_complaint", description: "File HR complaint (you +5 'diligence' prestige; target gets Under Investigation, can't retaliate against you for 1 tick)", cost: 22, requiresTarget: true },
   { type: "strategy_report", description: "Get consultant report (+35 prestige, gives Has Deliverable for a future +40 CEO meeting)", cost: 30 },
-  { type: "slack_bomb", description: "Drop a Slack bomb in #general ($25). Two random other managers each lose 6 prestige (caught in the crossfire). You gain 3 prestige (eyeballs are eyeballs). 15% chance HR flags it — you also lose 5 prestige and gain Problematic. Group damage with random targeting; pure chaos.", cost: 25 },
+  { type: "slack_bomb", description: "Drop a Slack bomb in #general ($25). Two random other managers each lose 6 prestige AND gain Questionable Judgment for 2 cycles (caught in the crossfire). You gain 5 prestige (eyeballs are eyeballs). 15% chance HR flags it — you also lose 5 prestige and gain Problematic. Group damage AND group tag — punches above its weight.", cost: 25 },
   { type: "office_party", description: "Throw an office party ($25). +5 prestige to ALL managers and +15 to you. Generous play that visibly helps your rivals too.", cost: 25 },
   { type: "anonymous_pulse_survey", description: "Launch an 'anonymous' morale survey somehow entirely about the leader ($25). Target loses 50 prestige. Available only when YOU are rank ≥ 4 AND target is rank #1. One shot per game.", cost: 25, requiresTarget: true },
 

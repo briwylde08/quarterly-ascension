@@ -752,7 +752,7 @@ export class GameOrchestrator {
     }
 
     if (path === "/state") {
-      const [agents, status, tick, recentEvents, ticker, stats, nextAlarmAt] = await Promise.all([
+      const [agents, status, tick, recentEvents, ticker, stats, nextAlarmAt, turnOrderRaw, turnIndexRaw] = await Promise.all([
         db.getAllAgents(),
         db.getGameStatus(),
         db.getCurrentTick(),
@@ -764,6 +764,8 @@ export class GameOrchestrator {
         // tab show the same countdown without local-clock drift / refresh
         // resetting it.
         this.state.storage.getAlarm(),
+        db.getGameStateValue("turn_order"),
+        db.getGameStateValue("turn_index"),
       ]);
 
       const agentsWithBalances = await Promise.all(
@@ -779,6 +781,22 @@ export class GameOrchestrator {
         }))
       );
 
+      // "Up Next": the IDs (and resolved names) of the agents who will
+      // act on the next alarm fire. Read directly from the turn-order
+      // queue stored in game_state.
+      let nextAgents: Array<{ id: string; name: string }> = [];
+      if (turnOrderRaw && turnIndexRaw) {
+        try {
+          const order: string[] = JSON.parse(turnOrderRaw);
+          const idx = parseInt(turnIndexRaw, 10);
+          const ids = order.slice(idx, idx + 2);
+          nextAgents = ids
+            .map((id) => agents.find((a) => a.id === id))
+            .filter((a): a is NonNullable<typeof a> => !!a)
+            .map((a) => ({ id: a.id, name: a.name }));
+        } catch { /* malformed state, leave empty */ }
+      }
+
       return Response.json({
         status,
         tick,
@@ -787,6 +805,7 @@ export class GameOrchestrator {
         nextAlarmAt,
         serverTime: Date.now(),
         agents: agentsWithBalances,
+        nextAgents,
         recentEvents,
         ticker,
         stats: {

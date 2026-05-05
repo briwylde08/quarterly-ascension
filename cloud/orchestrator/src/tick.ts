@@ -341,8 +341,14 @@ export async function processTick(deps: TickDeps, activeAgentIds?: string[]): Pr
 async function applyFatigue(deps: TickDeps, tick: number): Promise<void> {
   const { db, emit } = deps;
   const FATIGUE_WINDOW = 5;
+  const TIRED_DURATION = 4; // bumped from 3 post-game-3 — the previous -6 total wasn't enough to make agents care
   const RECOVERY_ACTIONS = new Set(["rest", "buy_coffee", "cry_in_stairwell"]);
   const agents = await db.getAllAgents();
+
+  // Collect everyone hitting the wall this cycle, then emit a single
+  // parent event with per-agent children. Cleaner activity-stream
+  // rendering than N separate "status_effect" rows.
+  const newlyTired: typeof agents = [];
   for (const agent of agents) {
     if (agent.statusEffects.some((e) => e.type === "tired")) continue;
     const recent = await db.getRecentActionLogsForAgent(agent.id, FATIGUE_WINDOW);
@@ -351,15 +357,30 @@ async function applyFatigue(deps: TickDeps, tick: number): Promise<void> {
     if (!noRecovery) continue;
     await db.updateAgentStatusEffects(agent.id, [
       ...agent.statusEffects,
-      { type: "tired", expiresAtTick: tick + 3 },
+      { type: "tired", expiresAtTick: tick + TIRED_DURATION },
     ]);
+    newlyTired.push(agent);
+  }
+
+  if (newlyTired.length === 0) return;
+  const parentId = uuid();
+  const namesList = newlyTired.map((a) => a.name).join(", ");
+  await emit({
+    id: parentId,
+    tick,
+    timestamp: new Date(),
+    type: "status_effect",
+    description: `${newlyTired.length === 1 ? namesList + " has" : namesList + " have"} Hit the Wall (-3 prestige/cycle for ${TIRED_DURATION} cycles; lifted by Rest, Buy Coffee, or Cry in the Stairwell).`,
+  });
+  for (const a of newlyTired) {
     await emit({
       id: uuid(),
       tick,
       timestamp: new Date(),
       type: "status_effect",
-      agentId: agent.id,
-      description: `${agent.name} hit the wall (${FATIGUE_WINDOW} turns without a break) — now Hit the Wall (-2/cycle for 3 cycles, lifted by Rest, Buy Coffee, or Cry in the Stairwell).`,
+      agentId: a.id,
+      description: `${a.name} — went ${FATIGUE_WINDOW} turns without recovering. Hit the Wall.`,
+      parentEventId: parentId,
     });
   }
 }
@@ -416,6 +437,12 @@ async function applyMysteriousInfluenceMisattribution(
  */
 async function applyPassiveStatusDecay(deps: TickDeps, tick: number): Promise<void> {
   const { db, emit } = deps;
+  // Collect all status-driven prestige changes this tick, then emit a
+  // single parent event with per-agent children. Pre-game-3 had each
+  // agent's decay as a separate row in the activity stream — visually
+  // noisy. Now: "5 managers had passive status effects fire this cycle"
+  // with the per-name details collapsed underneath.
+  const changes: Array<{ agentId: string; name: string; net: number; reasons: string[] }> = [];
   for (const agent of await db.getAllAgents()) {
     let net = 0;
     const reasons: string[] = [];
@@ -429,7 +456,7 @@ async function applyPassiveStatusDecay(deps: TickDeps, tick: number): Promise<vo
       reasons.push("Inspired");
     }
     if (agent.statusEffects.some((s) => s.type === "tired")) {
-      net -= 2;
+      net -= 3;
       reasons.push("Hit the Wall");
     }
     if (agent.statusEffects.some((s) => s.type === "problematic")) {
@@ -439,16 +466,37 @@ async function applyPassiveStatusDecay(deps: TickDeps, tick: number): Promise<vo
 
     if (net !== 0) {
       await db.updateAgentPrestige(agent.id, net);
-      await emit({
-        id: uuid(),
-        tick,
-        timestamp: new Date(),
-        type: "status_effect",
-        agentId: agent.id,
-        description: `${agent.name}: ${net > 0 ? "+" : ""}${net} prestige (${reasons.join(", ")})`,
-        prestigeChange: net,
-      });
+      changes.push({ agentId: agent.id, name: agent.name, net, reasons });
     }
+  }
+
+  if (changes.length === 0) return;
+  if (changes.length === 1) {
+    // Single-agent passive — no nesting needed, just emit directly.
+    const c = changes[0];
+    await emit({
+      id: uuid(), tick, timestamp: new Date(), type: "status_effect",
+      agentId: c.agentId,
+      description: `${c.name}: ${c.net > 0 ? "+" : ""}${c.net} prestige (${c.reasons.join(", ")})`,
+      prestigeChange: c.net,
+    });
+    return;
+  }
+
+  // Multi-agent: parent event lists count, children carry per-agent detail.
+  const parentId = uuid();
+  await emit({
+    id: parentId, tick, timestamp: new Date(), type: "status_effect",
+    description: `${changes.length} managers had passive status effects fire this cycle.`,
+  });
+  for (const c of changes) {
+    await emit({
+      id: uuid(), tick, timestamp: new Date(), type: "status_effect",
+      agentId: c.agentId,
+      description: `${c.name}: ${c.net > 0 ? "+" : ""}${c.net} prestige (${c.reasons.join(", ")})`,
+      prestigeChange: c.net,
+      parentEventId: parentId,
+    });
   }
 }
 
@@ -573,13 +621,13 @@ async function executeAction(
                 "their pre-existing PIP energy did most of the work",
               ];
               const flavor = flavors[Math.floor(Math.random() * flavors.length)];
-              outcome = `Successfully took credit for ${action.target}'s work (${flavor})`;
+              outcome = `Successfully took credit for ${target?.name ?? action.target}'s work (${flavor})`;
             } else {
-              outcome = `Successfully took credit for ${action.target}'s work`;
+              outcome = `Successfully took credit for ${target?.name ?? action.target}'s work`;
             }
           } else {
             prestigeChange = -20;
-            outcome = `Failed to take credit - ${action.target} had receipts`;
+            outcome = `Failed to take credit — ${target?.name ?? action.target} had receipts`;
           }
           await db.updateAgentPrestige(agent.id, prestigeChange);
           // Marked status is consumed once exploited.
@@ -771,7 +819,8 @@ async function executePaidAction(
         prestigeChange = 3;
         await db.updateAgentPrestige(agent.id, prestigeChange);
         await db.updateAgentPrestige(action.target, 3);
-        outcome = `Low-stakes coffee with ${action.target}. Both +3 prestige, no alliance proposed.`;
+        const target = await db.getAgent(action.target);
+        outcome = `Low-stakes coffee with ${target?.name ?? action.target}. Both +3 prestige, no alliance proposed.`;
       }
       break;
 
@@ -818,19 +867,47 @@ async function executePaidAction(
       }
       break;
 
+    case "invoke_handbook":
+      if ("target" in action) {
+        const target = await db.getAgent(action.target);
+        if (target) {
+          // $15 Problematic source — cheaper than Sensitivity Training
+          // ($30) but smaller prestige hit (-3 vs -20). Designed to make
+          // the Problematic chain (→ Bad Glassdoor) more reachable.
+          await db.updateAgentPrestige(action.target, -3);
+          await db.updateAgentStatusEffects(action.target, [
+            ...target.statusEffects.filter((e) => e.type !== "problematic"),
+            { type: "problematic", expiresAtTick: tick + 2, source: agent.id },
+          ]);
+          const sections = [
+            "section 4.7.b ('Decorum in Shared Spaces')",
+            "section 12.3 ('Communications Standards')",
+            "section 8.2 ('Time-and-Attendance Norms')",
+            "section 19.1 ('Professional Tone')",
+            "appendix C, paragraph 14 ('Common-Sense Provisions')",
+          ];
+          const section = sections[Math.floor(Math.random() * sections.length)];
+          actionDetail = section;
+          outcome = `Cited ${section} against ${target.name}. They lose 3 prestige and gain Problematic for 2 cycles. The handbook is a weapon.`;
+        }
+      }
+      break;
+
     case "anonymous_pulse_survey":
       if ("target" in action) {
         // Eligibility (rank ≥ 4, not yet used) is enforced in availableActions.
         // Verify target is rank #1 at execution; otherwise the survey misses.
         const all = await db.getAllAgents();
+        const target = await db.getAgent(action.target);
         const targetIsLeader = all[0]?.id === action.target;
+        const targetName = target?.name ?? action.target;
         if (!targetIsLeader) {
-          outcome = `Tried to launch a survey about ${action.target}, but they're no longer the leader — the email got buried.`;
+          outcome = `Tried to launch a survey about ${targetName}, but they're no longer the leader — the email got buried.`;
           break;
         }
         await db.updateAgentPrestige(action.target, -50);
         await db.setGameStateValue(`pulse_survey_used_${agent.id}`, "yes");
-        outcome = `Launched an 'anonymous' pulse survey somehow entirely about ${action.target}. They lose 50 prestige (the data was damning).`;
+        outcome = `Launched an 'anonymous' pulse survey somehow entirely about ${targetName}. They lose 50 prestige (the data was damning).`;
       }
       break;
 
@@ -958,7 +1035,7 @@ async function executePaidAction(
               ...target.statusEffects.filter((e) => e.type !== "meeting_blocked"),
               { type: "meeting_blocked", expiresAtTick: tick + 2, source: agent.id },
             ]);
-            outcome = `Booked a pre-meeting (and pre-pre-meeting) for ${action.target}. They lose 15 prestige and gain Meeting Blocked for 2 cycles.`;
+            outcome = `Booked a pre-meeting (and pre-pre-meeting) for ${target.name}. They lose 15 prestige and gain Meeting Blocked for 2 cycles.`;
           }
         }
       }
@@ -966,18 +1043,24 @@ async function executePaidAction(
 
     case "slack_bomb": {
       // $25 group attack. System randomly picks 2 OTHER managers; each
-      // takes -6 prestige. Attacker gains +3 ("eyeballs are eyeballs").
-      // 15% chance HR flags the post → attacker also -5 + Problematic 1 cycle.
+      // takes -6 prestige AND gains Questionable Judgment for 2 cycles.
+      // Attacker gains +5 (was +3, bumped post-game-3 since LLM never
+      // picked it). 15% chance HR flags the post → attacker also -5 +
+      // Problematic 1 cycle.
       const all = await db.getAllAgents();
       const others = all.filter((a) => a.id !== agent.id).sort(() => Math.random() - 0.5);
       const victims = others.slice(0, 2);
       for (const v of victims) {
         await db.updateAgentPrestige(v.id, -6);
+        await db.updateAgentStatusEffects(v.id, [
+          ...v.statusEffects.filter((e) => e.type !== "questionable_judgment"),
+          { type: "questionable_judgment", expiresAtTick: tick + 2, source: agent.id },
+        ]);
       }
-      let selfDelta = 3;
+      let selfDelta = 5;
       let backfire = "";
       if (Math.random() < 0.15) {
-        selfDelta = -5 + 3; // net -2: gain +3 then -5
+        selfDelta = -5 + 5; // net 0: gain +5 then -5
         const me = (await db.getAgent(agent.id))!;
         await db.updateAgentStatusEffects(agent.id, [
           ...me.statusEffects.filter((e) => e.type !== "problematic"),
@@ -989,7 +1072,7 @@ async function executePaidAction(
       await db.updateAgentPrestige(agent.id, selfDelta);
       const flavor = SLACK_BOMB_FLAVORS[Math.floor(Math.random() * SLACK_BOMB_FLAVORS.length)];
       const victimNames = victims.map((v) => v.name).join(" and ");
-      outcome = `${flavor} ${victimNames} caught in the crossfire (-6 each).${backfire}`;
+      outcome = `${flavor} ${victimNames} caught in the crossfire (-6 each + Questionable Judgment 2 cycles).${backfire}`;
       break;
     }
 
@@ -1002,7 +1085,7 @@ async function executePaidAction(
             ...cleaned,
             { type: "meeting_blocked", expiresAtTick: tick + 2, source: agent.id },
           ]);
-          outcome = `Cancelled ${action.target}'s CEO meeting. They're meeting-blocked for 2 cycles and any prepared deliverable is lost.`;
+          outcome = `Cancelled ${target.name}'s CEO meeting. They're meeting-blocked for 2 cycles and any prepared deliverable is lost.`;
         }
       }
       break;
@@ -1027,8 +1110,8 @@ async function executePaidAction(
           await db.updateAgentAllies(agent.id, newMyAllies);
           await db.updateAgentAllies(action.target, []);
           outcome = stolenAllies.length > 0
-            ? `Mounted a hostile takeover. Transferred ${stolenAllies.length} of ${action.target}'s cross-functional partnerships to your column. ${action.target}'s partner list is now zero.`
-            : `Mounted a hostile takeover, but ${action.target} had no partners to transfer. The kickoff invites went out to nobody.`;
+            ? `Mounted a hostile takeover. Transferred ${stolenAllies.length} of ${target.name}'s cross-functional partnerships to your column. ${target.name}'s partner list is now zero.`
+            : `Mounted a hostile takeover, but ${target.name} had no partners to transfer. The kickoff invites went out to nobody.`;
         }
       }
       break;
@@ -1086,6 +1169,11 @@ async function executePaidAction(
   return { outcome, prestigeChange, txHash: result.txHash, actionDetail };
 }
 
+// Maximum cross-functional partnerships per agent. 3+ also triggers
+// the Well-Allied tag (which halves incoming attack damage). Cap added
+// post-game-3 — alliances were proliferating and diluting drama.
+const ALLIANCE_CAP = 3;
+
 async function handleSchmooze(deps: TickDeps, agent: Agent, targetId: string): Promise<string> {
   // Re-fetch both sides — the agent reference passed in is the snapshot from
   // before this tick's actions ran, so allies modified earlier in the tick
@@ -1098,6 +1186,14 @@ async function handleSchmooze(deps: TickDeps, agent: Agent, targetId: string): P
   if (me?.allies.includes(targetId) || target.allies.includes(agent.id)) {
     const variants = SCHMOOZE_ALLY_FLAVORS(target.name);
     return variants[Math.floor(Math.random() * variants.length)];
+  }
+  // Cap at ALLIANCE_CAP partnerships per side. If either party is at
+  // capacity, the proposal politely fizzles — funny corporate-speak.
+  if ((me?.allies.length ?? 0) >= ALLIANCE_CAP) {
+    return `Tried to schmooze ${target.name} but you're already at ${ALLIANCE_CAP} cross-functional partnerships. Capacity is a real concern.`;
+  }
+  if (target.allies.length >= ALLIANCE_CAP) {
+    return `${target.name} is already at ${ALLIANCE_CAP} partnerships and 'tried to circle back next quarter.' Politely deferred.`;
   }
   // Don't overwrite an existing pending — if target already has someone
   // pending (especially us), no-op.
@@ -1112,6 +1208,13 @@ async function handleAllianceAccept(deps: TickDeps, agent: Agent, proposerId: st
   const { db, emit } = deps;
   const proposer = await db.getAgent(proposerId);
   if (!proposer) return "Proposer not found";
+
+  // Re-check cap at acceptance time — between proposal and accept, either
+  // side may have hit capacity from another partnership.
+  if (agent.allies.length >= ALLIANCE_CAP || proposer.allies.length >= ALLIANCE_CAP) {
+    await db.updateAgentPendingAlliance(agent.id, null);
+    return `Tried to accept ${proposer.name}'s alliance proposal but one of you is at the ${ALLIANCE_CAP}-partnership cap. Pending request closed.`;
+  }
 
   await db.updateAgentAllies(agent.id, [...agent.allies, proposerId]);
   await db.updateAgentAllies(proposerId, [...proposer.allies, agent.id]);
