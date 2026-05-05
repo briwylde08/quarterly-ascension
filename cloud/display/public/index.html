@@ -532,6 +532,33 @@
       position: relative;
     }
 
+    /* Per-coach gold highlight: rows where the coach's manager acted or
+       was targeted. Set via ?coach=<agentId> in the dashboard URL.
+       Inset shadow so we get the gold strip without shifting content. */
+    .feed-entry.yours-row {
+      box-shadow: inset 4px 0 0 #f1c40f;
+      background: rgba(241, 196, 15, 0.06);
+    }
+    .manager-row.yours-row {
+      box-shadow: inset 0 0 0 2px #f1c40f;
+      border-radius: 4px;
+    }
+    .your-coach-pill {
+      background: linear-gradient(90deg, #f1c40f 0%, #f39c12 100%);
+      color: var(--navy);
+      border-radius: 999px;
+      padding: 5px 14px 5px 12px;
+      gap: 6px;
+    }
+    .your-coach-pill .meta-label {
+      color: var(--navy) !important;
+      opacity: 0.75;
+    }
+    .your-coach-pill .meta-value {
+      color: var(--navy) !important;
+      font-weight: 700;
+    }
+
     /* Nested children for parent events (Hit the Wall, Problematic per-cycle
        passive decay, etc.). Parent stays as a normal row; children are
        collapsed by default and revealed by clicking the disclosure caret. */
@@ -1182,6 +1209,10 @@
     </div>
     <div></div>
     <div class="header-meta">
+      <div class="meta-item your-coach-pill" id="your-coach-pill" style="display:none;" title="The dashboard is highlighting events involving your manager. Pass ?coach=<agentId> in the URL to set this.">
+        <span class="meta-label">You coach</span>
+        <span class="meta-value" id="your-coach-name">—</span>
+      </div>
       <div class="meta-item">
         <span class="meta-label">Tick</span>
         <span class="meta-value" id="cycle">0</span>
@@ -1288,6 +1319,21 @@
       || _qsOrch
       || 'https://orchestrator.briana-761.workers.dev').replace(/\/$/, '');
     const ORCHESTRATOR_WS = ORCHESTRATOR_BASE.replace(/^http/, 'ws') + '/ws';
+
+    // ============================================================
+    // Per-coach view: ?coach=<agentId> highlights any event/leaderboard
+    // row involving that manager (acted or targeted) in gold. Lets each
+    // coach see "their" manager pop on a shared dashboard URL.
+    // ============================================================
+    const myCoachedAgent = new URLSearchParams(location.search).get('coach') || null;
+    function applyCoachHighlight(row) {
+      if (!myCoachedAgent || !row || !row.dataset) return;
+      const a = row.dataset.agentId;
+      const t = row.dataset.targetId;
+      if (a === myCoachedAgent || t === myCoachedAgent) {
+        row.classList.add('yours-row');
+      }
+    }
 
     // ============================================================
     // Hover-link: highlight matching pairs of (event, ticker entry)
@@ -1566,6 +1612,7 @@
       if (t.fromAgent) div.dataset.agentId = t.fromAgent;
       div.innerHTML = paidFeedInnerHTML(t, /*outcome*/ null);
       applyFilterToRow(div);
+      applyCoachHighlight(div);
       return div;
     }
 
@@ -1579,6 +1626,7 @@
       div.innerHTML = freeFeedInnerHTML(e);
       if (isBigMoment(e)) div.classList.add('big-moment');
       applyFilterToRow(div);
+      applyCoachHighlight(div);
       return div;
     }
 
@@ -1600,6 +1648,12 @@
 
     function enrichPaidRowWithEvent(row, event) {
       const entryId = row.dataset.entryId;
+      // Surface targetId so the per-coach gold highlight picks up rows
+      // where the coach's manager was the *target* of a paid action.
+      if (event.targetId && !row.dataset.targetId) {
+        row.dataset.targetId = event.targetId;
+        applyCoachHighlight(row);
+      }
       // Upgrade the action line to the narrative form once we know what
       // action this was. Replaces "Actor → Service" with "Actor went to
       // Service and [verb phrase with target]".
@@ -1786,6 +1840,19 @@
       const sorted = agents.slice().sort((a, b) => b.prestige - a.prestige);
       const lb = document.getElementById('leaderboard');
 
+      // Surface the "You coach: X" pill once the agents list resolves
+      // the coach's name. Stays hidden if no ?coach=<id> param or the
+      // id doesn't match any agent.
+      if (myCoachedAgent) {
+        const me = agents.find(a => a.id === myCoachedAgent);
+        const pill = document.getElementById('your-coach-pill');
+        const nameEl = document.getElementById('your-coach-name');
+        if (me && pill && nameEl) {
+          nameEl.textContent = me.name;
+          pill.style.display = '';
+        }
+      }
+
       // Capture old positions (FLIP)
       const before = new Map();
       lb.querySelectorAll('.manager-row').forEach(el => {
@@ -1879,7 +1946,8 @@
       // Row is a div, not a link — clicking opens an inline modal so the
       // viewer stays on the dashboard. Event delegation in initManagerModal()
       // handles clicks via data-agent-id.
-      return '<div class="manager-row rank-' + rank + (isWinner ? ' winner' : '') + '" data-agent-id="' + a.id + '" title="Click for character summary">'
+      const yoursClass = (myCoachedAgent && a.id === myCoachedAgent) ? ' yours-row' : '';
+      return '<div class="manager-row rank-' + rank + (isWinner ? ' winner' : '') + yoursClass + '" data-agent-id="' + a.id + '" title="Click for character summary">'
         + '<div class="rank">' + rank + '</div>'
         + '<div class="manager-identity">'
         +   '<div class="name">' + namePrefix + escape(a.name) + '</div>'
