@@ -192,7 +192,7 @@
     <div class="brand-mark">MegaCorp Inc.</div>
     <div class="nav-links">
       <a href="/intro.html">← All Managers</a>
-      <a href="/">Live Dashboard</a>
+      <a href="/" id="dashboard-link">Live Dashboard</a>
     </div>
   </header>
 
@@ -227,6 +227,14 @@
 
     const params = new URLSearchParams(location.search);
     const agentId = params.get('id');
+
+    // Carry the agent id through to the dashboard so the personalized
+    // gold highlight (?coach=<id>) follows the coach without them
+    // having to remember to add the param.
+    if (agentId) {
+      const dashLink = document.getElementById('dashboard-link');
+      if (dashLink) dashLink.href = '/?coach=' + encodeURIComponent(agentId);
+    }
 
     if (!agentId) {
       document.getElementById('profile-body').innerHTML =
@@ -458,7 +466,7 @@
           const data = await r.json();
           if (r.ok) {
             msg.className = 'claim-msg success';
-            msg.innerHTML = `Claim confirmed. Watch <a href="/">the live dashboard</a> — directives go live as soon as you submit them.`;
+            msg.innerHTML = `Claim confirmed. Watch <a href="/?coach=${encodeURIComponent(agentId)}">the live dashboard</a> — directives go live as soon as you submit them.`;
             btn.textContent = 'Claimed';
             setTimeout(() => location.reload(), 1200);
           } else {
