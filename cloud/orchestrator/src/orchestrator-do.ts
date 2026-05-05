@@ -294,7 +294,6 @@ export class GameOrchestrator {
     //
     // Refuses to run while status === "running"; halt first.
     if (path === "/reset" && request.method === "POST") {
-      const wipeClaims = url.searchParams.get("wipe_claims") === "true";
       const normalize = url.searchParams.get("normalize") === "true";
       const targetParam = url.searchParams.get("target");
       const target = targetParam ? parseFloat(targetParam) : 200;
@@ -305,12 +304,16 @@ export class GameOrchestrator {
           { status: 400 }
         );
       }
-      const result = await this.performReset({ wipeClaims, normalizeBalances: normalize, target, broadcastNotice: "Game reset by admin. Cycle 0. Status: setup." });
+      // Reset always wipes claims and password hashes together (issue #2).
+      // The retreat is a single-session event; no need to preserve coaches
+      // across reset boundaries. Slots are released so anyone can re-claim
+      // for the next game.
+      const result = await this.performReset({ normalizeBalances: normalize, target, broadcastNotice: "Game reset by admin. Cycle 0. Status: setup." });
       return Response.json({
         ok: true,
         status: "setup",
         tick: 0,
-        wipedClaims: wipeClaims,
+        wipedClaims: true,
         normalized: normalize,
         normalize: result,
         next: "POST /admin/start to begin a fresh game",
@@ -860,8 +863,9 @@ export class GameOrchestrator {
     if (tick >= maxTicks) {
       await db.setGameStatus("ended");
 
-      // Clear all per-game ephemeral state. Each new game starts fresh;
-      // persona traits + on-chain balances are the only carryover.
+      // Clear all per-game ephemeral state including password hashes. Each
+      // new game starts fresh — claims and passwords get released together
+      // (issue #2). Persona traits + on-chain balances are the only carryover.
       try {
         await this.env.DB.prepare(`
           DELETE FROM game_state WHERE
@@ -870,6 +874,7 @@ export class GameOrchestrator {
             key LIKE 'boomerang_used_%' OR
             key LIKE 'pulse_survey_used_%' OR
             key LIKE 'join_meeting_count_%' OR
+            key LIKE 'password_%' OR
             key IN ('turn_order', 'turn_index')
         `).run();
       } catch (err) {
@@ -1125,7 +1130,6 @@ export class GameOrchestrator {
    * balances. Status leaves at "setup", tick at 0.
    */
   private async performReset(opts: {
-    wipeClaims: boolean;
     normalizeBalances: boolean;
     target?: number;
     broadcastNotice?: string;
@@ -1139,14 +1143,15 @@ export class GameOrchestrator {
     await D.prepare("DELETE FROM ticker").run();
     await D.prepare("DELETE FROM action_logs").run();
     await D.prepare("DELETE FROM leaked_emails").run();
-    // Drop all game_state — setGameStatus / setCurrentTick rewrite the two
-    // we still need; everything else (directives, new_initiative_active)
-    // is meant to be cleared between games.
+    // Drop ALL game_state including password_* hashes (issue #2). The retreat
+    // is a single-session event — releasing a slot for the next game means
+    // releasing both the claim and its password together. Otherwise we'd end
+    // up with stale auth state vs. an open claim slot.
     await D.prepare("DELETE FROM game_state").run();
 
-    const claimsClause = opts.wipeClaims ? ", claimed_by = NULL, claimed_by_name = NULL" : "";
+    // Clear claims so the next game's intro page shows everyone available.
     await D.prepare(
-      `UPDATE agents SET prestige = 0, status_effects = '[]', allies = '[]', pending_alliance = NULL${claimsClause}`
+      `UPDATE agents SET prestige = 0, status_effects = '[]', allies = '[]', pending_alliance = NULL, claimed_by = NULL, claimed_by_name = NULL`
     ).run();
 
     let normResult: { burns: number; mints: number; failures: number } | null = null;
