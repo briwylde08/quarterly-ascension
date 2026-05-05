@@ -112,6 +112,23 @@ const CEO_MEETING_TOPICS_BLOCKED = [
   "was told to 'reach out to my EA to reschedule' and the EA never responded",
 ];
 
+// Insufficient-balance fizzle flavor — when a paid action fails because
+// the on-chain balance came up short (Stellar Soroban returns
+// HostError: Error(Contract, #10)). The action no-ops; the audience
+// reads a comedic outcome instead of a raw error stack trace.
+const INSUFFICIENT_BALANCE_FLAVORS: Array<(cost: number, service: string) => string> = [
+  (cost, service) => `Tried to charge $${cost} to the company card for ${service}; came back declined. Finance is being awful.`,
+  (cost, service) => `The card said no at the ${service} kiosk. The card said no in front of HR.`,
+  (cost, service) => `Got a 'pending approval' bounce on the $${cost} ${service} request — never actually approved.`,
+  (cost, service) => `Approved by Finance, declined by reality. ${service} did not happen this cycle.`,
+  (cost, service) => `Tried to expense $${cost} to ${service}; the receipt scanner just laughed.`,
+  (cost) => `Submitted a $${cost} requisition. Got back a sticky note that said 'lol.'`,
+];
+function isInsufficientBalanceError(err?: string): boolean {
+  if (!err) return false;
+  return /Error\(Contract,\s*#10\)|insufficient|underfunded/i.test(err);
+}
+
 // Slack Bomb flavor — what kind of #general post the agent dropped.
 const SLACK_BOMB_FLAVORS = [
   "Posted a 1,200-word screed in #general about 'team alignment.'",
@@ -707,6 +724,13 @@ async function executePaidAction(
   );
 
   if (!result.success) {
+    // Edge case: the on-chain balance was insufficient (Soroban contract
+    // #10). Don't show a raw error stack trace to the audience — pick
+    // a flavor outcome that reads as comedy.
+    if (isInsufficientBalanceError(result.error)) {
+      const fn = INSUFFICIENT_BALANCE_FLAVORS[Math.floor(Math.random() * INSUFFICIENT_BALANCE_FLAVORS.length)];
+      return { outcome: fn(serviceInfo.price, serviceInfo.name), prestigeChange: 0 };
+    }
     return { outcome: `Failed: ${result.error}`, prestigeChange: 0 };
   }
 
