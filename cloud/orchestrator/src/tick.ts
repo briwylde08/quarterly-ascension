@@ -366,6 +366,23 @@ async function applyFatigue(deps: TickDeps, tick: number): Promise<void> {
   }
 
   if (newlyTired.length === 0) return;
+
+  // Singleton: just emit one row directly. No nested expandable that just
+  // restates the same name.
+  if (newlyTired.length === 1) {
+    const a = newlyTired[0];
+    await emit({
+      id: uuid(),
+      tick,
+      timestamp: new Date(),
+      type: "status_effect",
+      agentId: a.id,
+      description: `${a.name} went ${FATIGUE_WINDOW} turns without recovering — Hit the Wall (-3 prestige/cycle for ${TIRED_CYCLES} cycles; lifted by Rest, Buy Coffee, or Cry in the Stairwell).`,
+    });
+    return;
+  }
+
+  // Multi-agent: parent summary + per-agent children for the disclosure UI.
   const parentId = uuid();
   const namesList = newlyTired.map((a) => a.name).join(", ");
   await emit({
@@ -373,7 +390,7 @@ async function applyFatigue(deps: TickDeps, tick: number): Promise<void> {
     tick,
     timestamp: new Date(),
     type: "status_effect",
-    description: `${newlyTired.length === 1 ? namesList + " has" : namesList + " have"} Hit the Wall (-3 prestige/cycle for ${TIRED_CYCLES} cycles; lifted by Rest, Buy Coffee, or Cry in the Stairwell).`,
+    description: `${namesList} have Hit the Wall (-3 prestige/cycle for ${TIRED_CYCLES} cycles; lifted by Rest, Buy Coffee, or Cry in the Stairwell).`,
   });
   for (const a of newlyTired) {
     await emit({

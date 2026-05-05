@@ -236,7 +236,7 @@ export function buildServiceUrls(npcBase: string): Record<string, { url: string;
     spread_rumor:            { url: npc("hr-dept",        "/spread-rumor"),           name: "HR Department",       price: 10 },
     invoke_handbook:         { url: npc("hr-dept",        "/invoke-handbook"),        name: "HR Department",       price: 15 },
     file_complaint:          { url: npc("hr-dept",        "/file-complaint"),         name: "HR Department",       price: 22 },
-    slack_bomb:              { url: npc("hr-dept",        "/slack-bomb"),             name: "HR Department",       price: 25 },
+    slack_bomb:              { url: npc("hr-dept",        "/slack-bomb"),             name: "HR Department",       price: 15 },
     anonymous_pulse_survey:  { url: npc("hr-dept",        "/anonymous-pulse-survey"), name: "HR Department",       price: 25 },
     sensitivity_training:    { url: npc("hr-dept",        "/sensitivity-training"),   name: "HR Department",       price: 30 },
 

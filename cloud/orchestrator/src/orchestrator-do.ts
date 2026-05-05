@@ -1064,13 +1064,22 @@ export class GameOrchestrator {
     let order: string[] = orderRaw ? JSON.parse(orderRaw) : [];
     let index = indexRaw ? parseInt(indexRaw, 10) : 0;
 
+    // Shuffle once per game (game-5 user feedback): predictable rhythm so
+    // coaches know when their manager acts. Pairs are fixed for all 16
+    // cycles — only shuffled if turn_order is empty (= start of game) or
+    // someone reset state. Wrap-around at end of cycle keeps the order.
+    if (order.length === 0) {
+      const agents = await db.getAllAgents();
+      order = agents.map((a) => a.id).sort(() => Math.random() - 0.5);
+      index = 0;
+      await db.setGameStateValue("turn_order", JSON.stringify(order));
+    }
+
     const out: string[] = [];
     for (let i = 0; i < count; i++) {
-      if (order.length === 0 || index >= order.length) {
-        const agents = await db.getAllAgents();
-        order = agents.map((a) => a.id).sort(() => Math.random() - 0.5);
+      if (index >= order.length) {
+        // Wrap to the start of the same fixed order — no reshuffle.
         index = 0;
-        await db.setGameStateValue("turn_order", JSON.stringify(order));
       }
       out.push(order[index]);
       index += 1;

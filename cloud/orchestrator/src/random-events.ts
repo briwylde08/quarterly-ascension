@@ -213,15 +213,43 @@ async function q1Kickoff(deps: EventDeps, tick: number): Promise<GameEvent[]> {
 
 // === Quarterly Bonus =======================================================
 
+// Bonuses go to 3 random agents (not top-3) with HR-flavored justifications.
+// Top-3 already-winning amplification cemented the leader; randomizing keeps
+// the leaderboard moving and the comedy fresher. Each line is a (reason)
+// where HR rationalizes the payout. Amount placeholder is filled at runtime.
+const BONUS_FLAVORS = [
+  "submitted timesheet on time three weeks running (HR was running out of categories)",
+  "best Out-of-Office message — it had a callback",
+  "attended one (1) all-hands meeting (the bar is on the floor)",
+  "hit reply-all the fewest times this quarter",
+  "named in zero PIPs this period (technically a win)",
+  "perfect attendance at meetings they organized themselves",
+  "highest 'works well with others' score (n=1, self-evaluated)",
+  "longest unbroken streak of '👀' Slack reactions",
+  "completed all required compliance trainings (twice — system glitch)",
+  "fewest typos in the all-hands chat",
+  "introduced themselves with title in 100% of new meetings",
+  "sent the most calendar invites with no agenda — 'leadership presence'",
+  "voted 'most likely to schedule a pre-meeting' by anonymous peers",
+  "still has not used their standing desk",
+  "expense-reported a $4 coffee as 'team-building research'",
+  "longest LinkedIn 'About' section in the org",
+  "highest rate of follow-up-to-the-follow-up emails",
+  "achieved zero deliverables but maximum visibility",
+];
+
 async function quarterlyBonus(
   deps: EventDeps,
   tick: number,
   payouts: [number, number, number],
   label: string
 ): Promise<GameEvent[]> {
-  const agents = await deps.db.getAllAgents(); // sorted prestige DESC
-  const top3 = agents.slice(0, 3);
-  if (top3.length === 0) return [];
+  const agents = await deps.db.getAllAgents();
+  const shuffled = [...agents].sort(() => Math.random() - 0.5);
+  const winners = shuffled.slice(0, 3);
+  if (winners.length === 0) return [];
+
+  const flavorPool = [...BONUS_FLAVORS].sort(() => Math.random() - 0.5);
 
   const parentId = uuid();
   const events: GameEvent[] = [{
@@ -229,12 +257,13 @@ async function quarterlyBonus(
     tick,
     timestamp: new Date(),
     type: "random_event",
-    description: `QUARTERLY BONUS — ${label}: HR is releasing performance bonuses to the top 3 by prestige.`,
+    description: `QUARTERLY BONUS — ${label}: HR is releasing performance bonuses. The criteria are mysterious.`,
   }];
 
-  for (let i = 0; i < top3.length; i++) {
-    const a = top3[i];
+  for (let i = 0; i < winners.length; i++) {
+    const a = winners[i];
     const amount = payouts[i];
+    const flavor = flavorPool[i] ?? BONUS_FLAVORS[Math.floor(Math.random() * BONUS_FLAVORS.length)];
     try {
       const txHash = await deps.stellar.sendAsset(deps.rewards.hrDeptSecret, a.publicKey, amount);
       events.push({
@@ -243,7 +272,7 @@ async function quarterlyBonus(
         timestamp: new Date(),
         type: "payment",
         agentId: a.id,
-        description: `${a.name} (rank #${i + 1}): received $${amount} ${label.toLowerCase()} bonus from HR`,
+        description: `${a.name} received $${amount} ${label.toLowerCase()} bonus — for "${flavor}"`,
         txHash,
         parentEventId: parentId,
       });

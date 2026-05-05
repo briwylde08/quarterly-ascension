@@ -1183,7 +1183,7 @@
     <div></div>
     <div class="header-meta">
       <div class="meta-item">
-        <span class="meta-label">Cycle</span>
+        <span class="meta-label">Tick</span>
         <span class="meta-value" id="cycle">0</span>
       </div>
       <div class="meta-item">
@@ -1736,7 +1736,7 @@
 
       return ''
         + '<div class="feed-head">'
-        +   '<span class="cycle">Cycle ' + (t.cycle || currentTick) + '</span>'
+        +   '<span class="cycle">Tick ' + (t.cycle || currentTick) + '</span>'
         +   '<span>' + time + '</span>'
         +   '<span class="badge-type ' + (statusKey === 'failed' ? 'payment_failed' : 'payment') + '">' + (statusKey === 'failed' ? 'Settlement Failed' : 'Settlement') + '</span>'
         + '</div>'
@@ -1763,7 +1763,7 @@
       const bigPill = isBigMoment(e) ? '<span class="big-pill">★ BIG MOMENT</span>' : '';
       return ''
         + '<div class="feed-head">'
-        +   '<span class="cycle">Cycle ' + (e.tick != null ? e.tick : currentTick) + '</span>'
+        +   '<span class="cycle">Tick ' + (e.tick != null ? e.tick : currentTick) + '</span>'
         +   '<span>' + time + '</span>'
         +   bigPill
         +   '<span class="badge-type ' + type + '">' + label + '</span>'

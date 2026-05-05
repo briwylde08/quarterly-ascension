@@ -63,7 +63,7 @@ const ENDPOINTS: Record<string, Endpoint> = {
     }),
   },
   "/slack-bomb": {
-    price: 25,
+    price: 15,
     needsTarget: true,
     payload: (target) => ({
       action: "slack_bomb_dropped",
