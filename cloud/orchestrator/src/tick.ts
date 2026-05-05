@@ -245,12 +245,28 @@ export async function processTick(deps: TickDeps, activeAgentIds?: string[]): Pr
   console.log(`TICK ${tick} STARTING`);
   console.log(`${"=".repeat(60)}\n`);
 
-  // Phase 1: expire status effects
+  // Phase 1: expire status effects. When Mysterious Influence wears off
+  // we surface a comedic event — the audience should see the office
+  // cipher trope ending, since the action becomes available to others
+  // again.
   const agents = await db.getAllAgents();
   for (const agent of agents) {
+    const losingMI = agent.statusEffects.some(
+      (e) => e.type === "mysterious_influence" && e.expiresAtTick && e.expiresAtTick <= tick
+    );
     const updated = agent.statusEffects.filter((e) => !(e.expiresAtTick && e.expiresAtTick <= tick));
     if (updated.length !== agent.statusEffects.length) {
       await db.updateAgentStatusEffects(agent.id, updated);
+    }
+    if (losingMI) {
+      await emit({
+        id: uuid(),
+        tick,
+        timestamp: new Date(),
+        type: "status_effect",
+        agentId: agent.id,
+        description: `${agent.name}'s Mysterious Influence has worn off. Someone in the building will start showing up to all-hands soon. Could be anyone.`,
+      });
     }
   }
 
@@ -627,9 +643,12 @@ async function executeAction(
       }
 
       case "join_meeting_silently": {
-        // Capped at 3 uses per game (filter enforces). Each use +4 prestige.
-        // The 3rd use grants the Mysterious Influence passive — +2/cycle and
-        // a 10% chance of misattribution (handled in passive decay + reasoning).
+        // Capped at 3 uses per agent (filter enforces). Each use +4 prestige.
+        // The 3rd use grants Mysterious Influence — +2/cycle passive, plus
+        // 10% misattribution comedy. Expires after 8 cycles (40 ticks);
+        // when it wears off, the join_meeting_silently action becomes
+        // available again for whoever hasn't capped at 3 uses.
+        const MI_DURATION_TICKS = 40;
         prestigeChange = 4;
         await db.updateAgentPrestige(agent.id, prestigeChange);
         const count = parseInt((await db.getGameStateValue(`join_meeting_count_${agent.id}`)) ?? "0", 10) + 1;
@@ -638,9 +657,9 @@ async function executeAction(
           const a = (await db.getAgent(agent.id))!;
           await db.updateAgentStatusEffects(agent.id, [
             ...a.statusEffects.filter((e) => e.type !== "mysterious_influence"),
-            { type: "mysterious_influence", expiresAtTick: 9999, source: agent.id },
+            { type: "mysterious_influence", expiresAtTick: tick + MI_DURATION_TICKS, source: agent.id },
           ]);
-          outcome = "Joined a meeting and said nothing (+4 prestige). Third such occurrence — gained MYSTERIOUS INFLUENCE.";
+          outcome = `Joined a meeting and said nothing (+4 prestige). Third such occurrence — gained MYSTERIOUS INFLUENCE for the next 8 cycles.`;
         } else {
           outcome = `Joined a meeting and said nothing (+4 prestige). ${count}/3 toward Mysterious Influence.`;
         }
@@ -900,12 +919,18 @@ async function executePaidAction(
       if ("target" in action) {
         const target = await db.getAgent(action.target);
         if (target) {
+          const cd = await checkTargetCooldown(deps, agent.id, "move_meeting_early", action.target, tick);
+          if (cd.onCooldown) {
+            outcome = fizzleOutcome("move_meeting_early", target.name);
+            break;
+          }
+          await recordTargetUse(deps, agent.id, "move_meeting_early", action.target, tick);
           await db.updateAgentPrestige(action.target, -5);
           await db.updateAgentStatusEffects(action.target, [
             ...target.statusEffects.filter((e) => e.type !== "tired"),
             { type: "tired", expiresAtTick: tick + 3, source: agent.id },
           ]);
-          outcome = `Moved ${action.target}'s meeting to 7:30am. They lose 5 prestige and become Hit the Wall (-2/cycle for 3 cycles). The room is freezing.`;
+          outcome = `Moved ${target.name}'s meeting to 7:30am. They lose 5 prestige and become Hit the Wall (-2/cycle for 3 cycles). The room is freezing.`;
         }
       }
       break;
@@ -914,13 +939,20 @@ async function executePaidAction(
       if ("target" in action) {
         const target = await db.getAgent(action.target);
         if (target) {
+          const cd = await checkTargetCooldown(deps, agent.id, "schedule_pre_meeting", action.target, tick);
+          if (cd.onCooldown) {
+            outcome = fizzleOutcome("schedule_pre_meeting", target.name);
+            break;
+          }
           // Loyal managers (loyalty > 70) shrug off the meeting bloat —
           // they think this is normal corporate behavior.
           const persona = getPersona(target.personaId);
           const loyalty = persona?.traits.loyalty ?? 0;
           if (loyalty > 70) {
-            outcome = `Booked a pre-meeting on ${action.target}'s calendar. They thought it was normal — no effect (their loyalty trait absorbs the slight).`;
+            // Loyalty-immune outcome — don't record cooldown, target was unaffected.
+            outcome = `Booked a pre-meeting on ${target.name}'s calendar. They thought it was normal — no effect (their loyalty trait absorbs the slight).`;
           } else {
+            await recordTargetUse(deps, agent.id, "schedule_pre_meeting", action.target, tick);
             await db.updateAgentPrestige(action.target, -15);
             await db.updateAgentStatusEffects(action.target, [
               ...target.statusEffects.filter((e) => e.type !== "meeting_blocked"),

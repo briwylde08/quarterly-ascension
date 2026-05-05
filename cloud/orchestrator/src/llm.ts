@@ -143,12 +143,16 @@ interface DecisionContext {
 // Hostile actions that have a target argument and are subject to the
 // per-target cooldown ("you can't attack the same person with the same
 // move twice in a row"). Surfaced both as a prompt warning and enforced
-// at handler-time.
+// at handler-time. schedule_pre_meeting + move_meeting_early added
+// post-game-3: pre-flight #3 had Pre-Meeting on Ron 5x because it
+// wasn't in the cooldown list.
 const TARGETED_HOSTILE_ACTIONS = new Set([
   "spread_rumor",
   "sensitivity_training",
   "sabotage_plan",
   "take_credit",
+  "schedule_pre_meeting",
+  "move_meeting_early",
 ]);
 const TARGET_COOLDOWN_TICKS = 10; // ≈ 2 cycles in 1-agent/tick mode
 

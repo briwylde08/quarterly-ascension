@@ -476,12 +476,12 @@ async function budgetCuts(deps: EventDeps, tick: number): Promise<GameEvent[]> {
     tick,
     timestamp: new Date(),
     type: "random_event",
-    description: `BUDGET CUTS: Finance is "rebalancing" — ${victims.length} managers each losing 15% of their DLBR balance (sent back to the issuer).`,
+    description: `BUDGET CUTS: Finance is "rebalancing" — ${victims.length} managers each losing 10% of their DLBR balance (sent back to the issuer).`,
   }];
 
   for (const victim of victims) {
     const balance = (deps.balances?.get(victim.id)) ?? (await deps.stellar.getAssetBalance(victim.publicKey));
-    const burn = Math.floor(balance * 0.15);
+    const burn = Math.floor(balance * 0.10);
     if (burn <= 0) continue;
     try {
       const txHash = await deps.stellar.burn(victim.secretKey, burn);
@@ -491,7 +491,7 @@ async function budgetCuts(deps: EventDeps, tick: number): Promise<GameEvent[]> {
         timestamp: new Date(),
         type: "payment",
         agentId: victim.id,
-        description: `${victim.name}: -$${burn} sent back to Finance (15% of $${balance.toFixed(0)})`,
+        description: `${victim.name}: -$${burn} sent back to Finance (10% of $${balance.toFixed(0)})`,
         txHash,
         parentEventId: parentId,
       });
