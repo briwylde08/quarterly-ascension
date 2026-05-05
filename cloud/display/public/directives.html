@@ -232,7 +232,10 @@
       // rank churns and we want each card position to mean the same person.
       const sorted = [...agents].sort((a, b) => a.name.localeCompare(b.name));
       grid.innerHTML = sorted.map((a) => {
-        const portraitUrl = `/images/${encodeURIComponent(a.name)}.png`;
+        // Headshots live as "<FirstName> Headshot.png" — tighter framing for
+        // the directory grid than the full-body persona art used elsewhere.
+        const firstName = a.name.split(' ')[0];
+        const portraitUrl = `/images/${encodeURIComponent(firstName + ' Headshot')}.png`;
         const portraitHtml = `<img src="${portraitUrl}" alt="${escape(a.name)}"
             onerror="this.replaceWith(Object.assign(document.createTextNode('${initials(a.name)}'), {}))">`;
         const isEmpty = !a.directive;

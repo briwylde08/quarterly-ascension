@@ -267,20 +267,32 @@
     .x402-bar .pulse { transition: text-shadow 0.3s; }
     .x402-bar .pulse.bump { text-shadow: 0 0 12px rgba(241,196,15,0.8); }
 
-    /* Up Next banner at the top of the activity stream */
+    /* Up Next banner at the top of the activity stream — high-contrast so it
+       reads as "preview / coming up" rather than another activity row. */
     .up-next {
-      background: rgba(241,196,15,0.18);
-      border-left: 3px solid #f1c40f;
-      padding: 6px 12px;
-      font-size: 12px;
-      color: var(--navy);
+      background: linear-gradient(90deg, var(--navy) 0%, var(--navy-2) 100%);
+      color: var(--navy-text);
+      border-left: 4px solid #f1c40f;
+      padding: 10px 14px;
+      font-size: 13px;
       letter-spacing: 0.5px;
       display: flex;
       align-items: center;
-      gap: 10px;
+      gap: 12px;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.15);
     }
-    .up-next .label { font-size: 10px; letter-spacing: 1.5px; text-transform: uppercase; color: var(--text-muted); }
-    .up-next .names { font-weight: 700; }
+    .up-next .label {
+      font-size: 10px;
+      letter-spacing: 1.8px;
+      text-transform: uppercase;
+      color: #f1c40f;
+      font-weight: 700;
+    }
+    .up-next .names {
+      font-weight: 700;
+      color: var(--navy-text);
+      font-size: 14px;
+    }
     .up-next.empty { display: none; }
 
     /* Tx ticker column */
@@ -519,6 +531,47 @@
       animation: slideInRight 0.35s ease-out;
       position: relative;
     }
+
+    /* Nested children for parent events (Hit the Wall, Problematic per-cycle
+       passive decay, etc.). Parent stays as a normal row; children are
+       collapsed by default and revealed by clicking the disclosure caret. */
+    .feed-children {
+      display: none;
+      margin: 8px 0 -4px 12px;
+      padding-left: 12px;
+      border-left: 2px solid var(--border);
+      flex-direction: column;
+      gap: 4px;
+    }
+    .feed-entry.expanded .feed-children {
+      display: flex;
+    }
+    .feed-children .feed-entry.feed-child {
+      padding: 6px 10px;
+      border-bottom: 0;
+      background: rgba(0,0,0,0.02);
+      font-size: 92%;
+      animation: none;
+      border-radius: 4px;
+    }
+    .feed-children .feed-entry.feed-child .feed-head {
+      font-size: 92%;
+    }
+    .disclosure-toggle {
+      display: inline-block;
+      cursor: pointer;
+      font-size: 10px;
+      color: var(--text-muted);
+      margin-right: 4px;
+      user-select: none;
+      transition: transform 0.12s ease-out;
+      transform: rotate(0deg);
+      line-height: 1;
+    }
+    .disclosure-toggle:hover { color: var(--text); }
+    .feed-entry.expanded > .feed-head .disclosure-toggle {
+      transform: rotate(90deg);
+    }
     @keyframes slideInRight {
       from { opacity: 0; transform: translateX(40px); }
       to   { opacity: 1; transform: translateX(0); }
@@ -558,10 +611,11 @@
       font-size: 13px;
       color: var(--text);
       margin-bottom: 6px;
+      font-weight: 600;
     }
-    .feed-action .actor { font-weight: 600; color: var(--navy); }
-    .feed-action .arrow { color: var(--text-faint); margin: 0 4px; }
-    .feed-action .recipient { font-weight: 500; }
+    .feed-action .actor { color: var(--navy); }
+    .feed-action .arrow { color: var(--text-faint); margin: 0 4px; font-weight: 400; }
+    .feed-action .recipient { color: var(--navy); }
 
     .feed-mpp {
       display: flex;
@@ -1141,6 +1195,7 @@
         <span class="meta-value" id="countdown">—</span>
       </div>
       <a id="handbook-btn" class="pause-btn" href="/handbook.html" title="Action catalog, status effects, public tags, and game mechanics">📖 Handbook</a>
+      <a id="directives-btn" class="pause-btn" href="/directives.html" title="Live coaching directives — what each manager has been told this cycle">🎙 Coaching</a>
       <button id="gossip-btn" class="pause-btn" title="The latest office gossip — refreshed every 4 cycles">💧 Water Cooler</button>
       <button id="alliances-btn" class="pause-btn" title="Current alliances and active rivalries">🤝 Alliances</button>
       <button id="pause-btn" class="pause-btn" title="Pause / resume the simulation (admin)">⏸ Pause</button>
@@ -1170,14 +1225,6 @@
       <div class="kpi-value"><span id="kpi-headcount">0</span><span class="kpi-suffix">FTE</span></div>
     </div>
   </section>
-
-  <!-- x402 protocol-visibility bar — the headline metric is "real money is moving on-chain" -->
-  <div class="x402-bar">
-    <span><span class="label">DLBR settled:</span> <span class="val pulse" id="x402-amount">$0</span></span>
-    <span><span class="label">x402 calls:</span> <span class="val pulse" id="x402-count">0</span></span>
-    <span><span class="label">avg settle:</span> <span class="val" id="x402-avg">—</span></span>
-    <span style="color:#aab9c9;font-size:11px;font-style:italic;">Every transaction is a real Stellar testnet settlement via MPP/x402.</span>
-  </div>
 
   <main class="dash-grid">
     <section class="panel">
@@ -1212,7 +1259,7 @@
     <section class="panel tx-ticker-col">
       <div class="panel-head">
         <span>Live Settlements</span>
-        <span class="panel-meta" style="font-family:Consolas,Menlo,monospace;font-size:11px;">stellar.expert ↗</span>
+        <a class="panel-meta" href="https://stellar.expert/explorer/testnet/asset/DLBR-GBJQKX4HMW3X2SLAXBCNOYNSAXYKYAHBXYAKGV4ZJZTEA6OPU5ZWGSG4" target="_blank" rel="noopener" style="font-family:Consolas,Menlo,monospace;font-size:11px;">stellar.expert ↗</a>
       </div>
       <div class="tx-ticker" id="tx-ticker">
         <div class="empty-state" style="font-size:11px;">Waiting for first settlement…</div>
@@ -1355,10 +1402,11 @@
       if (data.maxTicks) maxTicks = data.maxTicks;
       // x402 stats bar
       if (data.stats) syncX402Bar(data.stats);
-      // Up Next banner
-      syncUpNext(data.nextAgents || []);
       currentTick = data.tick;
       currentStatus = data.status;
+      // Up Next banner — must run AFTER currentStatus is set, since syncUpNext
+      // branches on it for placeholder copy ("awaiting kickoff" vs "computing…").
+      syncUpNext(data.nextAgents || []);
       nextAlarmAt = data.nextAlarmAt ?? null;
       if (typeof data.serverTime === 'number') clockSkewMs = Date.now() - data.serverTime;
       lastTickStartMs = Date.now(); // fallback for fresh load if nextAlarmAt is missing
@@ -1416,6 +1464,27 @@
         return;
       }
 
+      // Child event (Hit the Wall / Problematic per-agent rows under their
+      // cycle-summary parent): nest inside the parent row instead of prepending
+      // to the top of the stream. Falls through to standalone rendering if the
+      // parent isn't on screen (race/long-history case).
+      if (event.parentEventId && feedByEntryId.has(event.parentEventId)) {
+        const parentRow = feedByEntryId.get(event.parentEventId);
+        let childContainer = parentRow.querySelector('.feed-children');
+        if (!childContainer) {
+          childContainer = document.createElement('div');
+          childContainer.className = 'feed-children';
+          parentRow.appendChild(childContainer);
+          ensureDisclosure(parentRow);
+        }
+        const childRow = renderFreeFeedEntry(event);
+        childRow.classList.add('feed-child');
+        childContainer.appendChild(childRow);
+        feedByEntryId.set(event.id, childRow);
+        if (!replay) scheduleLeaderboardRefresh();
+        return;
+      }
+
       // Free action (or paid event without a matched ticker — fallback): create a fresh entry.
       const row = renderFreeFeedEntry(event);
       feedByEntryId.set(event.id, row);
@@ -1455,6 +1524,23 @@
       }
 
       if (!replay) scheduleLeaderboardRefresh();
+    }
+
+    // Add a clickable disclosure caret to a parent row so it can collapse/expand
+    // its nested children. Idempotent — safe to call on every child append.
+    function ensureDisclosure(parentRow) {
+      if (parentRow.querySelector(':scope > .feed-head .disclosure-toggle')) return;
+      const head = parentRow.querySelector(':scope > .feed-head');
+      if (!head) return;
+      const toggle = document.createElement('span');
+      toggle.className = 'disclosure-toggle';
+      toggle.textContent = '▶';
+      toggle.title = 'Click to expand the per-manager breakdown';
+      toggle.addEventListener('click', (e) => {
+        e.stopPropagation();
+        parentRow.classList.toggle('expanded');
+      });
+      head.insertBefore(toggle, head.firstChild);
     }
 
     function prependFeedEntry(row, replay) {
@@ -1648,18 +1734,10 @@
           +   '<span class="recipient">' + escape(t.toService) + '</span>'
           + '</div>';
 
-      // 402 pill: shows the protocol handshake state at a glance.
-      const pill402 = statusKey === 'failed'
-        ? '<span class="pill-402 failed">402 → ✗</span>'
-        : statusKey === 'settled'
-          ? '<span class="pill-402">402 → ✓ on-chain</span>'
-          : '<span class="pill-402 pending">402 → ⏳ ' + (statusKey === 'submitted' ? 'signed' : 'submitting…') + '</span>';
-
       return ''
         + '<div class="feed-head">'
         +   '<span class="cycle">Cycle ' + (t.cycle || currentTick) + '</span>'
         +   '<span>' + time + '</span>'
-        +   pill402
         +   '<span class="badge-type ' + (statusKey === 'failed' ? 'payment_failed' : 'payment') + '">' + (statusKey === 'failed' ? 'Settlement Failed' : 'Settlement') + '</span>'
         + '</div>'
         + actionLineHtml
@@ -1871,12 +1949,20 @@
       const banner = document.getElementById('up-next');
       const namesEl = document.getElementById('up-next-names');
       if (!banner || !namesEl) return;
-      if (!nextAgents || nextAgents.length === 0 || currentStatus !== 'running') {
-        banner.classList.add('empty');
-        return;
-      }
+      // Always show the banner so the slot is visible — placeholder copy
+      // when the game isn't actively about to fire the next pair.
       banner.classList.remove('empty');
-      namesEl.textContent = nextAgents.map(a => a.name).join(' & ');
+      if (nextAgents && nextAgents.length > 0 && currentStatus === 'running') {
+        namesEl.textContent = nextAgents.map(a => a.name).join(' & ');
+      } else if (currentStatus === 'running') {
+        namesEl.textContent = 'computing the next pair…';
+      } else if (currentStatus === 'halted') {
+        namesEl.textContent = 'paused';
+      } else if (currentStatus === 'ended') {
+        namesEl.textContent = 'game over';
+      } else {
+        namesEl.textContent = 'awaiting kickoff';
+      }
     }
 
     // ============================================================
@@ -1953,6 +2039,8 @@
         maybeShowHaltOverlay(data.status, data.tick);
         renderLeaderboard(data.agents);
         setKpis(data.stats.totalAmountMoved, data.stats.totalTransactions, data.stats.avgSettlementTime, data.agents.length);
+        // Up Next banner: refresh on every tick so the next pair stays current.
+        syncUpNext(data.nextAgents || []);
       } catch (e) { /* network blip; next event will retry */ }
     }
 
