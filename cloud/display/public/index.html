@@ -1245,11 +1245,6 @@
       <div class="kpi-sublabel">Game Cycle State</div>
       <div class="kpi-value status-value" id="status">Initializing</div>
     </div>
-    <div class="kpi-tile state-tile">
-      <div class="kpi-label">Next Sync-up</div>
-      <div class="kpi-sublabel">Until Next Action Drop</div>
-      <div class="kpi-value countdown-value" id="countdown">—</div>
-    </div>
     <div class="kpi-tile your-manager-tile" id="your-coach-pill" style="display:none;" title="The dashboard is highlighting events involving your manager. Pass ?coach=<agentId> in the URL to set this.">
       <div class="kpi-label">Your Manager</div>
       <div class="kpi-sublabel">Highlighted In Stream + Leaderboard</div>
@@ -2161,6 +2156,11 @@
     // ============================================================
     setInterval(() => {
       const el = document.getElementById('countdown');
+      // Countdown tile was removed from the dashboard (work consistently
+      // overran the 25s tick budget so the value never drained naturally).
+      // Keep this loop as a no-op so the rest of the page doesn't error if
+      // the tile is restored later.
+      if (!el) return;
       // While the game is paused, freeze the countdown — the server isn't
       // firing alarms, so a draining timer would be misleading. Resume detection
       // in refreshFromApi resets lastTickStartMs when the game un-halts.
