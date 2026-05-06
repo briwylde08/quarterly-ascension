@@ -265,27 +265,6 @@
       .tx-ticker-col { display: none; }
     }
 
-    /* x402 stats bar across the top of the dashboard */
-    .x402-bar {
-      background: var(--navy);
-      color: var(--navy-text);
-      margin: 0 24px 14px 24px;
-      padding: 10px 18px;
-      display: flex;
-      gap: 32px;
-      align-items: center;
-      justify-content: center;
-      border-radius: 2px;
-      box-shadow: var(--shadow);
-      font-family: Consolas, "SF Mono", Menlo, monospace;
-      font-size: 14px;
-      letter-spacing: 0.4px;
-    }
-    .x402-bar .label { color: #aab9c9; text-transform: uppercase; font-size: 11px; letter-spacing: 1px; margin-right: 4px; }
-    .x402-bar .val { color: #f1c40f; font-weight: 700; font-size: 18px; }
-    .x402-bar .pulse { transition: text-shadow 0.3s; }
-    .x402-bar .pulse.bump { text-shadow: 0 0 12px rgba(241,196,15,0.8); }
-
     /* Up Next banner at the top of the activity stream — high-contrast so it
        reads as "preview / coming up" rather than another activity row. */
     .up-next {
@@ -1475,8 +1454,6 @@
     function updateFullState(data) {
       tickIntervalMs = data.tickIntervalMs || tickIntervalMs;
       if (data.maxTicks) maxTicks = data.maxTicks;
-      // x402 stats bar
-      if (data.stats) syncX402Bar(data.stats);
       currentTick = data.tick;
       currentStatus = data.status;
       // Up Next banner — must run AFTER currentStatus is set, since syncUpNext
@@ -2026,27 +2003,6 @@
       animateNumber('kpi-headcount', headcount, v => v.toFixed(0));
     }
 
-    // ============================================================
-    // x402 stats bar (top of dashboard) — the protocol-visibility headline
-    // ============================================================
-    let lastX402Count = 0;
-    function syncX402Bar(stats) {
-      const amountEl = document.getElementById('x402-amount');
-      const countEl = document.getElementById('x402-count');
-      const avgEl = document.getElementById('x402-avg');
-      if (amountEl) amountEl.textContent = '$' + Math.round(stats.totalAmountMoved || 0).toLocaleString();
-      if (countEl) {
-        const newCount = stats.totalTransactions || 0;
-        countEl.textContent = newCount;
-        // Pulse animation when count goes up
-        if (newCount > lastX402Count) {
-          countEl.classList.remove('bump'); void countEl.offsetWidth; countEl.classList.add('bump');
-          if (amountEl) { amountEl.classList.remove('bump'); void amountEl.offsetWidth; amountEl.classList.add('bump'); }
-        }
-        lastX402Count = newCount;
-      }
-      if (avgEl) avgEl.textContent = stats.avgSettlementTime ? stats.avgSettlementTime.toFixed(1) + 's' : '—';
-    }
 
     // ============================================================
     // Up Next banner — surface the next 2 agents who'll act

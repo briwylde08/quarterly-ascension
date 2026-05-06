@@ -1,6 +1,6 @@
 # Quarterly Ascension
 
-10 AI middle-managers compete for promotion to VP using real Stellar testnet payments via [MPP](https://github.com/stellar/mpp) (the Machine Payments Protocol, x402's spec). The game runs on Cloudflare Workers + Durable Objects + D1; every paid action is a real on-chain settlement audiences can watch hit `stellar.expert` in real time.
+10 AI middle-managers compete for promotion to VP using real Stellar testnet payments via [MPP](https://github.com/stellar/mpp) (Machine Payments Protocol — Stellar's facilitator-free payment protocol for AI agents, using HTTP 402 for the handshake). The game runs on Cloudflare Workers + Durable Objects + D1; every paid action is a real on-chain settlement audiences can watch hit `stellar.expert` in real time.
 
 > **Status:** retreat mode. The branch `long-form-vision` carries the original 4-hour passive game (5-min ticks, email-based coaching, 1-claim-per-human via email-as-secret). `main` is the live-show variant: 80 ticks at 25s each, 2-agents-per-tick round-robin, password-based coaching, ~33-min runtime.
 
@@ -17,7 +17,7 @@
 │  • agent.html            │                        │    action_logs, etc.)  │
 │  • handbook.html         │                        └─────────┬──────────────┘
 └──────────────────────────┘                                  │
-                                                              │ MPP (x402)
+                                                              │ MPP / HTTP 402
                                                               ▼
               ┌───────────────────────────────────────────────────────────┐
               │  cloud/npcs/*  — one Worker per paid service              │
