@@ -620,24 +620,41 @@ async function executeAction(
         break;
 
       case "expense_report": {
-        // Safe earning path. Pays $25 from HR (bumped from $15 post-game-8 —
-        // agents were still running cash-tight even with the prior bump);
-        // 10% audit chance hits prestige.
+        // Safe earning path. Pays $25 from HR; 10% audit chance hits prestige.
         const audited = Math.random() < 0.10;
         if (audited) {
           prestigeChange = -5;
           await db.updateAgentPrestige(agent.id, prestigeChange);
         }
+        const expenseFlavors = [
+          "claimed a $24 lunch as 'team-building research'",
+          "categorized 'office supplies' (it was AirPods)",
+          "submitted an Uber that was definitely personal",
+          "expensed a co-working space in Lisbon they don't work at",
+          "filed a $30 'morale-supporting beverage' line item (it was wine)",
+          "expensed a 'professional development book' (Atomic Habits, again)",
+          "submitted a coffee shop receipt for 'a productive working session'",
+          "claimed 'cellular' for a phone they don't use for work",
+          "expensed a candle as 'home-office ambiance'",
+          "submitted a haircut as 'client-facing prep'",
+          "expensed three lunches on the same day from three different vendors",
+          "categorized a Spotify subscription as 'focus tools'",
+          "filed a $42 dry cleaning receipt as 'investor-meeting prep'",
+          "expensed a noise-canceling headphone they returned the next day",
+          "submitted 'team morale' for a $48 sushi platter they ate alone",
+        ];
+        const flavor = expenseFlavors[Math.floor(Math.random() * expenseFlavors.length)];
+        actionDetail = flavor;
         try {
           await stellar.sendAsset(rewards.hrDeptSecret, agent.publicKey, 25);
           outcome = audited
-            ? "Filed expense report (+$25 reimbursed) — flagged by Finance for review (-5 prestige)"
-            : "Filed expense report (+$25 reimbursed)";
+            ? `Filed expense report — ${flavor}. +$25 reimbursed; Finance flagged it for review (-5 prestige).`
+            : `Filed expense report — ${flavor}. +$25 reimbursed.`;
         } catch (err) {
           console.error(`[expense-report] HR payout to ${agent.name} failed:`, err);
           outcome = audited
-            ? "Filed expense report — Finance flagged it (-5 prestige); reimbursement pending"
-            : "Filed expense report — reimbursement pending";
+            ? `Filed expense report — ${flavor}. Finance flagged it (-5 prestige); reimbursement pending.`
+            : `Filed expense report — ${flavor}. Reimbursement pending.`;
         }
         break;
       }
@@ -759,7 +776,7 @@ async function executeAction(
           // target less able to defend a stolen-credit claim.
           const targetIsMarked = target?.statusEffects.some((e) => e.type === "marked") ?? false;
           const targetHasQJ = target?.statusEffects.some((e) => e.type === "questionable_judgment") ?? false;
-          const baseRate = targetHasQJ ? 0.65 : 0.5;
+          const baseRate = targetHasQJ ? 0.65 : 0.4;
           const success = targetIsMarked || Math.random() < baseRate;
           await recordTargetUse(deps, agent.id, "take_credit", action.target, tick);
           if (success) {
@@ -814,8 +831,31 @@ async function executeAction(
             outcome = `Failed to take credit — ${target?.name ?? action.target} ${flavor}`;
           }
           await db.updateAgentPrestige(agent.id, prestigeChange);
-          // Marked status is consumed once exploited.
+          // Marked status is consumed once exploited. The saboteur (whoever
+          // built the dossier — recorded in `marked.source`) earns a +5
+          // finder's fee when SOMEONE ELSE chains their setup, so the
+          // dossier is always worth investing in even if you don't get to
+          // chain it yourself. (Game-9 data: 11 of 12 dossiers were chained
+          // by an agent OTHER than the saboteur, leaving saboteurs paying
+          // $40 for someone else's win.)
           if (targetIsMarked && target) {
+            const markedEffect = target.statusEffects.find((e) => e.type === "marked");
+            const saboteurId = markedEffect?.source;
+            if (saboteurId && saboteurId !== agent.id) {
+              await db.updateAgentPrestige(saboteurId, 5);
+              const saboteur = await db.getAgent(saboteurId);
+              if (saboteur) {
+                await emit({
+                  id: uuid(),
+                  tick,
+                  timestamp: new Date(),
+                  type: "status_effect",
+                  agentId: saboteurId,
+                  description: `${saboteur.name}'s dossier on ${target.name} just paid off — earned a +5 finder's fee when ${agent.name} cashed in.`,
+                  prestigeChange: 5,
+                });
+              }
+            }
             await db.updateAgentStatusEffects(
               action.target,
               target.statusEffects.filter((e) => e.type !== "marked")

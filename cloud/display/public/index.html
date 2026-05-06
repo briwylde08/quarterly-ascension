@@ -374,9 +374,9 @@
     }
     .manager-row {
       display: grid;
-      grid-template-columns: 30px 1fr auto;
-      gap: 10px;
-      padding: 10px 14px;
+      grid-template-columns: 24px 1fr auto;
+      gap: 8px;
+      padding: 6px 12px;
       border-bottom: 1px solid var(--border);
       align-items: center;
       cursor: pointer;
@@ -386,7 +386,7 @@
     }
     .manager-row:hover { background: var(--info-bg); text-decoration: none; }
     .manager-row .rank {
-      font-size: 16px;
+      font-size: 14px;
       font-weight: 700;
       color: var(--text-muted);
       text-align: center;
@@ -401,20 +401,16 @@
       font-size: 13px;
     }
     .manager-identity .title {
-      font-size: 11px;
+      font-size: 10px;
       color: var(--text-muted);
     }
-    .manager-identity .traits {
-      font-size: 10px;
-      color: var(--text-faint);
-      letter-spacing: 0.3px;
-      margin-top: 2px;
-      font-family: "Consolas", "Menlo", monospace;
-    }
+    /* Trait line hidden in the leaderboard row to save vertical space — still
+       surfaced in the click-modal for anyone who wants the detail. */
+    .manager-identity .traits { display: none; }
     .manager-identity .badges {
       display: flex;
-      gap: 4px;
-      margin-top: 4px;
+      gap: 3px;
+      margin-top: 2px;
       flex-wrap: wrap;
     }
     .badge {
@@ -1234,7 +1230,7 @@
   <main class="dash-grid">
     <section class="panel">
       <div class="panel-head">
-        <span>Executive Leaderboard</span>
+        <span>Leaderboard</span>
         <span class="panel-meta">Click manager for review</span>
       </div>
       <div class="leaderboard" id="leaderboard">
@@ -1741,7 +1737,7 @@
       schedule_pre_meeting:   (t)    => 'scheduled a pre-meeting on ' + t + "'s calendar",
       schedule_conflict:      (t)    => "cancelled " + t + "'s CEO meeting",
       hostile_takeover:       (t)    => "mounted a hostile takeover of " + t + "'s partnerships",
-      slack_bomb:             (t, d) => 'posted in #general: "' + (d || 'cryptic vibes only') + '" — aimed at ' + t,
+      slack_bomb:             (t, d) => 'dropped a Slack bomb in #general: "' + (d || 'cryptic vibes only') + '" — aimed at ' + t,
       book_ceo_time:          (_, d) => d ? 'met with the CEO and ' + d : 'met with the CEO',
       office_party:           (_, d) => d ? 'threw an office party — ' + d : 'threw an office party',
       buy_coffee:             ()     => 'bought coffee',
