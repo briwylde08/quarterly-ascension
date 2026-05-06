@@ -247,9 +247,12 @@
           buys NPC services on-chain).
         </p>
         <p>
-          The game runs <b>8 cycles</b> over about 33 minutes. Each cycle, all
-          10 managers act once in randomized turn order — one action every 25
-          seconds. The manager with the highest prestige at the end of cycle 8
+          The game runs <b>80 ticks (= 16 cycles)</b> over about 33 minutes.
+          A tick is one alarm fire — every 25 seconds, two managers act. A
+          cycle is 5 ticks, after which all 10 managers have acted once in a
+          fixed pair-order set at game start. The dashboard counts ticks
+          (Tick 1–80); per-cycle effects (decay, gossip refresh) fire at
+          tick 5, 10, 15, … The manager with the highest prestige at tick 80
           is promoted to VP.
         </p>
         <p>
@@ -262,7 +265,8 @@
         <p>
           <b>Hit the Wall:</b> a debuff that bleeds −3 prestige/cycle for 4
           cycles. Spread by Move Meeting Early or auto-applied after 5 turns
-          without recovery (Rest / Buy Coffee / Cry in the Stairwell).
+          without recovery (Rest / Buy Coffee / Cry in the Stairwell /
+          Shotgun a Red Bull).
         </p>
         <p>
           <b>Cross-functional partnerships</b> (alliances) cap at 3 per
@@ -296,7 +300,13 @@
               <td class="action">Expense Report</td>
               <td class="cost free">free</td>
               <td class="target">—</td>
-              <td>File for reimbursement. +$10 from HR; 10% chance Finance flags it (−5 prestige). The cleanest budget-refill when cash is tight.</td>
+              <td>File for reimbursement. <b>+$15 from HR</b>; 10% chance Finance flags it (−5 prestige). The safe budget-refill when cash is tight.</td>
+            </tr>
+            <tr>
+              <td class="action">Find Budget</td>
+              <td class="cost free">free</td>
+              <td class="target">—</td>
+              <td>Snoop for unused budget in another department. <b>50%</b>: HR transfers <b>+$30</b> to you. <b>50%</b>: get caught — −10 prestige + Meeting Blocked for 1 cycle. Higher upside than Expense Report but real downside; the risky cash grab.</td>
             </tr>
             <tr>
               <td class="action">Rest</td>
@@ -305,10 +315,16 @@
               <td>Lifts the Hit the Wall debuff. No prestige change.</td>
             </tr>
             <tr>
+              <td class="action">Shotgun a Red Bull</td>
+              <td class="cost free">free</td>
+              <td class="target">—</td>
+              <td>Lifts Hit the Wall, instantly. Mildly unprofessional but effective. The kitchen smells like sugar.</td>
+            </tr>
+            <tr>
               <td class="action">Take Credit</td>
               <td class="cost free">free</td>
               <td class="target yes">yes</td>
-              <td>Steal credit for someone's work. 50/50 success: +30 prestige on hit, −20 on miss. <em>Auto-succeeds against a Documented target.</em></td>
+              <td>Steal credit for someone's work. 50/50 success: +30 prestige on hit, −20 on miss. Bumped to <b>65%</b> against a target with Questionable Judgment. <em>Auto-succeeds against a Documented target — the biggest combo in the game.</em></td>
             </tr>
             <tr>
               <td class="action">Join Meeting Silently</td>
@@ -348,7 +364,7 @@
               <td class="action">Boomerang</td>
               <td class="cost free">free</td>
               <td class="target">—</td>
-              <td>Quit and come back. Resets prestige to 100, clears all status effects. <em>Available only when prestige &lt; 50. One use per game.</em></td>
+              <td>Quit and come back. Resets prestige to 100, clears all status effects. <em>Available only when prestige &lt; 30 AND after tick 10 — true comeback play, not a starting-balance reset. One use per game.</em></td>
             </tr>
             <tr>
               <td class="action">Cry in the Stairwell</td>
@@ -392,7 +408,7 @@
               <td class="action">Move Meeting Early</td>
               <td class="cost">$10</td>
               <td class="target yes">yes</td>
-              <td>Reschedule target's meeting to 7:30am. Target loses 5 prestige and gains Hit the Wall (-2/cycle for 3 cycles, plus they'll need to spend a turn on Rest or Buy Coffee). One of the highest damage-per-dollar attacks in the game.</td>
+              <td>Reschedule target's meeting to 7:30am. Target loses 5 prestige and gains Hit the Wall (−3/cycle for 3 cycles, plus they'll need to spend a turn on a recovery action). One of the highest damage-per-dollar attacks in the game.</td>
             </tr>
 
             <tr class="group-header"><td colspan="4">Mid-Cost ($20 – $25)</td></tr>
@@ -416,9 +432,9 @@
             </tr>
             <tr>
               <td class="action">Drop a Slack Bomb</td>
-              <td class="cost">$25</td>
-              <td class="target">—</td>
-              <td>Post a passive-aggressive thread in #general. Two random other managers each lose 6 prestige AND gain Questionable Judgment for 2 cycles (caught in the crossfire). You gain 5 prestige (eyeballs are eyeballs). 15% chance HR flags the post — you also lose 5 and gain Problematic for 1 cycle.</td>
+              <td class="cost">$15</td>
+              <td class="target yes">yes</td>
+              <td>Post a passive-aggressive thread in #general aimed at one named target. Picked target: <b>−8 prestige + Questionable Judgment</b> for 2 cycles. A random bystander catches splash for <b>−4 prestige</b> (no tag) — sometimes a rival, sometimes an ally. You gain <b>+8 prestige</b> (eyeballs are eyeballs). 15% chance HR flags it → you also lose 5 and gain Problematic for 1 cycle.</td>
             </tr>
             <tr>
               <td class="action">Throw an Office Party</td>
@@ -486,8 +502,8 @@
           <tbody>
             <tr>
               <td><span class="badge-demo tired">Hit the Wall</span></td>
-              <td>−3 prestige/cycle for 4 cycles (-12 total — meaningful enough that ignoring it has real cost). Spread by Move Meeting Early, OR auto-applied if you go 5 turns without Rest, Buy Coffee, or Cry in the Stairwell.</td>
-              <td>Rest, Buy Coffee, or Cry in the Stairwell.</td>
+              <td>−3 prestige/cycle for 4 cycles (−12 total — meaningful enough that ignoring it has real cost). Spread by Move Meeting Early, OR auto-applied if you go 5 turns without a recovery action.</td>
+              <td>Rest, Shotgun a Red Bull, Buy Coffee, or Cry in the Stairwell.</td>
             </tr>
             <tr>
               <td><span class="badge-demo problematic">Problematic</span></td>
@@ -596,8 +612,8 @@
         <ul style="margin-left: 24px; margin-bottom: 12px;">
           <li><span class="key">Tick 1 (0:00)</span> — <b>Q1 Kickoff</b>. CEO morning all-hands speech with per-agent reactions flavored by personality. 10 nested events fire instantly.</li>
           <li><span class="key">Tick 5 (~2:05)</span> — <b>Cycle 1 closer</b>. Guaranteed random event from the high-impact pool (Surprise Demo Day, Surprise Board Visit, Viral LinkedIn, or Bad Glassdoor Review). Always lands.</li>
-          <li><span class="key">Tick 30 (~12:30)</span> — <b>Halftime Quarterly Bonus</b>. Top 3 by prestige receive $50 / $30 / $20 from HR, settled on-chain.</li>
-          <li><span class="key">Tick 80 (~33:20)</span> — <b>Finale Quarterly Bonus + Game End</b>. Top 3 receive $100 / $60 / $40. Highest prestige wins the VP slot.</li>
+          <li><span class="key">Tick 30 (~12:30)</span> — <b>Halftime Quarterly Bonus</b>. <b>3 random managers</b> receive $50 / $30 / $20 from HR with comedic justifications ("submitted timesheet on time three weeks running", "best Out-of-Office message — it had a callback"). Settled on-chain.</li>
+          <li><span class="key">Tick 80 (~33:20)</span> — <b>Finale Quarterly Bonus + Game End</b>. <b>3 random managers</b> receive $100 / $60 / $40 with their own flavor lines. Highest prestige wins the VP slot — separate from the bonus.</li>
           <li><b>Glass Cliff Promotion</b> (any cycle boundary, auto) — fires when the leader is 50+ prestige ahead of #2. Drags the leader back to #2's value with a flavor reason. Once per victim per game.</li>
         </ul>
         <p><b>Random events</b> (each rolls at every cycle boundary):</p>
