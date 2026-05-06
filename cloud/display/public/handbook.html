@@ -272,6 +272,17 @@
 
     <section class="block" id="actions">
       <h2>Action Catalog</h2>
+      <div class="body">
+        <div style="background: var(--info-bg, #f3e8d8); border-left: 3px solid #d4a02f; padding: 14px 18px; margin-bottom: 18px; border-radius: 4px;">
+          <div style="font-size: 11px; text-transform: uppercase; letter-spacing: 1.5px; color: #8a6d2c; font-weight: 700; margin-bottom: 8px;">🎯 The Big Combos</div>
+          <div style="font-size: 13px; line-height: 1.55;">
+            <b>Sabotage Dossier → Take Credit</b> (within 2 cycles): $40 + free → +30 to you, −10 to them. <b>40-point leaderboard swing</b> — the biggest single combo in the game.<br>
+            <b>Spread a Rumor → Take Credit</b>: $10 + free → 65% chance of +30 (vs the usual 50%). Cheaper alternative when you don't have $40.<br>
+            <b>Invoke Handbook or Sensitivity Training → wait for Bad Glassdoor Review</b>: every Problematic manager takes an extra −10. Set up the chain, hope the random event fires.<br>
+            <b>Move Meeting Early → enemy spends a turn recovering</b>: $10 to steal a turn AND deal damage. Underrated.
+          </div>
+        </div>
+      </div>
       <div class="body" style="padding: 0;">
         <table class="ref">
           <thead>
@@ -283,13 +294,45 @@
             </tr>
           </thead>
           <tbody>
-            <tr class="group-header"><td colspan="4">Free / Routine</td></tr>
+            <tr class="group-header"><td colspan="4">🎯 Climb (build your own prestige)</td></tr>
             <tr>
               <td class="action">Work</td>
               <td class="cost free">free</td>
               <td class="target">—</td>
               <td>Do actual work. +5 prestige and +$2 base salary from HR. Reliable but boring.</td>
             </tr>
+            <tr>
+              <td class="action">Join Meeting Silently</td>
+              <td class="cost free">free</td>
+              <td class="target">—</td>
+              <td>Show up, say nothing. +4 prestige. <em>Capped at 3 uses per game; the 3rd use grants Mysterious Influence (passive +2/cycle, plus other agents occasionally get credited for things you did).</em></td>
+            </tr>
+            <tr>
+              <td class="action">Coffee Chat</td>
+              <td class="cost">$5</td>
+              <td class="target yes">yes</td>
+              <td>Casual coffee with a colleague — talked about something arbitrary. Both managers gain +3 prestige. No partnership proposed.</td>
+            </tr>
+            <tr>
+              <td class="action">Get Consultant Report</td>
+              <td class="cost">$30</td>
+              <td class="target">—</td>
+              <td>+35 prestige and you gain Has Deliverable (your next CEO meeting awards +40 instead of −20).</td>
+            </tr>
+            <tr>
+              <td class="action">Throw an Office Party</td>
+              <td class="cost">$25</td>
+              <td class="target">—</td>
+              <td>You gain +15 prestige. Every other manager gains +5. A generous play that visibly helps your rivals.</td>
+            </tr>
+            <tr>
+              <td class="action">Book CEO Time</td>
+              <td class="cost expensive">$40</td>
+              <td class="target">—</td>
+              <td>Meet with the CEO. +40 with Has Deliverable, −20 without, −10 if Meeting Blocked. The biggest swing in the game.</td>
+            </tr>
+
+            <tr class="group-header"><td colspan="4">💰 Earn cash</td></tr>
             <tr>
               <td class="action">Expense Report</td>
               <td class="cost free">free</td>
@@ -302,6 +345,8 @@
               <td class="target">—</td>
               <td>Snoop for unused budget in another department. <b>60%</b>: HR transfers <b>+$30</b> to you. <b>40%</b>: get caught — −10 prestige + Meeting Blocked for 1 cycle. Higher upside than Expense Report but real downside; the risky cash grab.</td>
             </tr>
+
+            <tr class="group-header"><td colspan="4">😩 Recover from debuffs</td></tr>
             <tr>
               <td class="action">Shotgun a Red Bull</td>
               <td class="cost free">free</td>
@@ -309,24 +354,24 @@
               <td>Lifts the Hit the Wall debuff instantly. The free recovery option. <b>50%</b> chance you finish in record time, the office applauds, and you earn <b>+5 prestige</b> on top.</td>
             </tr>
             <tr>
-              <td class="action">Take Credit</td>
-              <td class="cost free">free</td>
-              <td class="target yes">yes</td>
-              <td>Steal credit for someone's work. 50/50 success: +30 prestige on hit, −20 on miss. Bumped to <b>65%</b> against a target with Questionable Judgment. <em>Auto-succeeds against a Documented target — the biggest combo in the game.</em></td>
+              <td class="action">Buy Coffee</td>
+              <td class="cost">$5</td>
+              <td class="target">—</td>
+              <td>Lifts Hit the Wall. The paid alternative to Shotgun a Red Bull — same effect minus the office applause potential.</td>
             </tr>
             <tr>
-              <td class="action">Join Meeting Silently</td>
+              <td class="action">Cry in the Stairwell</td>
               <td class="cost free">free</td>
               <td class="target">—</td>
-              <td>Show up, say nothing. +4 prestige. <em>Capped at 3 uses per game; the 3rd use grants Mysterious Influence (passive +2/cycle, plus other agents occasionally get credited for things you did).</em></td>
+              <td>Lifts Problematic AND Hit the Wall in one action. <b>30%</b> chance the VP sees it and grants +20 sympathy prestige. <em>The desperate self-rescue or just a Tuesday.</em></td>
             </tr>
 
-            <tr class="group-header"><td colspan="4">Free / Social</td></tr>
+            <tr class="group-header"><td colspan="4">🤝 Manage alliances</td></tr>
             <tr>
               <td class="action">Schmooze</td>
               <td class="cost free">free</td>
               <td class="target yes">yes</td>
-              <td>Propose a cross-functional partnership with another manager.</td>
+              <td>Propose a cross-functional partnership. Each manager caps at 3 partnerships. 3+ allies gives the Well-Allied tag, which halves incoming attack damage.</td>
             </tr>
             <tr>
               <td class="action">Accept Cross-Functional Partnership</td>
@@ -344,47 +389,21 @@
               <td class="action">End Cross-Functional Partnership</td>
               <td class="cost free">free</td>
               <td class="target yes">yes</td>
-              <td>Betray an existing partner. You lose 15 prestige; ex-partner gains Under Investigation for 1 cycle (can't retaliate immediately).</td>
+              <td>Betray an existing partner. You lose 15 prestige; ex-partner gains Under Investigation for 1 cycle (can't retaliate immediately). Calculated nuke.</td>
             </tr>
 
-            <tr class="group-header"><td colspan="4">Comeback (free, conditional)</td></tr>
+            <tr class="group-header"><td colspan="4">🗡️ Attack a rival</td></tr>
             <tr>
-              <td class="action">Boomerang</td>
+              <td class="action">Take Credit</td>
               <td class="cost free">free</td>
-              <td class="target">—</td>
-              <td>🪃 <b>BOOMERANG!</b> Quit and come back. Sets prestige to 75, clears all status effects. Massive visual moment. <em>Available only when prestige &lt; 30 AND after tick 10 — true comeback play, not a starting-balance reset. One use per game.</em></td>
-            </tr>
-            <tr>
-              <td class="action">Cry in the Stairwell</td>
-              <td class="cost free">free</td>
-              <td class="target">—</td>
-              <td>Lifts Problematic and Hit the Wall. <b>30%</b> chance the VP sees it and grants +20 sympathy prestige. <em>Available anytime — the desperate self-rescue or just a Tuesday.</em></td>
-            </tr>
-            <tr>
-              <td class="action">Hail Mary Idea</td>
-              <td class="cost free">free</td>
-              <td class="target">—</td>
-              <td>Pitch a wild idea. Lottery: 30% +50 prestige, 50% +5, 20% −5. <em>Only surfaces when truly cornered. One use per game.</em></td>
-            </tr>
-
-            <tr class="group-header"><td colspan="4">Cheap Paid ($5 – $10)</td></tr>
-            <tr>
-              <td class="action">Buy Coffee</td>
-              <td class="cost">$5</td>
-              <td class="target">—</td>
-              <td>Lifts Hit the Wall.</td>
-            </tr>
-            <tr>
-              <td class="action">Coffee Chat</td>
-              <td class="cost">$5</td>
               <td class="target yes">yes</td>
-              <td>Casual coffee with a colleague. Both managers gain +3 prestige. No partnership proposed.</td>
+              <td>Steal credit for someone's work. 50/50 success: +30 prestige on hit, −20 on miss. Bumped to <b>65%</b> against a target with Questionable Judgment. <em>Auto-succeeds against a Documented target — see The Big Combos above.</em></td>
             </tr>
             <tr>
               <td class="action">Spread a Rumor</td>
               <td class="cost">$10</td>
               <td class="target yes">yes</td>
-              <td>Plant a rumor about target via HR. Target loses 5 prestige and gains Questionable Judgment for 2 cycles. Cheap social warfare.</td>
+              <td>Plant a rumor about target via HR. Target loses 5 prestige and gains Questionable Judgment for 2 cycles. Cheap social warfare; sets up Take Credit at 65%.</td>
             </tr>
             <tr>
               <td class="action">Invoke the Employee Handbook</td>
@@ -393,51 +412,17 @@
               <td>Cite a section of the handbook against target. Target loses 3 prestige and gains Problematic for 2 cycles. The cheap source of Problematic — pairs with Bad Glassdoor Review for compound damage.</td>
             </tr>
             <tr>
-              <td class="action">Move Meeting Early</td>
-              <td class="cost">$10</td>
+              <td class="action">Drop a Slack Bomb</td>
+              <td class="cost">$15</td>
               <td class="target yes">yes</td>
-              <td>Reschedule target's meeting to 7:30am. Target loses 5 prestige and gains Hit the Wall (−3/cycle for 3 cycles, plus they'll need to spend a turn shotgunning a Red Bull or buying coffee). One of the highest damage-per-dollar attacks in the game.</td>
-            </tr>
-
-            <tr class="group-header"><td colspan="4">Mid-Cost ($20 – $25)</td></tr>
-            <tr>
-              <td class="action">Schedule a Pre-Meeting</td>
-              <td class="cost">$20</td>
-              <td class="target yes">yes</td>
-              <td>Book a pre-meeting on target's calendar. Target loses 15 prestige and gains Meeting Blocked for 2 cycles. <em>Loyal managers (loyalty &gt; 70) are immune — they think it's normal.</em></td>
+              <td>Post a passive-aggressive thread in #general aimed at one named target. Picked target: <b>−8 prestige + Questionable Judgment</b> for 2 cycles. A random bystander catches splash for <b>−4 prestige</b> (no tag) — sometimes a rival, sometimes an ally. You gain <b>+8 prestige</b>. 15% chance HR flags it → you also lose 5 and gain Problematic for 1 cycle.</td>
             </tr>
             <tr>
               <td class="action">File HR Complaint</td>
               <td class="cost">$22</td>
               <td class="target yes">yes</td>
-              <td>You gain +5 "diligence" prestige. Target gains Under Investigation for 1 cycle (can't retaliate against you).</td>
+              <td>You gain +5 "diligence" prestige. Target gains Under Investigation for 1 cycle (can't retaliate against you). Defensive shielding wrapped in an attack.</td>
             </tr>
-            <tr>
-              <td class="action">Get Consultant Report</td>
-              <td class="cost">$30</td>
-              <td class="target">—</td>
-              <td>+35 prestige and you gain Has Deliverable (your next CEO meeting awards +40 instead of −20).</td>
-            </tr>
-            <tr>
-              <td class="action">Drop a Slack Bomb</td>
-              <td class="cost">$15</td>
-              <td class="target yes">yes</td>
-              <td>Post a passive-aggressive thread in #general aimed at one named target. Picked target: <b>−8 prestige + Questionable Judgment</b> for 2 cycles. A random bystander catches splash for <b>−4 prestige</b> (no tag) — sometimes a rival, sometimes an ally. You gain <b>+8 prestige</b> (eyeballs are eyeballs). 15% chance HR flags it → you also lose 5 and gain Problematic for 1 cycle.</td>
-            </tr>
-            <tr>
-              <td class="action">Throw an Office Party</td>
-              <td class="cost">$25</td>
-              <td class="target">—</td>
-              <td>You gain +15 prestige. Every other manager gains +5. A generous play that visibly helps your rivals.</td>
-            </tr>
-            <tr>
-              <td class="action">Anonymous Pulse Survey</td>
-              <td class="cost">$25</td>
-              <td class="target yes">yes</td>
-              <td>Launch an "anonymous" morale survey somehow entirely about the leader. Target loses 50 prestige. <em>Available only when you're rank ≥ 4 and target is rank #1. One use per game.</em></td>
-            </tr>
-
-            <tr class="group-header"><td colspan="4">Expensive ($30 – $50)</td></tr>
             <tr>
               <td class="action">Send to Sensitivity Training</td>
               <td class="cost">$30</td>
@@ -445,28 +430,56 @@
               <td>You gain +5 "managerial accountability" prestige. Target loses 20 prestige and gains Problematic for 4 cycles (−3/cycle decay). <em>Halved against well-allied targets.</em> Setup play — Bad Glassdoor Review hits every Problematic manager for an extra −10.</td>
             </tr>
             <tr>
-              <td class="action">Schedule Conflict</td>
-              <td class="cost">$30</td>
-              <td class="target yes">yes</td>
-              <td>Cancel target's CEO meeting. Clears their Has Deliverable; gives them Meeting Blocked for 2 cycles.</td>
-            </tr>
-            <tr>
               <td class="action">Hostile Takeover</td>
               <td class="cost">$35</td>
               <td class="target yes">yes</td>
-              <td>Mount a hostile takeover of target's cross-functional partnerships. Their existing partners become yours; their partner list goes to zero.</td>
+              <td>Mount a hostile takeover of target's cross-functional partnerships. Their existing partners become yours; their partner list goes to zero. Strips the Well-Allied tag — sets up cleaner attacks afterward.</td>
             </tr>
             <tr>
               <td class="action">Build a Sabotage Dossier</td>
               <td class="cost expensive">$40</td>
               <td class="target yes">yes</td>
-              <td>Commission a Consultant dossier. Target loses 10 prestige and gains Documented for 2 cycles (next Take Credit against them auto-succeeds). Classic setup play. <em>Halved against well-allied targets.</em></td>
+              <td>Commission a Consultant dossier. Target loses 10 prestige and gains Documented for 2 cycles (next Take Credit against them auto-succeeds for +30). Classic setup play. <em>Halved against well-allied targets.</em></td>
+            </tr>
+
+            <tr class="group-header"><td colspan="4">📅 Disrupt a rival's calendar</td></tr>
+            <tr>
+              <td class="action">Move Meeting Early</td>
+              <td class="cost">$10</td>
+              <td class="target yes">yes</td>
+              <td>Reschedule target's meeting to 7:30am. Target loses 5 prestige and gains Hit the Wall (−3/cycle for 3 cycles, plus they'll need to spend a turn recovering). One of the highest damage-per-dollar attacks in the game.</td>
             </tr>
             <tr>
-              <td class="action">Book CEO Time</td>
-              <td class="cost expensive">$40</td>
+              <td class="action">Schedule a Pre-Meeting</td>
+              <td class="cost">$20</td>
+              <td class="target yes">yes</td>
+              <td>Book a pre-meeting on target's calendar. Target loses 15 prestige and gains Meeting Blocked for 2 cycles. <em>Loyal managers (loyalty &gt; 70) are immune — they think it's normal.</em></td>
+            </tr>
+            <tr>
+              <td class="action">Schedule Conflict</td>
+              <td class="cost">$30</td>
+              <td class="target yes">yes</td>
+              <td>Cancel target's CEO meeting. Clears their Has Deliverable; gives them Meeting Blocked for 2 cycles. Use against a Deliverable holder — kills their +40 swing.</td>
+            </tr>
+
+            <tr class="group-header"><td colspan="4">🆘 Comeback / kingmaker plays</td></tr>
+            <tr>
+              <td class="action">Anonymous Pulse Survey</td>
+              <td class="cost">$25</td>
+              <td class="target yes">yes</td>
+              <td>Launch an "anonymous" morale survey somehow entirely about the leader. Target loses 50 prestige. <em>Available only when you're rank ≥ 4 and target is rank #1. One use per game.</em> The bottom-half kingmaker.</td>
+            </tr>
+            <tr>
+              <td class="action">Boomerang</td>
+              <td class="cost free">free</td>
               <td class="target">—</td>
-              <td>Meet with the CEO. +40 with Has Deliverable, −20 without, −10 if Meeting Blocked. The biggest swing in the game.</td>
+              <td>🪃 <b>BOOMERANG!</b> Quit and come back. Sets prestige to 75, clears all status effects. Massive visual moment. <em>Available only when prestige &lt; 30 AND after tick 10 — true comeback play, not a starting-balance reset. One use per game.</em></td>
+            </tr>
+            <tr>
+              <td class="action">Hail Mary Idea</td>
+              <td class="cost free">free</td>
+              <td class="target">—</td>
+              <td>Pitch a wild idea at the next all-hands. Lottery: 30% +50 prestige, 50% +5, 20% −5. <em>Only surfaces when truly cornered. One use per game.</em></td>
             </tr>
           </tbody>
         </table>
