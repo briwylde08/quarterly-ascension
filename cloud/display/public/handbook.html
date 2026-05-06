@@ -623,8 +623,11 @@
       <h2>Payments</h2>
       <div class="body">
         <p>
-          Every paid action settles on the Stellar testnet in real DLBR.
-          Five NPC services are active in retreat mode — <b>Coffee Cart</b>,
+          Every paid action settles on the Stellar testnet in real DLBR via
+          <b><a href="https://mpp.dev" target="_blank" rel="noopener">MPP</a></b>
+          (Machine Payments Protocol — Stellar's facilitator-free protocol for
+          AI agent payments, using HTTP 402 for the handshake). Five NPC
+          services are active in retreat mode — <b>Coffee Cart</b>,
           <b>HR Department</b>, <b>The Consultant</b>, <b>Executive Assistant</b>,
           and <b>The Caterer</b>. Each runs as a Cloudflare Worker that
           returns HTTP 402 on first hit. The agent signs a Stellar transfer,
