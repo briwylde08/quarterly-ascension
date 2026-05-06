@@ -1394,6 +1394,7 @@
     let tickIntervalMs = 300000;
     let maxTicks = 80;
     let nextAlarmAt = null;       // server-reported timestamp; primary timer source
+    let tickInFlight = false;     // server-reported: an alarm is currently processing a tick
     let clockSkewMs = 0;          // localClock - serverClock; used to keep countdowns aligned across machines
     let lastTickStartMs = Date.now();  // fallback only
     let currentTick = 0;
@@ -1487,6 +1488,7 @@
       // branches on it for placeholder copy ("awaiting kickoff" vs "computing…").
       syncUpNext(data.nextAgents || []);
       nextAlarmAt = data.nextAlarmAt ?? null;
+      tickInFlight = !!data.tickInFlight;
       if (typeof data.serverTime === 'number') clockSkewMs = Date.now() - data.serverTime;
       lastTickStartMs = Date.now(); // fallback for fresh load if nextAlarmAt is missing
       document.getElementById('cycle').textContent = data.tick;
@@ -2142,6 +2144,7 @@
         currentStatus = data.status;
         currentTick = data.tick;
         nextAlarmAt = data.nextAlarmAt ?? null;
+        tickInFlight = !!data.tickInFlight;
         if (typeof data.serverTime === 'number') clockSkewMs = Date.now() - data.serverTime;
         document.getElementById('cycle').textContent = data.tick;
         document.getElementById('status').textContent = humanStatus(data.status);
@@ -2171,6 +2174,14 @@
       }
       if (currentStatus === 'setup') {
         el.textContent = 'Awaiting kickoff';
+        return;
+      }
+      // Tick is currently being processed by the orchestrator (LLM + Stellar
+      // settlement work, ~20-28s). The storage alarm is null during this
+      // window — pinning at 0:00 looked broken. Show explicit "Working…"
+      // until the next alarm gets rescheduled.
+      if (tickInFlight) {
+        el.textContent = 'Working…';
         return;
       }
       // Server-driven timer: nextAlarmAt is a ms-since-epoch timestamp set by

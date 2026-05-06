@@ -780,20 +780,18 @@ export class GameOrchestrator {
         db.getGameStateValue("game_started_at"),
       ]);
 
-      // While a tick is processing (LLM + Stellar work, ~20s) the storage
-      // alarm is null because it hasn't been rescheduled yet. Fall back to
-      // the wall-clock target derived from gameStartedAt + tick * interval —
-      // matches what the alarm handler will eventually set, so the dashboard
-      // countdown stays accurate during long ticks instead of pinning at 0:00.
-      // If the target is already in the past (work overruns 25s/tick), clamp
-      // a couple seconds forward so the dashboard reads "any second" instead
-      // of 0:00.
+      // While a tick is processing (LLM + Stellar work, ~20-28s) the storage
+      // alarm is null because it hasn't been rescheduled yet. Surface a
+      // tickInFlight flag so the dashboard can render "Working…" instead of
+      // a countdown stuck at 0:00. nextAlarmAt is still set to the wall-clock
+      // target so when the in-flight tick completes the countdown picks up
+      // accurately for the next interval.
       let nextAlarmAt = storageAlarm;
+      const tickInFlight = (storageAlarm == null) && status === "running";
       if ((nextAlarmAt == null || nextAlarmAt <= Date.now()) && status === "running" && gameStartedAtRaw) {
         const startedAt = parseInt(gameStartedAtRaw, 10);
         const interval = parseInt(this.env.TICK_INTERVAL_MS, 10);
-        const target = startedAt + tick * interval;
-        nextAlarmAt = Math.max(target, Date.now() + 2000);
+        nextAlarmAt = startedAt + tick * interval;
       }
 
       const agentsWithBalances = await Promise.all(
@@ -831,6 +829,7 @@ export class GameOrchestrator {
         tickIntervalMs: parseInt(this.env.TICK_INTERVAL_MS, 10),
         maxTicks: parseInt(this.env.MAX_TICKS, 10),
         nextAlarmAt,
+        tickInFlight,
         serverTime: Date.now(),
         agents: agentsWithBalances,
         nextAgents,
