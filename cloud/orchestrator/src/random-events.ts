@@ -126,30 +126,45 @@ export async function processRandomEvents(
   // always has narration material in the first ~2 minutes. Skips the
   // regular probabilistic rolls for this cycle boundary, AND marks the
   // chosen event as fired so it doesn't roll again later (one-per-game).
-  if (tick === 5) {
-    const openers = [
+  // Tick 45: GUARANTEED mid-game pivot (post-game-8). Same opener pool,
+  // pulls only events that haven't already fired so the audience reliably
+  // gets a second high-energy beat at the show's middle pivot point.
+  if (tick === 5 || tick === 45) {
+    const allOpeners = [
       { id: "surprise_demo_day", fn: surpriseDemoDay },
       { id: "surprise_board_visit", fn: surpriseBoardVisit },
       { id: "viral_linkedin", fn: viralLinkedIn },
       { id: "bad_glassdoor_review", fn: badGlassdoorReview },
     ];
-    const opener = openers[Math.floor(Math.random() * openers.length)];
-    events.push(...(await opener.fn(deps, tick)));
-    state.lastFiredEvents = new Set(["cycle1_opener"]);
-    state.firedEventTypes.add(opener.id);
-    await persist();
-    return { events, skipDecisions: false };
+    // For tick 45, only pick from openers that haven't fired yet so the
+    // mid-game beat is fresh. If somehow all four already fired (rare),
+    // fall through with no event rather than repeating one.
+    const openers = tick === 5
+      ? allOpeners
+      : allOpeners.filter((o) => !state.firedEventTypes.has(o.id));
+    if (openers.length > 0) {
+      const opener = openers[Math.floor(Math.random() * openers.length)];
+      events.push(...(await opener.fn(deps, tick)));
+      state.lastFiredEvents = new Set([tick === 5 ? "cycle1_opener" : "midgame_pivot"]);
+      state.firedEventTypes.add(opener.id);
+      await persist();
+      return { events, skipDecisions: false };
+    }
   }
 
-  // Quarterly Bonus at fixed cycle boundaries:
-  //   Halftime (cycle 3 = tick 30, ~12 min in) — moved earlier from cycle 4
-  //     so the most cinematic mid-show beat lands inside the host's 15-min
-  //     narration window.
-  //   Finale (cycle 8 = tick 80, also game-end).
-  if (tick === 30) {
-    events.push(...(await quarterlyBonus(deps, tick, [50, 30, 20], "Halftime")));
-  } else if (tick === 80) {
-    events.push(...(await quarterlyBonus(deps, tick, [100, 60, 40], "Finale")));
+  // Quarterly Bonus split into THREE smaller checkpoints (post-game-8):
+  //   Q1 wrap   (tick 25, ~10 min in)
+  //   Halftime  (tick 50, ~21 min in — peak audience attention)
+  //   Q3 wrap   (tick 75, late game; winners can still flex it)
+  // Smaller per-bonus amounts ($40/$25/$15 vs the old $100/$60/$40 finale)
+  // so the cumulative payout stays comparable but the cadence gives the
+  // audience three "winners are paid" beats instead of one ceremonial close.
+  if (tick === 25) {
+    events.push(...(await quarterlyBonus(deps, tick, [40, 25, 15], "Q1 Wrap")));
+  } else if (tick === 50) {
+    events.push(...(await quarterlyBonus(deps, tick, [40, 25, 15], "Halftime")));
+  } else if (tick === 75) {
+    events.push(...(await quarterlyBonus(deps, tick, [40, 25, 15], "Q3 Wrap")));
   }
 
   // Glass Cliff Promotion: auto-fires whenever the leader pulls 50+ prestige

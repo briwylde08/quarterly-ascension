@@ -72,6 +72,20 @@ const DOSSIER_FLAVORS = [
   "their LinkedIn endorsement history (suspicious)",
   "receipts from the company card that mention 'team morale' five times",
   "a calendar block titled 'thinking time' that's been on every Tuesday for a year",
+  "a Zoom recording where they call the CEO by the wrong name twice",
+  "their browser history during the Q4 planning offsite ('luxury cabin rentals')",
+  "a forwarded email reply where they accidentally CC'd the entire engineering team",
+  "their 'Quiet Quitting Memo' draft, dated three months ago",
+  "a meeting transcript where they say 'circle back' eleven times",
+  "their Notion workspace, which has 84 untouched 'pre-reads'",
+  "the time they live-tweeted an internal all-hands",
+  "a saved Slack message titled 'thoughts on Marketing' (it's just the eye-roll emoji)",
+  "an OKR doc they edited to rename 'committed' to 'aspirational' the day before review",
+  "their auto-generated quarterly review (they never opened it)",
+  "a one-on-one calendar invite with the CEO's EA labeled 'casual chat'",
+  "their git log: 4 PRs in 6 months, 3 of them README updates",
+  "a screenshot of them pasting a ChatGPT response into the all-hands chat",
+  "every Slack message they ever sent at 11:47 PM (it's a lot)",
 ];
 
 // File Complaint flavor — what was the complaint actually about.
@@ -606,18 +620,19 @@ async function executeAction(
         break;
 
       case "expense_report": {
-        // Safe earning path. Always pays $15 from HR (bumped from $10 post-game-6
-        // — agents were running cash-dry mid-game); 10% audit chance hits prestige.
+        // Safe earning path. Pays $25 from HR (bumped from $15 post-game-8 —
+        // agents were still running cash-tight even with the prior bump);
+        // 10% audit chance hits prestige.
         const audited = Math.random() < 0.10;
         if (audited) {
           prestigeChange = -5;
           await db.updateAgentPrestige(agent.id, prestigeChange);
         }
         try {
-          await stellar.sendAsset(rewards.hrDeptSecret, agent.publicKey, 15);
+          await stellar.sendAsset(rewards.hrDeptSecret, agent.publicKey, 25);
           outcome = audited
-            ? "Filed expense report (+$15 reimbursed) — flagged by Finance for review (-5 prestige)"
-            : "Filed expense report (+$15 reimbursed)";
+            ? "Filed expense report (+$25 reimbursed) — flagged by Finance for review (-5 prestige)"
+            : "Filed expense report (+$25 reimbursed)";
         } catch (err) {
           console.error(`[expense-report] HR payout to ${agent.name} failed:`, err);
           outcome = audited
@@ -630,22 +645,44 @@ async function executeAction(
       case "shotgun_red_bull": {
         const a = (await db.getAgent(agent.id))!;
         await db.updateAgentStatusEffects(agent.id, a.statusEffects.filter((e) => e.type !== "tired"));
-        const flavors = [
-          "Shotgunned a Red Bull in the breakroom. Hit the Wall lifted. The kitchen smells like sugar.",
-          "Cracked a Red Bull and downed it in 11 seconds. Eye twitch returned. Hit the Wall lifted.",
-          "Dispatched a Red Bull standing up next to the printer. Hit the Wall lifted. Made eye contact with no one.",
-          "Slammed a Red Bull at 10:47am. Hit the Wall lifted. Will crash at 2.",
-          "Pounded a Red Bull and immediately scheduled three meetings. Hit the Wall lifted.",
-        ];
-        outcome = flavors[Math.floor(Math.random() * flavors.length)];
+        // 50% chance the agent shotguns it in <5 seconds, the office applauds,
+        // and they earn +5 prestige on top of the Hit the Wall removal.
+        const speedRun = Math.random() < 0.5;
+        if (speedRun) {
+          prestigeChange = 5;
+          await db.updateAgentPrestige(agent.id, prestigeChange);
+          const applauseFlavors = [
+            "Cracked a Red Bull and dispatched it in record time. Mary from accounting started a slow clap that built to a full ovation. Hit the Wall lifted, +5 prestige.",
+            "Shotgunned the Red Bull in under 4 seconds. The intern filmed it. The office applauded. Hit the Wall lifted, +5 prestige.",
+            "Tilted back the can and inhaled it in one fluid motion. Three managers stood up to clap. Hit the Wall lifted, +5 prestige.",
+            "Demolished a Red Bull on the way to the standup. Engineering started chanting their name. Hit the Wall lifted, +5 prestige.",
+            "Dispatched the can faster than the espresso machine could pour. Spontaneous round of applause. Hit the Wall lifted, +5 prestige.",
+            "Crushed a Red Bull in front of the open-plan office. The kitchen erupted. The IT guy shouted 'LET'S GO.' Hit the Wall lifted, +5 prestige.",
+          ];
+          outcome = applauseFlavors[Math.floor(Math.random() * applauseFlavors.length)];
+        } else {
+          const regularFlavors = [
+            "Shotgunned a Red Bull in the breakroom. Hit the Wall lifted. The kitchen smells like sugar.",
+            "Cracked a Red Bull standing up next to the printer. Hit the Wall lifted. Made eye contact with no one.",
+            "Slammed a Red Bull at 10:47am. Hit the Wall lifted. Will crash at 2.",
+            "Pounded a Red Bull and immediately scheduled three meetings. Hit the Wall lifted.",
+            "Dispatched a Red Bull while pretending to read a Slack thread. Hit the Wall lifted.",
+            "Quietly cracked a Red Bull at the kitchen island. No witnesses. Hit the Wall lifted.",
+            "Drained a Red Bull in three pulls. Started a different Slack thread mid-sip. Hit the Wall lifted.",
+            "Took a Red Bull back to their desk. Drank it during a 1:1. Hit the Wall lifted. The other person noticed.",
+            "Cracked a sugar-free Red Bull, declared 'still counts.' Hit the Wall lifted.",
+            "Pounded a Red Bull. Eye twitch returned. Hit the Wall lifted.",
+          ];
+          outcome = regularFlavors[Math.floor(Math.random() * regularFlavors.length)];
+        }
         break;
       }
 
       case "find_budget": {
-        // Free risky cash grab. 50% → +$30 from HR. 50% → -10 prestige + Meeting
-        // Blocked 1 cycle (got caught snooping). Higher upside than expense_report
-        // ($15 safe) but real downside; gives the LLM a real risk/reward choice.
-        const success = Math.random() < 0.5;
+        // Free risky cash grab. 60% → +$30 from HR. 40% → -10 prestige + Meeting
+        // Blocked 1 cycle (got caught snooping). Tilted toward useful post-game-8
+        // (was 50/50; agents were still cash-strapped even at the original odds).
+        const success = Math.random() < 0.6;
         if (success) {
           const successFlavors = [
             "Found unused Q3 budget the Marketing team forgot about. $30 quietly migrated to your cost center.",
@@ -737,15 +774,44 @@ async function executeAction(
                 "the room had already decided whose deck it was",
                 "you presented; they got tagged in the post-mortem",
                 "their pre-existing PIP energy did most of the work",
+                "you walked into the room with the printout. Game over",
+                "Slack went silent when the dossier dropped",
+                "their own VP-skip cited the dossier in your favor (you didn't ask)",
+                "the meeting moved on like the receipts didn't exist",
+                "you said 'as my dossier shows' and somehow it worked",
+                "they tried to interrupt; HR shushed them",
+                "you got the credit AND the calendar invite for the follow-up",
               ];
               const flavor = flavors[Math.floor(Math.random() * flavors.length)];
               outcome = `Successfully took credit for ${target?.name ?? action.target}'s work (${flavor})`;
             } else {
-              outcome = `Successfully took credit for ${target?.name ?? action.target}'s work`;
+              const regularFlavors = [
+                "smiled, nodded, owned it",
+                "presented like you'd written it yourself, because today, you had",
+                "added one slide and called it 'the strategic framing'",
+                "the CEO repeated your name three times. Job done",
+                "took a beat, then said 'happy to walk through it'",
+                "their meeting got moved to your calendar somehow",
+                "left the room before they could clarify",
+                "rephrased the deliverable using 'we'",
+                "@-mentioned yourself in the recap deck",
+                "answered the follow-up question they couldn't",
+              ];
+              const flavor = regularFlavors[Math.floor(Math.random() * regularFlavors.length)];
+              outcome = `Successfully took credit for ${target?.name ?? action.target}'s work — ${flavor}`;
             }
           } else {
+            const failFlavors = [
+              "had receipts",
+              "had the original Figma history pulled up in real-time",
+              "casually @-mentioned themselves in the thread",
+              "produced a Slack screenshot dated three months ago",
+              "calmly forwarded the original commit to the CEO",
+              "had already pre-empted you with a humble-brag post",
+            ];
+            const flavor = failFlavors[Math.floor(Math.random() * failFlavors.length)];
             prestigeChange = -20;
-            outcome = `Failed to take credit — ${target?.name ?? action.target} had receipts`;
+            outcome = `Failed to take credit — ${target?.name ?? action.target} ${flavor}`;
           }
           await db.updateAgentPrestige(agent.id, prestigeChange);
           // Marked status is consumed once exploited.
@@ -779,26 +845,29 @@ async function executeAction(
         break;
 
       case "boomerang": {
-        // Eligibility (prestige < 50, not yet used) is enforced in
-        // availableActions. Reset prestige to 100, clear all status effects,
-        // mark used so the LLM filter hides it for the rest of the game.
+        // Eligibility (prestige < 30, after tick 10, not yet used) is enforced
+        // in availableActions. Sets prestige to 75 (post-game-8: was 100;
+        // dropped so the borderline-qualifier abuse is gone but desperate
+        // comebacks still feel meaningful), clears all status effects, marks
+        // used so the LLM filter hides it for the rest of the game.
         const a = (await db.getAgent(agent.id))!;
         const oldPrestige = a.prestige;
-        prestigeChange = 100 - oldPrestige;
+        prestigeChange = 75 - oldPrestige;
         await db.updateAgentPrestige(agent.id, prestigeChange);
         await db.updateAgentStatusEffects(agent.id, []);
         await db.setGameStateValue(`boomerang_used_${agent.id}`, "yes");
-        outcome = `Quit and came back. Prestige reset to 100 (was ${oldPrestige}); all status effects cleared.`;
+        outcome = `🪃 BOOMERANG! ${a.name} quit and came back. Prestige set to 75 (was ${oldPrestige}); all status effects cleared.`;
         break;
       }
 
       case "cry_in_stairwell": {
-        // Eligibility (prestige ≤ 30) is enforced in availableActions.
-        // Always clears Problematic + Hit the Wall; 20% chance the VP grants +20.
+        // Always clears Problematic + Hit the Wall; 30% chance the VP grants +20
+        // (post-game-8 bump from 20% — agents weren't getting the comedy moment
+        // often enough; this makes "the VP sees" a real possibility).
         const a = (await db.getAgent(agent.id))!;
         const cleaned = a.statusEffects.filter((e) => e.type !== "problematic" && e.type !== "tired");
         await db.updateAgentStatusEffects(agent.id, cleaned);
-        if (Math.random() < 0.20) {
+        if (Math.random() < 0.30) {
           prestigeChange = 20;
           await db.updateAgentPrestige(agent.id, prestigeChange);
           outcome = "Cried in the stairwell. The VP saw, gave a sympathy nod (+20 prestige). Problematic + Hit the Wall cleared.";

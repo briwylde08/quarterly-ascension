@@ -63,8 +63,8 @@ export async function generateGossip(
 const ALL_ACTIONS = [
   // === FREE (12) ===
   { type: "work", description: "Do actual work (+5 prestige, +$2 base salary, free). Boring. The audience does not enjoy watching this.", cost: 0 },
-  { type: "expense_report", description: "File an expense report (+$15 reimbursed; 10% chance Finance flags it for -5 prestige). Safe income path — when budgets get tight, this is the cleanest refill.", cost: 0 },
-  { type: "find_budget", description: "Snoop for unused budget in another department (free). 50% chance: HR transfers $30 to you. 50% chance: get caught — lose 10 prestige + Meeting Blocked for 1 cycle. Risky cash grab; bigger upside than expense_report but real downside.", cost: 0 },
+  { type: "expense_report", description: "File an expense report (+$25 reimbursed; 10% chance Finance flags it for -5 prestige). Safe income path — when budgets get tight, this is the cleanest refill.", cost: 0 },
+  { type: "find_budget", description: "Snoop for unused budget in another department (free). 60% chance: HR transfers $30 to you. 40% chance: get caught — lose 10 prestige + Meeting Blocked for 1 cycle. Risky cash grab; bigger upside than expense_report but real downside.", cost: 0 },
   { type: "shotgun_red_bull", description: "Shotgun a Red Bull in the breakroom (free). Removes Hit the Wall instantly. Mildly unprofessional but effective. The kitchen smells like sugar for an hour. The free way to recover.", cost: 0 },
   { type: "take_credit", description: "Attempt to claim credit for someone's work (50% base success: +30 prestige, 50% fail: -20 prestige). Auto-succeeds against a Documented target (set up via Sabotage Plan). Bumped to 65% against targets with Questionable Judgment (set up via Spread Rumor).", cost: 0, requiresTarget: true },
 
@@ -74,7 +74,7 @@ const ALL_ACTIONS = [
   { type: "break_alliance", description: "End a cross-functional partnership (-15 prestige for you; ex-partner gets Under Investigation 1 tick — can't retaliate immediately). Calculated nuke.", cost: 0, requiresTarget: true },
 
   // Underdog comeback paths — gated by prestige thresholds in the filter below.
-  { type: "boomerang", description: "Quit and come back (free). Resets your prestige to 100, clears all status effects. Massive visual moment, one shot per game. Available only when prestige < 30 AND after tick 10 — gives the game time to develop before anyone reaches for the comeback button.", cost: 0 },
+  { type: "boomerang", description: "Quit and come back (free). Sets your prestige to 75, clears all status effects. Massive visual moment, one shot per game. Available only when prestige < 30 AND after tick 10 — gives the game time to develop before anyone reaches for the comeback button.", cost: 0 },
   { type: "cry_in_stairwell", description: "Cry in the stairwell (free, anytime). Removes Problematic and Hit the Wall. 20% chance the VP sees and grants +20 sympathy prestige. The desperate self-rescue or just a Tuesday.", cost: 0 },
   { type: "hail_mary_idea", description: "Pitch a wild idea at the next all-hands (free). Lottery: 30% +50 prestige (CEO loved it), 50% +5 (polite nodding), 20% -5 (sounded unhinged). One use per game.", cost: 0 },
 

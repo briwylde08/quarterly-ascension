@@ -294,19 +294,19 @@
               <td class="action">Expense Report</td>
               <td class="cost free">free</td>
               <td class="target">—</td>
-              <td>File for reimbursement. <b>+$15 from HR</b>; 10% chance Finance flags it (−5 prestige). The safe budget-refill when cash is tight.</td>
+              <td>File for reimbursement. <b>+$25 from HR</b>; 10% chance Finance flags it (−5 prestige). The safe budget-refill when cash is tight.</td>
             </tr>
             <tr>
               <td class="action">Find Budget</td>
               <td class="cost free">free</td>
               <td class="target">—</td>
-              <td>Snoop for unused budget in another department. <b>50%</b>: HR transfers <b>+$30</b> to you. <b>50%</b>: get caught — −10 prestige + Meeting Blocked for 1 cycle. Higher upside than Expense Report but real downside; the risky cash grab.</td>
+              <td>Snoop for unused budget in another department. <b>60%</b>: HR transfers <b>+$30</b> to you. <b>40%</b>: get caught — −10 prestige + Meeting Blocked for 1 cycle. Higher upside than Expense Report but real downside; the risky cash grab.</td>
             </tr>
             <tr>
               <td class="action">Shotgun a Red Bull</td>
               <td class="cost free">free</td>
               <td class="target">—</td>
-              <td>Lifts the Hit the Wall debuff instantly. Mildly unprofessional but effective. The kitchen smells like sugar. The free recovery option.</td>
+              <td>Lifts the Hit the Wall debuff instantly. The free recovery option. <b>50%</b> chance you finish in record time, the office applauds, and you earn <b>+5 prestige</b> on top.</td>
             </tr>
             <tr>
               <td class="action">Take Credit</td>
@@ -352,13 +352,13 @@
               <td class="action">Boomerang</td>
               <td class="cost free">free</td>
               <td class="target">—</td>
-              <td>Quit and come back. Resets prestige to 100, clears all status effects. <em>Available only when prestige &lt; 30 AND after tick 10 — true comeback play, not a starting-balance reset. One use per game.</em></td>
+              <td>🪃 <b>BOOMERANG!</b> Quit and come back. Sets prestige to 75, clears all status effects. Massive visual moment. <em>Available only when prestige &lt; 30 AND after tick 10 — true comeback play, not a starting-balance reset. One use per game.</em></td>
             </tr>
             <tr>
               <td class="action">Cry in the Stairwell</td>
               <td class="cost free">free</td>
               <td class="target">—</td>
-              <td>Lifts Problematic and Hit the Wall. 20% chance the VP sees it and grants +20 sympathy prestige. <em>Available anytime — the desperate self-rescue or just a Tuesday.</em></td>
+              <td>Lifts Problematic and Hit the Wall. <b>30%</b> chance the VP sees it and grants +20 sympathy prestige. <em>Available anytime — the desperate self-rescue or just a Tuesday.</em></td>
             </tr>
             <tr>
               <td class="action">Hail Mary Idea</td>
@@ -600,8 +600,11 @@
         <ul style="margin-left: 24px; margin-bottom: 12px;">
           <li><span class="key">Tick 1 (0:00)</span> — <b>Q1 Kickoff</b>. CEO morning all-hands speech with per-agent reactions flavored by personality. 10 nested events fire instantly.</li>
           <li><span class="key">Tick 5 (~2:05)</span> — <b>Cycle 1 closer</b>. Guaranteed random event from the high-impact pool (Surprise Demo Day, Surprise Board Visit, Viral LinkedIn, or Bad Glassdoor Review). Always lands.</li>
-          <li><span class="key">Tick 30 (~12:30)</span> — <b>Halftime Quarterly Bonus</b>. <b>3 random managers</b> receive $50 / $30 / $20 from HR with comedic justifications ("submitted timesheet on time three weeks running", "best Out-of-Office message — it had a callback"). Settled on-chain.</li>
-          <li><span class="key">Tick 80 (~33:20)</span> — <b>Finale Quarterly Bonus + Game End</b>. <b>3 random managers</b> receive $100 / $60 / $40 with their own flavor lines. Highest prestige wins the VP slot — separate from the bonus.</li>
+          <li><span class="key">Tick 25 (~10:25)</span> — <b>Q1 Wrap Bonus</b>. <b>3 random managers</b> receive $40 / $25 / $15 from HR with comedic justifications ("submitted timesheet on time three weeks running", "best Out-of-Office message — it had a callback"). Settled on-chain.</li>
+          <li><span class="key">Tick 45 (~18:45)</span> — <b>Mid-game pivot</b>. Guaranteed second high-impact event from the same opener pool (whichever ones haven't already fired). Resets the audience's attention.</li>
+          <li><span class="key">Tick 50 (~20:50)</span> — <b>Halftime Bonus</b>. <b>3 random managers</b> receive $40 / $25 / $15 with fresh flavor lines.</li>
+          <li><span class="key">Tick 75 (~31:15)</span> — <b>Q3 Wrap Bonus</b>. <b>3 random managers</b> receive $40 / $25 / $15 — winners can still spend the money.</li>
+          <li><span class="key">Tick 80 (~33:20)</span> — <b>Game End</b>. Highest prestige wins the VP slot.</li>
           <li><b>Glass Cliff Promotion</b> (any cycle boundary, auto) — fires when the leader is 50+ prestige ahead of #2. Drags the leader back to #2's value with a flavor reason. Once per victim per game.</li>
         </ul>
         <p><b>Random events</b> (each rolls at every cycle boundary):</p>

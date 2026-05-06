@@ -1732,6 +1732,7 @@
     const ACTION_NARRATIVE = {
       spread_rumor:           (t, d) => 'spread a rumor about ' + t + (d ? ' — ' + d : ''),
       file_complaint:         (t, d) => 'filed an HR complaint against ' + t + (d ? ' ' + d : ''),
+      invoke_handbook:        (t, d) => 'cited ' + (d || 'an obscure handbook section') + ' against ' + t,
       sensitivity_training:   (t)    => 'sent ' + t + ' to sensitivity training',
       anonymous_pulse_survey: (t)    => 'launched an "anonymous" pulse survey about ' + t,
       strategy_report:        (_, d) => d ? 'got a consultant report titled "' + d + '"' : 'got a consultant report',

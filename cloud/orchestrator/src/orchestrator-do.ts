@@ -809,13 +809,22 @@ export class GameOrchestrator {
 
       // "Up Next": the IDs (and resolved names) of the agents who will
       // act on the next alarm fire. Read directly from the turn-order
-      // queue stored in game_state.
+      // queue stored in game_state. Wrap idx to 0 if it's already past
+      // the end (between cycles, before pickActiveAgentsForRoundRobin
+      // wraps it on the next alarm fire) so the dashboard always shows
+      // the next pair instead of "computing the next pair…".
       let nextAgents: Array<{ id: string; name: string }> = [];
       if (turnOrderRaw && turnIndexRaw) {
         try {
           const order: string[] = JSON.parse(turnOrderRaw);
-          const idx = parseInt(turnIndexRaw, 10);
+          let idx = parseInt(turnIndexRaw, 10);
+          if (order.length > 0 && idx >= order.length) idx = 0;
           const ids = order.slice(idx, idx + 2);
+          // If we still don't have 2 names (idx near the end of order),
+          // wrap to grab the rest from the top.
+          if (ids.length < 2 && order.length >= 2) {
+            ids.push(...order.slice(0, 2 - ids.length));
+          }
           nextAgents = ids
             .map((id) => agents.find((a) => a.id === id))
             .filter((a): a is NonNullable<typeof a> => !!a)
