@@ -1237,7 +1237,7 @@
     </div>
     <div class="kpi-tile state-tile">
       <div class="kpi-label">Tick</div>
-      <div class="kpi-sublabel">Out of 80</div>
+      <div class="kpi-sublabel" aria-hidden="true">&nbsp;</div>
       <div class="kpi-value"><span id="cycle">0</span><span class="kpi-suffix">/80</span></div>
     </div>
     <div class="kpi-tile state-tile">
@@ -1489,7 +1489,7 @@
       nextAlarmAt = data.nextAlarmAt ?? null;
       if (typeof data.serverTime === 'number') clockSkewMs = Date.now() - data.serverTime;
       lastTickStartMs = Date.now(); // fallback for fresh load if nextAlarmAt is missing
-      document.getElementById('cycle').textContent = data.tick + ' / ' + (data.maxTicks || maxTicks);
+      document.getElementById('cycle').textContent = data.tick;
       document.getElementById('status').textContent = humanStatus(data.status);
       maybeShowHaltOverlay(data.status, data.tick);
 
@@ -1529,7 +1529,7 @@
       if (typeof event.tick === 'number' && event.tick > currentTick) {
         currentTick = event.tick;
         lastTickStartMs = Date.now();
-        document.getElementById('cycle').textContent = currentTick + ' / ' + maxTicks;
+        document.getElementById('cycle').textContent = currentTick;
         document.getElementById('banner').classList.remove('tick-pulse');
         // force reflow to restart animation
         void document.getElementById('banner').offsetWidth;
@@ -2143,7 +2143,7 @@
         currentTick = data.tick;
         nextAlarmAt = data.nextAlarmAt ?? null;
         if (typeof data.serverTime === 'number') clockSkewMs = Date.now() - data.serverTime;
-        document.getElementById('cycle').textContent = data.tick + ' / ' + (data.maxTicks || maxTicks);
+        document.getElementById('cycle').textContent = data.tick;
         document.getElementById('status').textContent = humanStatus(data.status);
         maybeShowHaltOverlay(data.status, data.tick);
         renderLeaderboard(data.agents);

@@ -763,7 +763,7 @@ export class GameOrchestrator {
     }
 
     if (path === "/state") {
-      const [agents, status, tick, recentEvents, ticker, stats, nextAlarmAt, turnOrderRaw, turnIndexRaw] = await Promise.all([
+      const [agents, status, tick, recentEvents, ticker, stats, storageAlarm, turnOrderRaw, turnIndexRaw, gameStartedAtRaw] = await Promise.all([
         db.getAllAgents(),
         db.getGameStatus(),
         db.getCurrentTick(),
@@ -777,7 +777,24 @@ export class GameOrchestrator {
         this.state.storage.getAlarm(),
         db.getGameStateValue("turn_order"),
         db.getGameStateValue("turn_index"),
+        db.getGameStateValue("game_started_at"),
       ]);
+
+      // While a tick is processing (LLM + Stellar work, ~20s) the storage
+      // alarm is null because it hasn't been rescheduled yet. Fall back to
+      // the wall-clock target derived from gameStartedAt + tick * interval —
+      // matches what the alarm handler will eventually set, so the dashboard
+      // countdown stays accurate during long ticks instead of pinning at 0:00.
+      // If the target is already in the past (work overruns 25s/tick), clamp
+      // a couple seconds forward so the dashboard reads "any second" instead
+      // of 0:00.
+      let nextAlarmAt = storageAlarm;
+      if ((nextAlarmAt == null || nextAlarmAt <= Date.now()) && status === "running" && gameStartedAtRaw) {
+        const startedAt = parseInt(gameStartedAtRaw, 10);
+        const interval = parseInt(this.env.TICK_INTERVAL_MS, 10);
+        const target = startedAt + tick * interval;
+        nextAlarmAt = Math.max(target, Date.now() + 2000);
+      }
 
       const agentsWithBalances = await Promise.all(
         agents.map(async (a) => ({
