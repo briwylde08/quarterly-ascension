@@ -191,11 +191,30 @@
     /* === KPI strip ================================================== */
     .kpi-strip {
       display: grid;
-      grid-template-columns: repeat(2, 1fr);
-      gap: 12px;
+      /* 6 boxes when Your Manager pill is shown; auto-fits at 5 when hidden. */
+      grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+      gap: 10px;
       padding: 14px 24px;
       background: var(--bg);
     }
+    /* State tiles (Tick / Status / Next Sync-up) are slightly de-emphasized
+       vs Settlements/Tx KPIs — same shape, smaller value text. */
+    .kpi-tile.state-tile .kpi-value { font-size: 22px; }
+    .kpi-tile .status-value { text-transform: capitalize; }
+    .kpi-tile .countdown-value {
+      font-variant-numeric: tabular-nums;
+      letter-spacing: 0.5px;
+    }
+    /* Your Manager tile keeps the gold accent so it stands apart as
+       "this is yours, watch this." */
+    .kpi-tile.your-manager-tile {
+      background: linear-gradient(180deg, #fdf4d4 0%, #fcefb7 100%);
+      border-color: #f1c40f;
+      box-shadow: inset 0 -3px 0 #f1c40f;
+    }
+    .kpi-tile.your-manager-tile .kpi-label,
+    .kpi-tile.your-manager-tile .kpi-sublabel { color: var(--navy); }
+    .kpi-tile.your-manager-tile .kpi-value { color: var(--navy); font-size: 18px; }
     .kpi-tile {
       background: var(--panel);
       border: 1px solid var(--border);
@@ -543,22 +562,6 @@
       box-shadow: inset 0 0 0 2px #f1c40f;
       border-radius: 4px;
     }
-    .your-coach-pill {
-      background: linear-gradient(90deg, #f1c40f 0%, #f39c12 100%);
-      color: var(--navy);
-      border-radius: 999px;
-      padding: 5px 14px 5px 12px;
-      gap: 6px;
-    }
-    .your-coach-pill .meta-label {
-      color: var(--navy) !important;
-      opacity: 0.75;
-    }
-    .your-coach-pill .meta-value {
-      color: var(--navy) !important;
-      font-weight: 700;
-    }
-
     /* Nested children for parent events (Hit the Wall, Problematic per-cycle
        passive decay, etc.). Parent stays as a normal row; children are
        collapsed by default and revealed by clicking the disclosure caret. */
@@ -1211,42 +1214,46 @@
     </div>
     <div></div>
     <div class="header-meta">
-      <div class="meta-item your-coach-pill" id="your-coach-pill" style="display:none;" title="The dashboard is highlighting events involving your manager. Pass ?coach=<agentId> in the URL to set this.">
-        <span class="meta-label">Your Manager</span>
-        <span class="meta-value" id="your-coach-name">—</span>
-      </div>
-      <div class="meta-item">
-        <span class="meta-label">Tick</span>
-        <span class="meta-value" id="cycle">0</span>
-      </div>
-      <div class="meta-item">
-        <span class="meta-label">Status</span>
-        <span class="meta-value" id="status">Initializing</span>
-      </div>
-      <div class="meta-item countdown">
-        <span class="meta-label">Next Sync-up</span>
-        <span class="meta-value" id="countdown">—</span>
-      </div>
-      <a id="adopt-btn" class="pause-btn" href="/intro.html" title="Adopt one of the AI managers to coach during the next game">🧑‍💼 Adopt a Manager</a>
+      <a id="adopt-btn" class="pause-btn" href="/intro.html" title="Adopt one of the AI managers to life-coach during the next game">🧑‍💼 Be a Life Coach</a>
       <a id="handbook-btn" class="pause-btn" href="/handbook.html" title="Action catalog, status effects, public tags, and game mechanics">📖 Handbook</a>
       <a id="directives-btn" class="pause-btn" href="/directives.html" title="Live life-coaching directives — what each manager has been told this cycle">🎙 Life Coaching</a>
       <button id="gossip-btn" class="pause-btn" title="The latest office gossip — refreshed every 4 cycles">💧 Water Cooler</button>
       <button id="alliances-btn" class="pause-btn" title="Current alliances and active rivalries">🤝 Alliances</button>
-      <button id="pause-btn" class="pause-btn" title="Pause / resume the simulation (admin)">⏸ Pause</button>
+      <button id="pause-btn" class="pause-btn" title="Game control: start a new game, pause/resume in flight, or reset after game-end">▶ Start Game</button>
     </div>
   </header>
   <div class="exec-subheader">Q1 FY2026 Performance Dashboard</div>
 
   <section class="kpi-strip">
     <div class="kpi-tile" id="kpi-settlements">
-      <div class="kpi-label">Settlements YTD</div>
+      <div class="kpi-label">DLBR Settlements</div>
       <div class="kpi-sublabel">Aggregate Capital Movement</div>
       <div class="kpi-value">$<span id="kpi-amount">0.00</span><span class="kpi-suffix">DLBR</span></div>
     </div>
     <div class="kpi-tile" id="kpi-tx">
-      <div class="kpi-label">Transaction Throughput</div>
+      <div class="kpi-label">Tx Throughput</div>
       <div class="kpi-sublabel">Cleared On-Chain Settlements</div>
       <div class="kpi-value"><span id="kpi-count">0</span><span class="kpi-suffix">tx</span></div>
+    </div>
+    <div class="kpi-tile state-tile">
+      <div class="kpi-label">Tick</div>
+      <div class="kpi-sublabel">Out of 80</div>
+      <div class="kpi-value"><span id="cycle">0</span><span class="kpi-suffix">/80</span></div>
+    </div>
+    <div class="kpi-tile state-tile">
+      <div class="kpi-label">Status</div>
+      <div class="kpi-sublabel">Game Cycle State</div>
+      <div class="kpi-value status-value" id="status">Initializing</div>
+    </div>
+    <div class="kpi-tile state-tile">
+      <div class="kpi-label">Next Sync-up</div>
+      <div class="kpi-sublabel">Until Next Action Drop</div>
+      <div class="kpi-value countdown-value" id="countdown">—</div>
+    </div>
+    <div class="kpi-tile your-manager-tile" id="your-coach-pill" style="display:none;" title="The dashboard is highlighting events involving your manager. Pass ?coach=<agentId> in the URL to set this.">
+      <div class="kpi-label">Your Manager</div>
+      <div class="kpi-sublabel">Highlighted In Stream + Leaderboard</div>
+      <div class="kpi-value your-manager-name" id="your-coach-name">—</div>
     </div>
   </section>
 
