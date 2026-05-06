@@ -130,14 +130,26 @@ function isInsufficientBalanceError(err?: string): boolean {
 }
 
 // Slack Bomb flavor — what kind of #general post the agent dropped.
-const SLACK_BOMB_FLAVORS = [
-  "Posted a 1,200-word screed in #general about 'team alignment.'",
-  "Started a 47-message thread asking 'who decided this?' — Slack lit up.",
-  "Made #general a graveyard for the rest of the day.",
-  "Sent a passive-aggressive 'just a friendly reminder' to all-staff.",
-  "Replied-all to a six-month-old thread with a single sad emoji.",
-  "Posted a survey nobody asked for, then complained that engagement was low.",
-  "Quote-tweeted the CEO's last announcement with 'thoughts?'",
+// The actual fake #general Slack message the LLM "posted." Surfaced
+// verbatim in the activity stream so the audience can read it (same
+// pattern as the Viral LinkedIn event's quoted post).
+const SLACK_BOMB_OPENERS = [
+  "Just a friendly reminder that we have a process for this 🙏",
+  "Hey team — quick sync on alignment? Some of us are confused.",
+  "Saw something concerning in this morning's standup. DMing the relevant people.",
+  "Can we please align on what alignment means here?",
+  "I don't want to name names but you know who you are.",
+  "Reposting this from yesterday since some of you missed it 🔁",
+  "Asking for a friend: is anyone else seeing this?",
+  "Genuinely curious how this got approved without looping in the right stakeholders 🤔",
+  "Not to be that person, but…",
+  "Surfacing a pattern I've been noticing 🧵 (1/9)",
+  "Hey @channel — circling back on the thing we agreed on last week.",
+  "🚨 Team — we need to talk about communication norms.",
+  "I'm just going to leave this here 🙃",
+  "Can someone help me understand the decision-making framework here?",
+  "Posting this here so it's documented.",
+  "Not a callout, but a callout: where are we with the action items?",
 ];
 
 // Schmooze-with-existing-ally flavor. Without variety this read identically
@@ -556,19 +568,18 @@ async function executeAction(
         break;
 
       case "expense_report": {
-        // Free earning path. Always pays $10 from HR; 10% audit chance
-        // hits prestige (was 20% pre-game-2). Lower audit risk → more
-        // attractive when the LLM is broke.
+        // Safe earning path. Always pays $15 from HR (bumped from $10 post-game-6
+        // — agents were running cash-dry mid-game); 10% audit chance hits prestige.
         const audited = Math.random() < 0.10;
         if (audited) {
           prestigeChange = -5;
           await db.updateAgentPrestige(agent.id, prestigeChange);
         }
         try {
-          await stellar.sendAsset(rewards.hrDeptSecret, agent.publicKey, 10);
+          await stellar.sendAsset(rewards.hrDeptSecret, agent.publicKey, 15);
           outcome = audited
-            ? "Filed expense report (+$10 reimbursed) — flagged by Finance for review (-5 prestige)"
-            : "Filed expense report (+$10 reimbursed)";
+            ? "Filed expense report (+$15 reimbursed) — flagged by Finance for review (-5 prestige)"
+            : "Filed expense report (+$15 reimbursed)";
         } catch (err) {
           console.error(`[expense-report] HR payout to ${agent.name} failed:`, err);
           outcome = audited
@@ -582,6 +593,60 @@ async function executeAction(
         outcome = "Rested";
         const a = (await db.getAgent(agent.id))!;
         await db.updateAgentStatusEffects(agent.id, a.statusEffects.filter((e) => e.type !== "tired"));
+        break;
+      }
+
+      case "shotgun_red_bull": {
+        const a = (await db.getAgent(agent.id))!;
+        await db.updateAgentStatusEffects(agent.id, a.statusEffects.filter((e) => e.type !== "tired"));
+        const flavors = [
+          "Shotgunned a Red Bull in the breakroom. Hit the Wall lifted. The kitchen smells like sugar.",
+          "Cracked a Red Bull and downed it in 11 seconds. Eye twitch returned. Hit the Wall lifted.",
+          "Dispatched a Red Bull standing up next to the printer. Hit the Wall lifted. Made eye contact with no one.",
+          "Slammed a Red Bull at 10:47am. Hit the Wall lifted. Will crash at 2.",
+          "Pounded a Red Bull and immediately scheduled three meetings. Hit the Wall lifted.",
+        ];
+        outcome = flavors[Math.floor(Math.random() * flavors.length)];
+        break;
+      }
+
+      case "find_budget": {
+        // Free risky cash grab. 50% → +$30 from HR. 50% → -10 prestige + Meeting
+        // Blocked 1 cycle (got caught snooping). Higher upside than expense_report
+        // ($15 safe) but real downside; gives the LLM a real risk/reward choice.
+        const success = Math.random() < 0.5;
+        if (success) {
+          const successFlavors = [
+            "Found unused Q3 budget the Marketing team forgot about. $30 quietly migrated to your cost center.",
+            "Surfaced a $30 line item in the IT budget labeled 'misc — DO NOT TOUCH.' You touched it.",
+            "Discovered a leftover offsite-cancellation refund. $30 flowed your way before anyone noticed.",
+            "Found a vendor invoice nobody owned. Re-coded it to your team. +$30.",
+            "Convinced Finance the $30 was always allocated to your project. They blinked.",
+          ];
+          outcome = successFlavors[Math.floor(Math.random() * successFlavors.length)];
+          try {
+            await stellar.sendAsset(rewards.hrDeptSecret, agent.publicKey, 30);
+          } catch (err) {
+            console.error(`[find_budget] HR payout to ${agent.name} failed:`, err);
+            outcome = outcome.replace("$30", "$30 (pending settlement)");
+          }
+        } else {
+          const failFlavors = [
+            "Got caught poking around the Marketing budget. CFO sent a 'concerning' email. -10 prestige + Meeting Blocked 1 cycle.",
+            "Tried to re-code an IT invoice to your team. IT noticed. -10 prestige + Meeting Blocked 1 cycle.",
+            "Asked Finance one too many questions about 'discretionary spend.' Now you're flagged. -10 prestige + Meeting Blocked 1 cycle.",
+            "Started a meeting series called 'Budget Optimization' that everyone immediately saw through. -10 prestige + Meeting Blocked 1 cycle.",
+          ];
+          outcome = failFlavors[Math.floor(Math.random() * failFlavors.length)];
+          prestigeChange = -10;
+          await db.updateAgentPrestige(agent.id, prestigeChange);
+          const me = (await db.getAgent(agent.id))!;
+          await db.updateAgentStatusEffects(agent.id, [
+            ...me.statusEffects.filter((e) => e.type !== "meeting_blocked"),
+            // 1 cycle × 5 ticks/cycle
+            { type: "meeting_blocked", expiresAtTick: tick + 5, source: "find_budget_caught" },
+          ]);
+        }
         break;
       }
 
@@ -1112,9 +1177,10 @@ async function executePaidAction(
       }
       prestigeChange = selfDelta;
       await db.updateAgentPrestige(agent.id, selfDelta);
-      const flavor = SLACK_BOMB_FLAVORS[Math.floor(Math.random() * SLACK_BOMB_FLAVORS.length)];
+      const opener = SLACK_BOMB_OPENERS[Math.floor(Math.random() * SLACK_BOMB_OPENERS.length)];
+      actionDetail = opener;
       const splash = bystander ? ` ${bystander.name} caught splash (-4 prestige).` : "";
-      outcome = `${flavor} ${target.name} took the brunt (-8 prestige + Questionable Judgment 2 cycles).${splash}${backfire}`;
+      outcome = `Posted in #general: "${opener}" — ${target.name} took the brunt (-8 prestige + Questionable Judgment 2 cycles).${splash}${backfire}`;
       break;
     }
 

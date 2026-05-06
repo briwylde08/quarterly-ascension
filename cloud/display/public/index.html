@@ -191,7 +191,7 @@
     /* === KPI strip ================================================== */
     .kpi-strip {
       display: grid;
-      grid-template-columns: repeat(4, 1fr);
+      grid-template-columns: repeat(2, 1fr);
       gap: 12px;
       padding: 14px 24px;
       background: var(--bg);
@@ -237,12 +237,12 @@
     /* === Main two-column grid ======================================= */
     .dash-grid {
       display: grid;
-      grid-template-columns: minmax(340px, 26%) 1fr minmax(220px, 20%);
+      grid-template-columns: minmax(310px, 22%) 1fr minmax(200px, 18%);
       gap: 14px;
       padding: 0 24px 14px 24px;
     }
     @media (max-width: 1100px) {
-      .dash-grid { grid-template-columns: minmax(300px, 32%) 1fr; }
+      .dash-grid { grid-template-columns: minmax(280px, 28%) 1fr; }
       .tx-ticker-col { display: none; }
     }
 
@@ -638,11 +638,17 @@
       font-size: 13px;
       color: var(--text);
       margin-bottom: 6px;
-      font-weight: 600;
+      font-weight: 500;
     }
-    .feed-action .actor { color: var(--navy); }
+    .feed-action .actor { color: var(--navy); font-weight: 700; }
     .feed-action .arrow { color: var(--text-faint); margin: 0 4px; font-weight: 400; }
-    .feed-action .recipient { color: var(--navy); }
+    .feed-action .recipient { color: var(--navy); font-weight: 700; }
+    /* Inline mentions of any manager name in the description text — boosted
+       weight + navy color so 'who-did-what-to-whom' scans at a glance. */
+    .agent-mention {
+      font-weight: 700;
+      color: var(--navy);
+    }
 
     .feed-mpp {
       display: flex;
@@ -1198,10 +1204,6 @@
     </div>
   </div>
 
-  <div class="intro-bar">
-    <span>New here? <a href="/intro.html">Adopt one of these mid-level managers</a> to play during the next game.</span>
-  </div>
-
   <header class="exec-banner" id="banner">
     <div class="brand">
       <div class="brand-mark">MegaCorp Inc.</div>
@@ -1225,8 +1227,9 @@
         <span class="meta-label">Next Sync-up</span>
         <span class="meta-value" id="countdown">—</span>
       </div>
+      <a id="adopt-btn" class="pause-btn" href="/intro.html" title="Adopt one of the AI managers to coach during the next game">🧑‍💼 Adopt a Manager</a>
       <a id="handbook-btn" class="pause-btn" href="/handbook.html" title="Action catalog, status effects, public tags, and game mechanics">📖 Handbook</a>
-      <a id="directives-btn" class="pause-btn" href="/directives.html" title="Live coaching directives — what each manager has been told this cycle">🎙 Coaching</a>
+      <a id="directives-btn" class="pause-btn" href="/directives.html" title="Live life-coaching directives — what each manager has been told this cycle">🎙 Life Coaching</a>
       <button id="gossip-btn" class="pause-btn" title="The latest office gossip — refreshed every 4 cycles">💧 Water Cooler</button>
       <button id="alliances-btn" class="pause-btn" title="Current alliances and active rivalries">🤝 Alliances</button>
       <button id="pause-btn" class="pause-btn" title="Pause / resume the simulation (admin)">⏸ Pause</button>
@@ -1244,16 +1247,6 @@
       <div class="kpi-label">Transaction Throughput</div>
       <div class="kpi-sublabel">Cleared On-Chain Settlements</div>
       <div class="kpi-value"><span id="kpi-count">0</span><span class="kpi-suffix">tx</span></div>
-    </div>
-    <div class="kpi-tile" id="kpi-velocity">
-      <div class="kpi-label">Operational Velocity</div>
-      <div class="kpi-sublabel">Mean Settlement Latency</div>
-      <div class="kpi-value"><span id="kpi-velocity-val">0.0</span><span class="kpi-suffix">sec</span></div>
-    </div>
-    <div class="kpi-tile" id="kpi-roster">
-      <div class="kpi-label">Active Headcount</div>
-      <div class="kpi-sublabel">Managers In Cycle</div>
-      <div class="kpi-value"><span id="kpi-headcount">0</span><span class="kpi-suffix">FTE</span></div>
     </div>
   </section>
 
@@ -1333,6 +1326,39 @@
       if (a === myCoachedAgent || t === myCoachedAgent) {
         row.classList.add('yours-row');
       }
+    }
+
+    // ============================================================
+    // Inline manager-name highlighting. Builds a regex from the live
+    // agent roster, wraps name occurrences inside .feed-action and
+    // .feed-outcome text with .agent-mention spans so "who did what to
+    // whom" pops at a glance.
+    // ============================================================
+    let agentNameRegex = null;
+    function rebuildAgentNameRegex(agents) {
+      const names = (agents || []).map(a => a.name).filter(Boolean);
+      if (names.length === 0) { agentNameRegex = null; return; }
+      // Sort longest-first so "Kevin Hustle" matches before "Kevin" would.
+      names.sort((a, b) => b.length - a.length);
+      const escaped = names.map(n => n.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'));
+      agentNameRegex = new RegExp('(' + escaped.join('|') + ')', 'g');
+    }
+    function highlightAgentMentions(row) {
+      if (!agentNameRegex || !row) return;
+      // Apply to the heading line + outcome/quote text. Skip if the row
+      // structure already wraps actor/recipient (paid action narrative
+      // form) since those have their own bolding.
+      row.querySelectorAll('.feed-action, .feed-outcome').forEach(el => {
+        // Skip if it has children that already include mentions (idempotent).
+        if (el.querySelector('.agent-mention')) return;
+        // textContent guarantees no HTML; we re-emit as innerHTML with the
+        // wrap. innerHTML is safe because textContent strips tags first.
+        const text = el.textContent;
+        if (!text) return;
+        const replaced = text.replace(/[&<>"]/g, ch => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;' }[ch]))
+                             .replace(agentNameRegex, '<span class="agent-mention">$1</span>');
+        if (replaced !== text) el.innerHTML = replaced;
+      });
     }
 
     // ============================================================
@@ -1613,6 +1639,7 @@
       div.innerHTML = paidFeedInnerHTML(t, /*outcome*/ null);
       applyFilterToRow(div);
       applyCoachHighlight(div);
+      highlightAgentMentions(div);
       return div;
     }
 
@@ -1627,6 +1654,7 @@
       if (isBigMoment(e)) div.classList.add('big-moment');
       applyFilterToRow(div);
       applyCoachHighlight(div);
+      highlightAgentMentions(div);
       return div;
     }
 
@@ -1689,6 +1717,7 @@
         o.className = 'feed-outcome';
         o.textContent = stripActorPrefix(event.description);
         row.appendChild(o);
+        highlightAgentMentions(row);
       }
       // Surface the prestige delta on paid actions too — by default the ticker
       // entry doesn't carry it, so we attach it now that the event has arrived.
@@ -1887,6 +1916,11 @@
 
       // Update memory of last-seen prestige
       sorted.forEach(a => prevPrestige.set(a.id, a.prestige));
+
+      // Refresh the agent-name regex from the latest roster (names don't
+      // change mid-game, but on first paint this is the moment we know them).
+      // No-op rebuild on subsequent calls is cheap.
+      rebuildAgentNameRegex(agents);
     }
 
     // Hover-text for each status type. Surfaces the mechanic so players

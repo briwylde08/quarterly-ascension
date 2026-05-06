@@ -498,17 +498,17 @@
       const w = a.coachingWindow || { open: false };
       const dirText = a.directive || '';
       const stateText = w.open
-        ? `Coaching is open. Submit a directive any time — it persists until you overwrite it.`
+        ? `Life-coaching is open. Submit a directive any time — it persists until you overwrite it.`
         : a.gameStatus === 'ended'
           ? `Game ended. Directives cleared at end-of-game.`
           : a.gameStatus === 'setup'
-            ? `Game hasn't started. Coaching opens when the first cycle does.`
-            : `Coaching unavailable (game ${a.gameStatus}).`;
+            ? `Game hasn't started. Life-coaching opens when the first cycle does.`
+            : `Life-coaching unavailable (game ${a.gameStatus}).`;
       const stateClass = w.open ? 'open' : 'locked';
 
       area.innerHTML = `
         <div class="coach-box">
-          <h3>⏱ Coach ${escape(a.name.split(' ')[0])}</h3>
+          <h3>⏱ Life-coach ${escape(a.name.split(' ')[0])}</h3>
           <div class="coach-state ${stateClass}">${escape(stateText)}</div>
           ${dirText ? `<div class="current-directive">"${escape(dirText)}"</div>` : ''}
           ${w.open ? `

@@ -63,8 +63,10 @@ export async function generateGossip(
 const ALL_ACTIONS = [
   // === FREE (12) ===
   { type: "work", description: "Do actual work (+5 prestige, +$2 base salary, free). Boring. The audience does not enjoy watching this.", cost: 0 },
-  { type: "expense_report", description: "File an expense report (+$10 reimbursed; 10% chance Finance flags it for -5 prestige). Free money path — when budgets get tight, this is the cleanest refill.", cost: 0 },
+  { type: "expense_report", description: "File an expense report (+$15 reimbursed; 10% chance Finance flags it for -5 prestige). Safe income path — when budgets get tight, this is the cleanest refill.", cost: 0 },
+  { type: "find_budget", description: "Snoop for unused budget in another department (free). 50% chance: HR transfers $30 to you. 50% chance: get caught — lose 10 prestige + Meeting Blocked for 1 cycle. Risky cash grab; bigger upside than expense_report but real downside.", cost: 0 },
   { type: "rest", description: "Rest and recover (removes Hit the Wall, free)", cost: 0 },
+  { type: "shotgun_red_bull", description: "Shotgun a Red Bull in the breakroom (free). Removes Hit the Wall instantly. Mildly unprofessional but effective. The kitchen smells like sugar for an hour.", cost: 0 },
   { type: "take_credit", description: "Attempt to claim credit for someone's work (50% base success: +30 prestige, 50% fail: -20 prestige). Auto-succeeds against a Documented target (set up via Sabotage Plan). Bumped to 65% against targets with Questionable Judgment (set up via Spread Rumor).", cost: 0, requiresTarget: true },
 
   { type: "schmooze", description: "Schmooze another manager — propose a cross-functional partnership (free). Each manager caps at 3 partnerships; if you're at 3 OR they're at 3, the proposal politely fizzles ('they're at capacity, let's circle back next quarter').", cost: 0, requiresTarget: true },
@@ -307,18 +309,20 @@ function buildContextPrompt(ctx: DecisionContext): string {
 
   const directiveSection = directive
     ? `\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-COACH DIRECTIVE (from your real-world claimer; live, may update tick-to-tick):
+LIFE-COACH DIRECTIVE (from your real-world life-coach; live, may update tick-to-tick):
 
   "${directive.replace(/"/g, '\\"')}"
 
-This is a strong steer. Take it seriously. BUT — your persona traits
-shape *how* you execute. If the directive conflicts with who you are
-(e.g. a cautious manager told to "go aggressive," or a loyal one told
-to "betray everyone"), your character might comply imperfectly,
-half-heartedly, or pick an adjacent action that fits your nature
-better. Be true to yourself. Either way, your reasoning quote MUST
-explicitly reference the directive — say what your coach asked and
-how your action relates. The audience is watching this play out.
+This is a life-coach whispering in your ear, helping you show up as
+your best (or worst) self. Take it seriously. BUT — your persona
+traits shape *how* you execute. If the directive conflicts with who
+you are (e.g. a cautious manager told to "go aggressive," or a loyal
+one told to "betray everyone"), your character might comply
+imperfectly, half-heartedly, or pick an adjacent action that fits
+your nature better. Be true to yourself. Either way, your reasoning
+quote MUST explicitly reference the directive — say what your life
+coach asked and how your action relates. The audience is watching
+this play out.
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 `
     : "";
