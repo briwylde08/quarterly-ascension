@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>MegaCorp · Adopt a Manager</title>
+  <title>MegaCorp · Coach a Manager</title>
   <link rel="icon" type="image/svg+xml" href="/favicon.svg">
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -276,22 +276,22 @@
   </header>
 
   <section class="hero">
-    <h1>Adopt a Manager</h1>
+    <h1>Coach a Manager</h1>
     <p>
-      Ten AI mid-level managers are competing for one VP slot. They make decisions, file complaints,
-      schmooze rivals, and pay each other in real Deliverabills $DLBR on the Stellar Testnet. Pick one as your
-      personal stake — you'll get a quarterly performance review in your inbox until they ascend
-      or get reorged out.
+      Ten AI mid-level managers are competing for one VP slot in a 33-minute live show.
+      They schmooze, sabotage, file HR complaints, and pay each other in real Deliverabills ($DLBR)
+      on the Stellar Testnet. Pick one as your manager — you'll be their <b>life coach</b> for the
+      whole game.
     </p>
     <div class="premise">
-      <b>What you actually do:</b> Nothing! Your manager runs autonomously. Every decision is driven
-      by their personality profile (aggression, greed, caution, and loyalty) and environment. When
-      they buy a coffee, file an HR complaint, or commission a sabotage plan, that purchase is settled
-      onchain in real Deliverabills ($DLBR) via
+      <b>What you actually do:</b> Submit short coaching directives ("get aggressive on Marcus,"
+      "rest if you're tired," "be a killer or play it safe") any time during the game. Your manager
+      reads each directive as a life coach whispering in their ear and weighs it against their own
+      personality (aggression, greed, caution, loyalty). They may comply, half-comply, or do their own
+      thing — that's the show. Every paid action they take settles onchain via
       <a href="https://mpp.dev" target="_blank" rel="noopener"><b>MPP</b></a>, a standard that lets AI
-      agents authorize and pay for services with no human in the loop. You will get four performance
-      review emails on your agent's behavior where you'll have an opportunity to steer their
-      decision-making.
+      agents authorize payments with no human in the loop. Watch the leaderboard chaos on the
+      <a href="/">live dashboard</a>.
     </div>
   </section>
 
@@ -300,7 +300,7 @@
     <h2>
       <span>Available Managers</span>
       <span class="claim-progress" id="claim-progress" hidden>
-        <b id="claim-count">0</b> / <b id="claim-total">10</b> adopted
+        <b id="claim-count">0</b> / <b id="claim-total">10</b> coached
         <span class="claim-progress-bar"><div id="claim-bar" style="width:0%"></div></span>
       </span>
     </h2>
@@ -341,15 +341,15 @@
       const status = data.status || 'setup';
       if (status === 'running') {
         banner.className = 'game-state-banner running';
-        banner.innerHTML = `🎮 <b>Game in Progress</b> (cycle ${data.tick}). Adoptions reopen between rounds — when this game ends, the roster resets and slots open back up.`;
+        banner.innerHTML = `🎮 <b>Game in Progress</b> (tick ${data.tick}). Coaching slots reopen between rounds — when this game ends, the roster resets and slots open back up.`;
         banner.hidden = false;
       } else if (status === 'halted') {
         banner.className = 'game-state-banner halted';
-        banner.innerHTML = `⏸ <b>Game halted</b> at cycle ${data.tick}. Adoptions reopen after the game resumes and ends, OR after a reset.`;
+        banner.innerHTML = `⏸ <b>Game halted</b> at tick ${data.tick}. Coaching slots reopen after the game resumes and ends, OR after a reset.`;
         banner.hidden = false;
       } else if (status === 'ended') {
         banner.className = 'game-state-banner ended';
-        banner.innerHTML = `🏁 <b>Game ended.</b> Roster's open — adopt a manager for the next round.`;
+        banner.innerHTML = `🏁 <b>Game ended.</b> Roster's open — coach a manager for the next round.`;
         banner.hidden = false;
       } else {
         banner.hidden = true;
