@@ -243,6 +243,12 @@
       load();
     }
 
+    // Tracks the last-seen coaching-open state so the poller below can re-render
+    // the coach panel ONLY when the game transitions setup → running. Avoids
+    // wiping a coach's in-progress textarea text on every poll.
+    let lastCoachWindowOpen = null;
+    let lastGameStatus = null;
+
     async function load() {
       const url = `${ORCHESTRATOR_BASE}/api/agent/${encodeURIComponent(agentId)}`;
       const res = await fetch(url);
@@ -261,7 +267,30 @@
       renderActivity(a.recentActions || []);
       renderClaim(a);
       renderCoach(a);
+      lastCoachWindowOpen = !!(a.coachingWindow && a.coachingWindow.open);
+      lastGameStatus = a.gameStatus;
     }
+
+    // Poll every 5s for game-state changes so the coaching panel auto-unblocks
+    // when the game transitions to running (was: coach had to refresh manually).
+    // Only re-renders the coach panel when something materially changes; preserves
+    // textarea content during normal gameplay.
+    async function pollAgentState() {
+      if (document.visibilityState === 'hidden') return;
+      try {
+        const r = await fetch(`${ORCHESTRATOR_BASE}/api/agent/${encodeURIComponent(agentId)}`);
+        if (!r.ok) return;
+        const a = await r.json();
+        const isOpen = !!(a.coachingWindow && a.coachingWindow.open);
+        const status = a.gameStatus;
+        if (isOpen !== lastCoachWindowOpen || status !== lastGameStatus) {
+          renderCoach(a);
+          lastCoachWindowOpen = isOpen;
+          lastGameStatus = status;
+        }
+      } catch { /* network blip; try again next tick */ }
+    }
+    setInterval(pollAgentState, 5000);
 
     function renderProfile(a) {
       const traits = a.traits || { aggression: 0, greed: 0, caution: 0, loyalty: 0 };
@@ -466,9 +495,17 @@
           const data = await r.json();
           if (r.ok) {
             msg.className = 'claim-msg success';
-            msg.innerHTML = `Claim confirmed. Watch <a href="/?coach=${encodeURIComponent(agentId)}">the live dashboard</a> — directives go live as soon as you submit them.`;
+            msg.innerHTML = `
+              <div style="margin-bottom: 12px;">Claim confirmed! Directives go live as soon as you submit them.</div>
+              <a href="/?coach=${encodeURIComponent(agentId)}" target="_blank" rel="noopener"
+                 style="display:inline-block; padding:10px 18px; background: var(--navy); color: #fff;
+                        text-decoration: none; border-radius: 4px; font-weight: 700; font-size: 14px;
+                        letter-spacing: 0.4px;">
+                Go to Dashboard →
+              </a>
+            `;
             btn.textContent = 'Claimed';
-            setTimeout(() => location.reload(), 1200);
+            setTimeout(() => location.reload(), 2500);
           } else {
             msg.className = 'claim-msg error';
             msg.textContent = data.error || `Claim failed (${r.status})`;
