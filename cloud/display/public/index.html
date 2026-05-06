@@ -2176,14 +2176,6 @@
         el.textContent = 'Awaiting kickoff';
         return;
       }
-      // Tick is currently being processed by the orchestrator (LLM + Stellar
-      // settlement work, ~20-28s). The storage alarm is null during this
-      // window — pinning at 0:00 looked broken. Show explicit "Working…"
-      // until the next alarm gets rescheduled.
-      if (tickInFlight) {
-        el.textContent = 'Working…';
-        return;
-      }
       // Server-driven timer: nextAlarmAt is a ms-since-epoch timestamp set by
       // the DO via state.storage.setAlarm(...). Refreshing the page reads it
       // afresh from /api/state, so the countdown stays consistent across
@@ -2197,6 +2189,15 @@
       } else {
         const elapsed = Date.now() - lastTickStartMs;
         remaining = Math.max(0, tickIntervalMs - elapsed);
+      }
+      // Show countdown while there's time left. Once it drains to zero AND
+      // the orchestrator is still processing (work overran the 25s budget),
+      // switch to "Working…" with elapsed time so the field doesn't look
+      // frozen at 0:00.
+      if (remaining < 1000 && tickInFlight) {
+        const elapsedSec = Math.max(0, Math.floor((Date.now() - lastTickStartMs) / 1000));
+        el.textContent = `Working… ${elapsedSec}s`;
+        return;
       }
       const sec = Math.floor(remaining / 1000);
       const m = Math.floor(sec / 60);
