@@ -68,11 +68,54 @@ export async function processRandomEvents(
 ): Promise<RandomEventsResult> {
   const events: GameEvent[] = [];
 
+  // Hydrate firedEventTypes + glassCliffVictims from game_state so the
+  // one-per-game caps survive DO eviction. The class-level in-memory Set
+  // wasn't enough — game 7 had Viral LinkedIn fire twice because the DO
+  // restarted mid-game and the Set re-initialized empty.
+  try {
+    const persistedFired = await deps.db.getGameStateValue("fired_random_events");
+    if (persistedFired) {
+      const ids: string[] = JSON.parse(persistedFired);
+      for (const id of ids) state.firedEventTypes.add(id);
+    }
+    const persistedGlassCliff = await deps.db.getGameStateValue("glass_cliff_victims");
+    if (persistedGlassCliff) {
+      const victims: string[] = JSON.parse(persistedGlassCliff);
+      for (const v of victims) state.glassCliffVictims.add(v);
+    }
+  } catch (err) {
+    console.error("[random-events] hydrate state failed:", err);
+  }
+  const initialFiredSize = state.firedEventTypes.size;
+  const initialGlassCliffSize = state.glassCliffVictims.size;
+
+  // Persist state to D1 if anything new fired this tick. Called before each
+  // return so the one-per-game cap survives DO eviction.
+  const persist = async () => {
+    if (state.firedEventTypes.size !== initialFiredSize) {
+      try {
+        await deps.db.setGameStateValue(
+          "fired_random_events",
+          JSON.stringify([...state.firedEventTypes])
+        );
+      } catch (err) { console.error("[random-events] persist fired failed:", err); }
+    }
+    if (state.glassCliffVictims.size !== initialGlassCliffSize) {
+      try {
+        await deps.db.setGameStateValue(
+          "glass_cliff_victims",
+          JSON.stringify([...state.glassCliffVictims])
+        );
+      } catch (err) { console.error("[random-events] persist glass-cliff failed:", err); }
+    }
+  };
+
   // Tick 1: Q1 KICKOFF — a per-agent reaction event the moment the game
   // starts. Pure flavor + tiny prestige movements, but it gives the host
   // 10 names to call out before any action has even fired.
   if (tick === 1) {
     events.push(...(await q1Kickoff(deps, tick)));
+    await persist();
     return { events, skipDecisions: false };
   }
 
@@ -94,6 +137,7 @@ export async function processRandomEvents(
     events.push(...(await opener.fn(deps, tick)));
     state.lastFiredEvents = new Set(["cycle1_opener"]);
     state.firedEventTypes.add(opener.id);
+    await persist();
     return { events, skipDecisions: false };
   }
 
@@ -143,6 +187,7 @@ export async function processRandomEvents(
 
   state.lastFiredEvents = fired;
 
+  await persist();
   return { events, skipDecisions: false };
 }
 
@@ -446,8 +491,8 @@ async function surpriseDemoDay(deps: EventDeps, tick: number): Promise<GameEvent
         prestigeDelta = 30;
         flavor = "crushed Q&A by interrupting every clarifying question";
       } else if (greed > 70) {
-        prestigeDelta = 20;
-        flavor = "tried to claim credit for two other teams' work mid-presentation; got side-eye";
+        prestigeDelta = 8;
+        flavor = "tried to claim credit for two other teams' work mid-presentation; got side-eye but somehow scraped a small win";
       } else if (caution > 70) {
         prestigeDelta = 25;
         flavor = "presented like a defense lawyer — every slide footnoted, every claim hedged";

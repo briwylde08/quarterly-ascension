@@ -62,7 +62,6 @@ export interface ActionResult {
 
 export type Action =
   | { type: "work" }
-  | { type: "rest" }
   | { type: "shotgun_red_bull" }
   | { type: "find_budget" }
   | { type: "schmooze"; target: string }

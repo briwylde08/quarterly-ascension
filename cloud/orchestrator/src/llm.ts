@@ -65,8 +65,7 @@ const ALL_ACTIONS = [
   { type: "work", description: "Do actual work (+5 prestige, +$2 base salary, free). Boring. The audience does not enjoy watching this.", cost: 0 },
   { type: "expense_report", description: "File an expense report (+$15 reimbursed; 10% chance Finance flags it for -5 prestige). Safe income path — when budgets get tight, this is the cleanest refill.", cost: 0 },
   { type: "find_budget", description: "Snoop for unused budget in another department (free). 50% chance: HR transfers $30 to you. 50% chance: get caught — lose 10 prestige + Meeting Blocked for 1 cycle. Risky cash grab; bigger upside than expense_report but real downside.", cost: 0 },
-  { type: "rest", description: "Rest and recover (removes Hit the Wall, free)", cost: 0 },
-  { type: "shotgun_red_bull", description: "Shotgun a Red Bull in the breakroom (free). Removes Hit the Wall instantly. Mildly unprofessional but effective. The kitchen smells like sugar for an hour.", cost: 0 },
+  { type: "shotgun_red_bull", description: "Shotgun a Red Bull in the breakroom (free). Removes Hit the Wall instantly. Mildly unprofessional but effective. The kitchen smells like sugar for an hour. The free way to recover.", cost: 0 },
   { type: "take_credit", description: "Attempt to claim credit for someone's work (50% base success: +30 prestige, 50% fail: -20 prestige). Auto-succeeds against a Documented target (set up via Sabotage Plan). Bumped to 65% against targets with Questionable Judgment (set up via Spread Rumor).", cost: 0, requiresTarget: true },
 
   { type: "schmooze", description: "Schmooze another manager — propose a cross-functional partnership (free). Each manager caps at 3 partnerships; if you're at 3 OR they're at 3, the proposal politely fizzles ('they're at capacity, let's circle back next quarter').", cost: 0, requiresTarget: true },
@@ -86,7 +85,7 @@ const ALL_ACTIONS = [
   { type: "coffee_chat", description: "Casual coffee with target ($5; non-self). Both gain +3 prestige. No alliance proposed. Low-stakes networking.", cost: 5, requiresTarget: true },
   { type: "buy_coffee", description: "Buy coffee (removes Hit the Wall).", cost: 5 },
   { type: "spread_rumor", description: "Spread a rumor about target ($10). Target loses 5 prestige and gets QUESTIONABLE JUDGMENT public tag for 2 cycles. Cheap social warfare with real teeth.", cost: 10, requiresTarget: true },
-  { type: "move_meeting_early", description: "Move target's meeting to 7:30am ($10). Target -5 prestige + Hit the Wall (-2/cycle for 3 cycles = -11 total damage, plus they'll need to spend a turn on Rest or $5 on Buy Coffee — that's stolen value on top of the prestige hit). Underrated cheap attack.", cost: 10, requiresTarget: true },
+  { type: "move_meeting_early", description: "Move target's meeting to 7:30am ($10). Target -5 prestige + Hit the Wall (-3/cycle for 3 cycles = -9 total damage, plus they'll need to spend a turn on Shotgun a Red Bull or $5 on Buy Coffee — that's stolen value on top of the prestige hit). Underrated cheap attack.", cost: 10, requiresTarget: true },
 
   // === MID PAID ($20 – $25) ===
   { type: "invoke_handbook", description: "Invoke the Employee Handbook against target ($15). Cite a policy section. Target loses 3 prestige and gains Problematic for 2 cycles. The cheap source of Problematic — combine with Bad Glassdoor Review for compound damage.", cost: 15, requiresTarget: true },
@@ -224,7 +223,7 @@ function buildContextPrompt(ctx: DecisionContext): string {
   const statusDescriptions = agent.statusEffects.map((s) => {
     switch (s.type) {
       // Retreat renames: internal key stays stable; user-facing label is updated.
-      case "tired": return "Hit the Wall (-2 prestige/tick decay; removed by coffee, rest, or cry_in_stairwell)";
+      case "tired": return "Hit the Wall (-3 prestige/cycle decay; removed by Shotgun a Red Bull, Buy Coffee, or Cry in the Stairwell)";
       case "marked": return `Documented (sabotaged — next take_credit against you auto-succeeds; expires tick ${s.expiresAtTick})`;
       // Retreat additions:
       case "mysterious_influence": return "Mysterious Influence (+2 prestige/cycle passive; people occasionally credit you for things you didn't do)";
@@ -239,7 +238,7 @@ function buildContextPrompt(ctx: DecisionContext): string {
       case "caffeinated": return `Caffeinated (legacy; expires tick ${s.expiresAtTick})`;
       case "inspired": return `Inspired (legacy; expires tick ${s.expiresAtTick})`;
       case "under_review": return `Under Review (legacy; expires tick ${s.expiresAtTick})`;
-      case "technical_difficulties": return "Technical Difficulties (legacy; forced to rest)";
+      case "technical_difficulties": return "Technical Difficulties (legacy; forced to shotgun a Red Bull)";
       case "mandatory_motivation": return "Stuck in Mandatory Motivation (legacy; forced to rest)";
       default: return s.type;
     }
@@ -351,7 +350,24 @@ YOUR STATUS:
 - Allies: ${agent.allies.length > 0 ? agent.allies.map((id) => allAgents.find((a) => a.id === id)?.name).join(", ") : "None"}
 ${agent.pendingAlliance ? `- PENDING ALLIANCE: ${allAgents.find((a) => a.id === agent.pendingAlliance)?.name} wants to ally with you` : ""}
 
-OTHER MANAGERS (use the id in lowercase as "target" in action JSON):
+${(() => {
+  // Surface Documented (auto-Take-Credit) and Questionable Judgment
+  // (65% Take Credit) targets as a dedicated EXPLOIT NOW section. Without
+  // this callout the LLM tends to miss the chain even when both pieces
+  // (target tag + take_credit description) are in the prompt — game-7 had
+  // 6 Documented windows and 0 chained Take Credits.
+  const documented = otherAgents.filter(a => a.publicTags.includes("MARKED"));
+  const qj = otherAgents.filter(a => a.publicTags.includes("QUESTIONABLE JUDGMENT"));
+  if (documented.length === 0 && qj.length === 0) return "";
+  const lines: string[] = ["🎯 EXPLOIT OPPORTUNITIES (act on these BEFORE the windows close):"];
+  for (const a of documented) {
+    lines.push(`- ${a.name} (id: ${a.id}) is DOCUMENTED — take_credit on them is a GUARANTEED +30 prestige (free action). This is the biggest single-action swing available. Do not miss this window.`);
+  }
+  for (const a of qj) {
+    lines.push(`- ${a.name} (id: ${a.id}) has QUESTIONABLE JUDGMENT — take_credit on them is 65% to succeed (vs the usual 50%). Solid value if you don't have a cleaner shot.`);
+  }
+  return lines.join("\n") + "\n\n";
+})()}OTHER MANAGERS (use the id in lowercase as "target" in action JSON):
 ${otherAgents.map((a) => {
   const tags: string[] = [];
   if (a.isAlly) tags.push("ALLY");
@@ -379,7 +395,7 @@ Choose ONE action based on your personality. Consider:
    imposes that same status on them is wasted spend — pick a different
    target or a different action.
 
-${agent.statusEffects.some((s) => s.type === "technical_difficulties") ? "WARNING: You have Technical Difficulties - you MUST choose 'rest' this turn!" : ""}
+${agent.statusEffects.some((s) => s.type === "technical_difficulties") ? "WARNING: You have Technical Difficulties - you MUST choose 'shotgun_red_bull' this turn!" : ""}
 
 Respond with ONLY a single JSON object — no prose, no code fences — matching this shape:
 {
@@ -520,7 +536,7 @@ function validateAction(action: Action, agent: Agent, balance: number, allAgents
     }
   }
 
-  if (agent.statusEffects.some((s) => s.type === "technical_difficulties") && action.type !== "rest") {
+  if (agent.statusEffects.some((s) => s.type === "technical_difficulties") && action.type !== "shotgun_red_bull") {
     return { valid: false, reason: "Technical difficulties - must rest" };
   }
 

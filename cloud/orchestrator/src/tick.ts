@@ -357,7 +357,7 @@ async function applyFatigue(deps: TickDeps, tick: number): Promise<void> {
   // applyPassiveStatusDecay. So duration is in *ticks* but represents 4 cycles.
   const TIRED_CYCLES = 4;
   const TIRED_DURATION = TIRED_CYCLES * 5;
-  const RECOVERY_ACTIONS = new Set(["rest", "buy_coffee", "cry_in_stairwell"]);
+  const RECOVERY_ACTIONS = new Set(["shotgun_red_bull", "buy_coffee", "cry_in_stairwell"]);
   const agents = await db.getAllAgents();
 
   // Collect everyone hitting the wall this cycle, then emit a single
@@ -389,7 +389,7 @@ async function applyFatigue(deps: TickDeps, tick: number): Promise<void> {
       timestamp: new Date(),
       type: "status_effect",
       agentId: a.id,
-      description: `${a.name} went ${FATIGUE_WINDOW} turns without recovering — Hit the Wall (-3 prestige/cycle for ${TIRED_CYCLES} cycles; lifted by Rest, Buy Coffee, or Cry in the Stairwell).`,
+      description: `${a.name} went ${FATIGUE_WINDOW} turns without recovering — Hit the Wall (-3 prestige/cycle for ${TIRED_CYCLES} cycles; lifted by Shotgun a Red Bull, Buy Coffee, or Cry in the Stairwell).`,
     });
     return;
   }
@@ -402,7 +402,7 @@ async function applyFatigue(deps: TickDeps, tick: number): Promise<void> {
     tick,
     timestamp: new Date(),
     type: "status_effect",
-    description: `${namesList} have Hit the Wall (-3 prestige/cycle for ${TIRED_CYCLES} cycles; lifted by Rest, Buy Coffee, or Cry in the Stairwell).`,
+    description: `${namesList} have Hit the Wall (-3 prestige/cycle for ${TIRED_CYCLES} cycles; lifted by Shotgun a Red Bull, Buy Coffee, or Cry in the Stairwell).`,
   });
   for (const a of newlyTired) {
     await emit({
@@ -415,6 +415,44 @@ async function applyFatigue(deps: TickDeps, tick: number): Promise<void> {
       parentEventId: parentId,
     });
   }
+}
+
+// Map raw action keys → human-readable phrases for use in flavor strings
+// surfaced to the audience. Anything missing from the map falls back to
+// snake_case → "snake case" so we never leak code identifiers to the UI.
+const ACTION_PHRASES: Record<string, string> = {
+  work: "actual work",
+  expense_report: "expense report",
+  find_budget: "budget hunt",
+  shotgun_red_bull: "Red Bull moment",
+  take_credit: "credit grab",
+  schmooze: "schmooze",
+  accept_alliance: "alliance acceptance",
+  reject_alliance: "alliance rejection",
+  break_alliance: "alliance breakup",
+  boomerang: "boomerang quit-and-return",
+  cry_in_stairwell: "stairwell cry",
+  hail_mary_idea: "Hail Mary pitch",
+  join_meeting_silently: "silent meeting attendance",
+  buy_coffee: "coffee run",
+  coffee_chat: "coffee chat",
+  spread_rumor: "rumor mill",
+  invoke_handbook: "handbook citation",
+  move_meeting_early: "7:30am meeting reschedule",
+  schedule_pre_meeting: "pre-meeting booking",
+  file_complaint: "HR complaint",
+  strategy_report: "consultant deck",
+  slack_bomb: "Slack bomb",
+  office_party: "office party",
+  anonymous_pulse_survey: "anonymous pulse survey",
+  sensitivity_training: "sensitivity training assignment",
+  schedule_conflict: "schedule conflict",
+  hostile_takeover: "hostile partnership takeover",
+  sabotage_plan: "sabotage dossier",
+  book_ceo_time: "CEO meeting",
+};
+function humanizeAction(actionType: string): string {
+  return ACTION_PHRASES[actionType] ?? actionType.replace(/_/g, " ");
 }
 
 const MYSTERIOUS_CREDIT_FLAVORS = [
@@ -450,7 +488,7 @@ async function applyMysteriousInfluenceMisattribution(
   for (const influencer of influencers) {
     if (Math.random() >= 0.10) continue;
     const flavor = MYSTERIOUS_CREDIT_FLAVORS[Math.floor(Math.random() * MYSTERIOUS_CREDIT_FLAVORS.length)];
-    const description = flavor(influencer.name, active.agent.name, active.action.type);
+    const description = flavor(influencer.name, active.agent.name, humanizeAction(active.action.type));
     await emit({
       id: uuid(),
       tick,
@@ -586,13 +624,6 @@ async function executeAction(
             ? "Filed expense report — Finance flagged it (-5 prestige); reimbursement pending"
             : "Filed expense report — reimbursement pending";
         }
-        break;
-      }
-
-      case "rest": {
-        outcome = "Rested";
-        const a = (await db.getAgent(agent.id))!;
-        await db.updateAgentStatusEffects(agent.id, a.statusEffects.filter((e) => e.type !== "tired"));
         break;
       }
 
@@ -907,7 +938,18 @@ async function executePaidAction(
         await db.updateAgentPrestige(agent.id, prestigeChange);
         await db.updateAgentPrestige(action.target, 3);
         const target = await db.getAgent(action.target);
-        outcome = `Low-stakes coffee with ${target?.name ?? action.target}. Both +3 prestige, no alliance proposed.`;
+        const topics = [
+          "Q3 OKRs", "the new Slack reactions policy", "their kid's soccer schedule",
+          "remote-work norms", "the parking situation", "the office plant that died",
+          "headcount rumors", "the new HRIS rollout", "their burnout, vaguely",
+          "weekend plans they didn't actually have", "the all-hands deck typo",
+          "calendar tetris", "the espresso machine that's been 'on order' since March",
+          "what 'alignment' means here, exactly", "a Netflix show neither finished",
+          "the org chart redesign", "whether anyone reads the company newsletter",
+        ];
+        const topic = topics[Math.floor(Math.random() * topics.length)];
+        actionDetail = topic;
+        outcome = `Low-stakes coffee with ${target?.name ?? action.target} — talked about ${topic}. Both +3 prestige, no alliance proposed.`;
       }
       break;
 

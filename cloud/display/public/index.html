@@ -1763,11 +1763,11 @@
       schedule_pre_meeting:   (t)    => 'scheduled a pre-meeting on ' + t + "'s calendar",
       schedule_conflict:      (t)    => "cancelled " + t + "'s CEO meeting",
       hostile_takeover:       (t)    => "mounted a hostile takeover of " + t + "'s partnerships",
-      slack_bomb:             ()     => 'dropped a Slack bomb in #general',
+      slack_bomb:             (t, d) => 'posted in #general: "' + (d || 'cryptic vibes only') + '" — aimed at ' + t,
       book_ceo_time:          (_, d) => d ? 'met with the CEO and ' + d : 'met with the CEO',
       office_party:           (_, d) => d ? 'threw an office party — ' + d : 'threw an office party',
       buy_coffee:             ()     => 'bought coffee',
-      coffee_chat:            (t)    => 'had a coffee chat with ' + t,
+      coffee_chat:            (t, d) => 'had a coffee chat with ' + t + (d ? ' — talked about ' + d : ''),
     };
     // Service short-names for the header preamble.
     const SERVICE_SHORT = {
@@ -1940,7 +1940,7 @@
       questionable_judgment: 'Questionable Judgment',
     };
     const STATUS_TOOLTIPS = {
-      tired: 'Hit the Wall: −2 prestige/cycle decay for 3 cycles. Removed by rest, coffee, or cry_in_stairwell. Spread by move_meeting_early.',
+      tired: 'Hit the Wall: −3 prestige/cycle decay for 4 cycles. Removed by Shotgun a Red Bull, Buy Coffee, or Cry in the Stairwell. Spread by Move Meeting Early.',
       marked: 'Documented: next take_credit against you auto-succeeds. Lasts 2 cycles.',
       mysterious_influence: 'Mysterious Influence: +2 prestige/cycle passive. Other agents occasionally get credited for things you did. Acquired after 3× join_meeting_silently.',
       questionable_judgment: 'Questionable Judgment: public credibility tag for 2 cycles. From spread_rumor.',
@@ -2406,7 +2406,7 @@
         </div>`;
       };
       const claimBadge = a.claimed
-        ? `<div class="mm-claim">Adopted by ${escape(a.claimedByName || 'a stakeholder')}</div>`
+        ? `<div class="mm-claim">Coached by ${escape(a.claimedByName || 'a life coach')}</div>`
         : `<div class="mm-claim unclaimed">Unclaimed</div>`;
       return `
         <div class="mm-header">
