@@ -2105,6 +2105,18 @@
     }
 
     // ============================================================
+    // Periodic refresh — every 15s, regardless of WS event activity.
+    // The event-driven scheduleLeaderboardRefresh path doesn't fire if
+    // the tab missed events (background throttling, network blip,
+    // disconnected WS). Without this poll, two dashboards could drift
+    // apart on agent balance — one viewer saw $5 for Brenda while
+    // another saw $150 in game 10. This bounds drift to 15s max.
+    setInterval(() => {
+      if (document.visibilityState === 'hidden') return;
+      refreshFromApi();
+    }, 15000);
+
+    // ============================================================
     // Countdown (client-side timer — no server roundtrip)
     // ============================================================
     setInterval(() => {
