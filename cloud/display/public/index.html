@@ -2072,14 +2072,18 @@
       // handles clicks via data-agent-id.
       const isYours = !!(myCoachedAgent && a.id === myCoachedAgent);
       const yoursClass = isYours ? ' yours-row' : '';
-      const yoursTag = isYours
+      // Coach affordance — single source per row to keep the line tight.
+      // YOURS supplants the coach-name pill on your own row (the gold inset
+      // stripe + YOURS already tell you it's yours; the coach's literal name
+      // would just be your own).
+      const coachAffix = isYours
         ? ' <span class="yours-tag" title="This is the manager you\'re coaching">🎙 YOURS</span>'
-        : '';
+        : (a.claimedByName ? ' · <span class="title-coach">🎙 ' + escape(a.claimedByName) + '</span>' : '');
       return '<div class="manager-row rank-' + rank + (isWinner ? ' winner' : '') + yoursClass + '" data-agent-id="' + a.id + '" title="Click for character summary">'
         + '<div class="rank">' + rank + '</div>'
         + '<div class="manager-identity">'
-        +   '<div class="name">' + namePrefix + escape(a.name) + yoursTag + '</div>'
-        +   '<div class="title">' + escape(a.title) + (a.claimedByName ? ' · <span class="title-coach">🎙 ' + escape(a.claimedByName) + '</span>' : '') + '</div>'
+        +   '<div class="name">' + namePrefix + escape(a.name) + '</div>'
+        +   '<div class="title">' + escape(a.title) + coachAffix + '</div>'
         +   (traitText ? '<div class="traits">' + traitText + '</div>' : '')
         +   (badges ? '<div class="badges">' + badges + '</div>' : '')
         + '</div>'
