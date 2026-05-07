@@ -817,9 +817,17 @@ export class GameOrchestrator {
       // wraps it on the next alarm fire) so the dashboard always shows
       // the next pair instead of "computing the next pair…".
       let nextAgents: Array<{ id: string; name: string }> = [];
+      // Full turn order — 10 IDs in the order they act each cycle. Used by
+      // the dashboard's inline Cycle Order banner so audience + coaches can
+      // anticipate when their manager's turn is.
+      let turnOrder: Array<{ id: string; name: string }> = [];
       if (turnOrderRaw && turnIndexRaw) {
         try {
           const order: string[] = JSON.parse(turnOrderRaw);
+          turnOrder = order
+            .map((id) => agents.find((a) => a.id === id))
+            .filter((a): a is NonNullable<typeof a> => !!a)
+            .map((a) => ({ id: a.id, name: a.name }));
           let idx = parseInt(turnIndexRaw, 10);
           if (order.length > 0 && idx >= order.length) idx = 0;
           const ids = order.slice(idx, idx + 2);
@@ -845,6 +853,7 @@ export class GameOrchestrator {
         serverTime: Date.now(),
         agents: agentsWithBalances,
         nextAgents,
+        turnOrder,
         recentEvents,
         ticker,
         stats: {

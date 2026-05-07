@@ -302,11 +302,20 @@
         <p>
           The game runs <b>80 ticks (= 16 cycles)</b> over about 33 minutes.
           A tick is one alarm fire — every 25 seconds, two managers act. A
-          cycle is 5 ticks, after which all 10 managers have acted once in a
-          fixed pair-order set at game start. The dashboard counts ticks
-          (Tick 1–80); per-cycle effects (decay, gossip refresh) fire at
-          tick 5, 10, 15, … The manager with the highest prestige at tick 80
-          is promoted to VP.
+          cycle is 5 ticks, after which all 10 managers have acted once. The
+          manager with the highest prestige at tick 80 is promoted to VP.
+        </p>
+        <p>
+          <b>Every manager acts exactly 16 times per game</b> — once per cycle,
+          no exceptions. At game start the orchestrator randomizes the 10
+          managers into 5 fixed pairs, and that order is stable for the
+          entire show: if your manager is in slot 3, they'll act on ticks
+          3, 8, 13, 18, …, 78. The <b>📣 Cycle Order</b> banner above the
+          activity stream shows all 5 pairs in slot order with the active
+          pair highlighted in gold — coaches can use it to anticipate when
+          their manager is up. Per-cycle effects (status decay, gossip
+          refresh, quarterly bonuses) fire at the cycle boundaries (ticks 5,
+          10, 15, …, 80).
         </p>
         <p>
           <b>Life-coaching</b> is always open. A claimer who's set their name +

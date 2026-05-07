@@ -278,6 +278,7 @@
       align-items: center;
       gap: 12px;
       box-shadow: 0 1px 3px rgba(0,0,0,0.15);
+      flex-wrap: wrap;
     }
     .up-next .label {
       font-size: 10px;
@@ -289,9 +290,47 @@
     .up-next .names {
       font-weight: 700;
       color: var(--navy-text);
-      font-size: 14px;
+      font-size: 13px;
+      opacity: 0.85;
     }
     .up-next.empty { display: none; }
+
+    /* 5-pair cycle order strip — shows all 5 fixed pairs in slot order,
+       highlights the pair currently up next in gold. Renders inline in
+       the up-next banner. */
+    .cycle-pairs {
+      display: flex;
+      gap: 6px;
+      flex: 1;
+      flex-wrap: wrap;
+      min-width: 0;
+    }
+    .cycle-pair {
+      flex: 1;
+      min-width: 110px;
+      background: rgba(255,255,255,0.08);
+      border: 1px solid rgba(255,255,255,0.12);
+      border-radius: 3px;
+      padding: 4px 8px;
+      font-size: 11px;
+      line-height: 1.3;
+      color: rgba(255,255,255,0.7);
+      transition: background 0.15s, border-color 0.15s, color 0.15s;
+    }
+    .cycle-pair .slot-num {
+      font-size: 9px;
+      letter-spacing: 1.2px;
+      text-transform: uppercase;
+      opacity: 0.6;
+      margin-right: 4px;
+    }
+    .cycle-pair.active {
+      background: #f1c40f;
+      border-color: #f1c40f;
+      color: var(--navy);
+      font-weight: 700;
+    }
+    .cycle-pair.active .slot-num { color: var(--navy); opacity: 0.85; }
 
     /* Tx ticker column */
     .tx-ticker-col {
@@ -1220,6 +1259,11 @@
       <div class="kpi-value"><span id="cycle">0</span><span class="kpi-suffix">/80</span></div>
     </div>
     <div class="kpi-tile state-tile">
+      <div class="kpi-label">Cycle</div>
+      <div class="kpi-sublabel" aria-hidden="true">&nbsp;</div>
+      <div class="kpi-value"><span id="cycle-num">0</span><span class="kpi-suffix">/16</span></div>
+    </div>
+    <div class="kpi-tile state-tile">
       <div class="kpi-label">Status</div>
       <div class="kpi-sublabel">Game Cycle State</div>
       <div class="kpi-value status-value" id="status">Initializing</div>
@@ -1253,8 +1297,9 @@
         </span>
       </div>
       <div class="up-next empty" id="up-next">
-        <span class="label">📣 Up Next:</span>
+        <span class="label">📣 Cycle Order:</span>
         <span class="names" id="up-next-names"></span>
+        <div class="cycle-pairs" id="cycle-pairs"></div>
       </div>
       <div class="stream" id="stream">
         <div class="empty-state">Waiting for the first cycle to begin…</div>
@@ -1456,14 +1501,17 @@
       if (data.maxTicks) maxTicks = data.maxTicks;
       currentTick = data.tick;
       currentStatus = data.status;
-      // Up Next banner — must run AFTER currentStatus is set, since syncUpNext
-      // branches on it for placeholder copy ("awaiting kickoff" vs "computing…").
+      // Up Next banner — must run AFTER currentStatus AND lastTurnOrder are set,
+      // since syncUpNext branches on currentStatus for placeholder copy and on
+      // lastTurnOrder to render the 5-pair cycle strip.
+      lastTurnOrder = Array.isArray(data.turnOrder) ? data.turnOrder : [];
       syncUpNext(data.nextAgents || []);
       nextAlarmAt = data.nextAlarmAt ?? null;
       tickInFlight = !!data.tickInFlight;
       if (typeof data.serverTime === 'number') clockSkewMs = Date.now() - data.serverTime;
       lastTickStartMs = Date.now(); // fallback for fresh load if nextAlarmAt is missing
       document.getElementById('cycle').textContent = data.tick;
+      document.getElementById('cycle-num').textContent = String(Math.max(1, Math.ceil((data.tick || 0) / 5)) || 0);
       document.getElementById('status').textContent = humanStatus(data.status);
       maybeShowHaltOverlay(data.status, data.tick);
 
@@ -1504,6 +1552,7 @@
         currentTick = event.tick;
         lastTickStartMs = Date.now();
         document.getElementById('cycle').textContent = currentTick;
+        document.getElementById('cycle-num').textContent = String(Math.max(1, Math.ceil(currentTick / 5)));
         document.getElementById('banner').classList.remove('tick-pulse');
         // force reflow to restart animation
         void document.getElementById('banner').offsetWidth;
@@ -2011,10 +2060,32 @@
     function syncUpNext(nextAgents) {
       const banner = document.getElementById('up-next');
       const namesEl = document.getElementById('up-next-names');
-      if (!banner || !namesEl) return;
-      // Always show the banner so the slot is visible — placeholder copy
-      // when the game isn't actively about to fire the next pair.
+      const pairsEl = document.getElementById('cycle-pairs');
+      if (!banner || !namesEl || !pairsEl) return;
       banner.classList.remove('empty');
+
+      // When we know the full 10-manager shuffle, render 5 fixed pairs and
+      // highlight whichever pair is up next. Otherwise fall back to a status
+      // line so the banner slot stays visible.
+      const haveOrder = Array.isArray(lastTurnOrder) && lastTurnOrder.length === 10;
+      const nextIds = new Set((nextAgents || []).map(a => a.id));
+      if (haveOrder && currentStatus === 'running') {
+        namesEl.textContent = '';
+        const pairs = [];
+        for (let i = 0; i < 5; i++) {
+          pairs.push([lastTurnOrder[i * 2], lastTurnOrder[i * 2 + 1]]);
+        }
+        pairsEl.innerHTML = pairs.map((pair, idx) => {
+          const isActive = pair.some(p => p && nextIds.has(p.id));
+          const names = pair.map(p => p ? escape(p.name.split(' ')[0]) : '?').join(' & ');
+          return `<div class="cycle-pair${isActive ? ' active' : ''}">`
+               + `<span class="slot-num">${idx + 1}</span>${names}`
+               + `</div>`;
+        }).join('');
+        return;
+      }
+
+      pairsEl.innerHTML = '';
       if (nextAgents && nextAgents.length > 0 && currentStatus === 'running') {
         namesEl.textContent = nextAgents.map(a => a.name).join(' & ');
       } else if (currentStatus === 'running') {
@@ -2099,11 +2170,14 @@
         tickInFlight = !!data.tickInFlight;
         if (typeof data.serverTime === 'number') clockSkewMs = Date.now() - data.serverTime;
         document.getElementById('cycle').textContent = data.tick;
+        document.getElementById('cycle-num').textContent = String(Math.max(1, Math.ceil((data.tick || 0) / 5)) || 0);
         document.getElementById('status').textContent = humanStatus(data.status);
         maybeShowHaltOverlay(data.status, data.tick);
         renderLeaderboard(data.agents);
         setKpis(data.stats.totalAmountMoved, data.stats.totalTransactions, data.stats.avgSettlementTime, data.agents.length);
         // Up Next banner: refresh on every tick so the next pair stays current.
+        // Order matters — syncUpNext reads lastTurnOrder for the pair strip.
+        lastTurnOrder = Array.isArray(data.turnOrder) ? data.turnOrder : lastTurnOrder;
         syncUpNext(data.nextAgents || []);
       } catch (e) { /* network blip; next event will retry */ }
     }
@@ -2259,6 +2333,11 @@
         closeAlliancesModal();
       }
     });
+
+    // Cached from /api/state on every refresh — used to render the
+    // 5-pair Cycle Order banner. Empty until the orchestrator shuffles
+    // the pairs at game start.
+    let lastTurnOrder = [];
 
     // ============================================================
     // Activity stream filter
