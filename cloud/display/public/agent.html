@@ -84,7 +84,10 @@
     .agent-title { color: var(--text-muted); font-size: 14px; letter-spacing: 0.3px; }
     .agent-id { font-family: monospace; font-size: 11px; color: var(--text-faint); margin-top: 4px; }
 
-    .stat-strip { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-bottom: 18px; }
+    /* 2×2 grid (Prestige + Budget on top, Rank + Allies below). Was a single
+       row of 4 but the narrower right-column profile (320px) caused them
+       to overflow the panel. */
+    .stat-strip { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; margin-bottom: 18px; }
     .stat-tile { background: #f8fafc; border: 1px solid var(--border); padding: 10px 12px; text-align: center; }
     .stat-label { font-size: 10px; text-transform: uppercase; letter-spacing: 1px; color: var(--text-muted); }
     .stat-value { font-size: 22px; font-weight: 700; color: var(--navy); font-variant-numeric: tabular-nums; }
