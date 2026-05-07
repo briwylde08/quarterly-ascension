@@ -29,10 +29,40 @@
       margin: 28px auto 60px;
       padding: 0 24px;
       display: grid;
-      grid-template-columns: 1fr 380px;
+      /* Left column (wide): coach panel + recent activity — what the coach
+         actually acts on. Right column (compressed): manager profile —
+         reference info. Reversed from earlier layout where profile dominated. */
+      grid-template-columns: 1fr 320px;
       gap: 24px;
     }
     @media (max-width: 880px) { .layout { grid-template-columns: 1fr; } }
+
+    /* Directive-alignment badges per recent action so the coach can scan
+       "did Brenda listen this time?" without reading every reasoning quote. */
+    .align-badge {
+      display: inline-block;
+      font-size: 10px;
+      font-weight: 700;
+      padding: 2px 7px;
+      border-radius: 999px;
+      letter-spacing: 0.4px;
+      text-transform: uppercase;
+      margin-left: 6px;
+      vertical-align: middle;
+    }
+    .align-badge.followed { background: #d4f4dd; color: #186a3b; border: 1px solid #74c47e; }
+    .align-badge.tilted   { background: #fef5e7; color: #936300; border: 1px solid #f1c40f; }
+    .align-badge.defied   { background: #fadbd8; color: #922b21; border: 1px solid #e8786a; }
+    .activity-directive {
+      font-size: 11px;
+      color: var(--text-muted);
+      margin-top: 4px;
+      padding: 4px 8px;
+      background: rgba(0,0,0,0.025);
+      border-left: 2px solid var(--border);
+      border-radius: 2px;
+    }
+    .activity-directive .label { font-weight: 700; color: var(--text); margin-right: 4px; }
 
     .panel { background: var(--panel); border: 1px solid var(--border); box-shadow: var(--shadow); }
     .panel-head { background: var(--panel-head); color: var(--navy); padding: 10px 16px; font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: 1px; border-bottom: 1px solid var(--border); }
@@ -197,20 +227,20 @@
   </header>
 
   <main class="layout">
-    <section class="panel">
-      <div class="panel-head">Manager Profile</div>
-      <div class="panel-body" id="profile-body">
-        <div style="text-align:center;padding:40px 0;color:var(--text-faint)">Loading…</div>
-      </div>
-    </section>
-
-    <aside id="side-col" style="display:flex;flex-direction:column;gap:16px;">
+    <section id="side-col" style="display:flex;flex-direction:column;gap:16px;">
       <div id="claim-area"></div>
       <div id="coach-area"></div>
       <section class="panel">
         <div class="panel-head">Recent Activity</div>
         <div class="activity-list" id="activity-list"></div>
       </section>
+    </section>
+
+    <aside class="panel">
+      <div class="panel-head">Manager Profile</div>
+      <div class="panel-body" id="profile-body">
+        <div style="text-align:center;padding:40px 0;color:var(--text-faint)">Loading…</div>
+      </div>
     </aside>
   </main>
 
@@ -365,19 +395,37 @@
         list.innerHTML = '<div style="padding:18px;color:var(--text-faint);font-size:12px;">No recent activity yet.</div>';
         return;
       }
-      list.innerHTML = actions.map((a) => {
+      // Newest first — coaches scan the top of the list to see "what just
+      // happened with my last directive."
+      const sorted = actions.slice().sort((a, b) => b.tick - a.tick);
+      list.innerHTML = sorted.map((a) => {
         const pc = a.prestigeChange;
-        const badge = pc > 0
+        const prestigeBadge = pc > 0
           ? `<span class="activity-prestige up">+${pc}</span>`
           : pc < 0
             ? `<span class="activity-prestige down">${pc}</span>`
             : '';
+        // Directive-alignment badge: LLM self-rated whether it followed,
+        // tilted from, or defied the active directive at the time of action.
+        // Only renders when a directive was actually in flight.
+        const align = a.directiveAlignment;
+        const alignBadge = align === 'followed'
+          ? `<span class="align-badge followed" title="The agent followed your directive.">✓ Followed</span>`
+          : align === 'tilted'
+            ? `<span class="align-badge tilted" title="The agent did something related to your directive but flavored by their personality / situation.">〰 Tilted</span>`
+            : align === 'defied'
+              ? `<span class="align-badge defied" title="The agent ignored your directive and did their own thing.">✘ Defied</span>`
+              : '';
+        const directiveBlock = a.directiveAtAction
+          ? `<div class="activity-directive"><span class="label">Directive:</span>"${escape(a.directiveAtAction)}"</div>`
+          : '';
         return `
           <div class="activity-row">
-            <div class="activity-tick">cycle ${a.tick}</div>
-            <div><span class="activity-action">${escape(a.actionType)}</span>${badge}</div>
+            <div class="activity-tick">tick ${a.tick}</div>
+            <div><span class="activity-action">${escape(a.actionType)}</span>${prestigeBadge}${alignBadge}</div>
             <div class="activity-outcome">${escape(a.outcome || '')}</div>
             ${a.reasoning ? `<div class="activity-reasoning">"${escape(a.reasoning)}"</div>` : ''}
+            ${directiveBlock}
           </div>`;
       }).join('');
     }

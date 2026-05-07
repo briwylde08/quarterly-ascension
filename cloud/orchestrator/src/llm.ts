@@ -400,7 +400,8 @@ ${agent.statusEffects.some((s) => s.type === "technical_difficulties") ? "WARNIN
 Respond with ONLY a single JSON object — no prose, no code fences — matching this shape:
 {
   "reasoning": "<2-3 sentences, in character>",
-  "action": {"type": "<one of the action types above>", "target": "<id, only if the action requires a target>"}
+  "action": {"type": "<one of the action types above>", "target": "<id, only if the action requires a target>"}${directive ? `,
+  "directiveAlignment": "<one of: 'followed' (you did what your life coach asked) | 'tilted' (you did something related to the directive but bent by your personality / situation) | 'defied' (you ignored the directive and did your own thing)>"` : ""}
 }
 
 Examples:
@@ -409,13 +410,18 @@ Examples:
 `;
 }
 
-function parseAction(response: string, agent: Agent): { action: Action; reasoning: string } {
+function parseAction(response: string, agent: Agent): { action: Action; reasoning: string; directiveAlignment?: string } {
   try {
     const parsed = JSON.parse(response);
     if (parsed?.action?.type) {
+      // directiveAlignment is only valid when the LLM had a directive in the prompt.
+      // Sanitize to one of the three known values; anything else → undefined.
+      const rawAlign = typeof parsed.directiveAlignment === "string" ? parsed.directiveAlignment.toLowerCase().trim() : undefined;
+      const alignment = (rawAlign === "followed" || rawAlign === "tilted" || rawAlign === "defied") ? rawAlign : undefined;
       return {
         action: parsed.action as Action,
         reasoning: typeof parsed.reasoning === "string" ? parsed.reasoning : "",
+        directiveAlignment: alignment,
       };
     }
   } catch { /* fall through */ }
@@ -552,7 +558,7 @@ export async function getAgentDecision(
   agent: Agent,
   currentTick: number,
   tickCtx: TickCtx
-): Promise<{ action: Action; reasoning: string }> {
+): Promise<{ action: Action; reasoning: string; directiveAlignment?: string; directiveAtAction?: string }> {
   const persona = getPersona(agent.personaId);
   if (!persona) {
     return { action: { type: "work" }, reasoning: "No persona found" };
@@ -620,7 +626,7 @@ export async function getAgentDecision(
       return { action: { type: "work" }, reasoning: "Empty response" };
     }
 
-    const { action, reasoning } = parseAction(content, agent);
+    const { action, reasoning, directiveAlignment } = parseAction(content, agent);
 
     const validation = validateAction(action, agent, balance, allAgents);
     if (!validation.valid) {
@@ -631,7 +637,15 @@ export async function getAgentDecision(
       };
     }
 
-    return { action, reasoning };
+    // Only attach alignment + directive snapshot when there WAS a directive in
+    // play — coaches only care if they actually gave one, and the LLM was only
+    // asked to self-rate when one was present in the prompt.
+    return {
+      action,
+      reasoning,
+      directiveAlignment: directive ? directiveAlignment : undefined,
+      directiveAtAction: directive ?? undefined,
+    };
   } catch (error) {
     console.error(`LLM error for ${agent.name}:`, error);
     return { action: { type: "work" }, reasoning: "LLM error, defaulting to work" };

@@ -519,6 +519,8 @@ export class GameOrchestrator {
           reasoning: r.reasoning,
           prestigeChange: r.prestige_change,
           txHash: r.tx_hash,
+          directiveAlignment: r.directive_alignment,
+          directiveAtAction: r.directive_at_action,
         })),
       });
     }

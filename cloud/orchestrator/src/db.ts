@@ -274,12 +274,14 @@ export class Db {
     reasoning: string,
     outcome: string,
     prestigeChange: number,
-    txHash?: string
+    txHash?: string,
+    directiveAlignment?: string,
+    directiveAtAction?: string
   ): Promise<void> {
     await this.db
       .prepare(
-        `INSERT INTO action_logs (tick, agent_id, action_type, action_data, reasoning, outcome, prestige_change, tx_hash)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
+        `INSERT INTO action_logs (tick, agent_id, action_type, action_data, reasoning, outcome, prestige_change, tx_hash, directive_alignment, directive_at_action)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
       )
       .bind(
         tick,
@@ -289,7 +291,9 @@ export class Db {
         reasoning,
         outcome,
         prestigeChange,
-        txHash ?? null
+        txHash ?? null,
+        directiveAlignment ?? null,
+        directiveAtAction ?? null
       )
       .run();
   }

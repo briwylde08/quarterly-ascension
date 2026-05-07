@@ -327,19 +327,19 @@ export async function processTick(deps: TickDeps, activeAgentIds?: string[]): Pr
   const actingAgents = activeAgentIds && activeAgentIds.length > 0
     ? activeAgentIds.map((id) => agentById.get(id)).filter((a): a is Agent => !!a)
     : freshAgents;
-  const decisions: { agent: Agent; action: Action; reasoning: string }[] = [];
+  const decisions: { agent: Agent; action: Action; reasoning: string; directiveAlignment?: string; directiveAtAction?: string }[] = [];
 
   for (const agent of actingAgents) {
-    const { action, reasoning } = await getAgentDecision(llm, agent, tick, tickCtx);
-    decisions.push({ agent, action, reasoning });
-    console.log(`${agent.name}: ${action.type}${("target" in action) ? ` → ${action.target}` : ""}`);
+    const { action, reasoning, directiveAlignment, directiveAtAction } = await getAgentDecision(llm, agent, tick, tickCtx);
+    decisions.push({ agent, action, reasoning, directiveAlignment, directiveAtAction });
+    console.log(`${agent.name}: ${action.type}${("target" in action) ? ` → ${action.target}` : ""}${directiveAlignment ? ` [${directiveAlignment}]` : ""}`);
   }
 
   // Phase 4: execute decisions. Retreat mode has no singleton actions
   // (team_lunch was the only one and is cut). Each agent's choice runs as-is.
   const SERVICE_URLS = buildServiceUrls(npcBase);
-  for (const { agent, action, reasoning } of decisions) {
-    await executeAction(deps, SERVICE_URLS, agent, action, reasoning, tick);
+  for (const { agent, action, reasoning, directiveAlignment, directiveAtAction } of decisions) {
+    await executeAction(deps, SERVICE_URLS, agent, action, reasoning, tick, directiveAlignment, directiveAtAction);
   }
 
   // Phase 4b: Mysterious Influence misattribution. After each agent acts,
@@ -592,7 +592,9 @@ async function executeAction(
   agent: Agent,
   action: Action,
   reasoning: string,
-  tick: number
+  tick: number,
+  directiveAlignment?: string,
+  directiveAtAction?: string
 ): Promise<void> {
   const { db, emit, stellar, rewards } = deps;
 
@@ -956,7 +958,7 @@ async function executeAction(
     outcome = `Error: ${err instanceof Error ? err.message : "Unknown error"}`;
   }
 
-  await db.logAction(tick, agent.id, action.type, action, reasoning, outcome, prestigeChange, txHash);
+  await db.logAction(tick, agent.id, action.type, action, reasoning, outcome, prestigeChange, txHash, directiveAlignment, directiveAtAction);
 
   const HANDLER_EMITS_OWN: Set<Action["type"]> = new Set([
     "accept_alliance",
