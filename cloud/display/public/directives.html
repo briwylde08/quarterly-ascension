@@ -36,7 +36,18 @@
       align-items: center;
       justify-content: space-between;
       border-bottom: 4px solid var(--gold);
+      flex-wrap: wrap;
+      gap: 14px;
     }
+    .header .nav-links a {
+      color: rgba(255,255,255,0.85);
+      margin-left: 14px;
+      text-decoration: none;
+      font-size: 13px;
+      letter-spacing: 0.4px;
+    }
+    .header .nav-links a:hover { color: #ffffff; text-decoration: underline; }
+    .header .nav-links a:first-child { margin-left: 0; }
     .header .title {
       font-size: 28px;
       font-weight: 700;
@@ -184,8 +195,14 @@
 <body>
   <div class="header">
     <div class="title">⏱ Live Life-Coach Directives</div>
+    <div class="nav-links">
+      <a href="/">📊 Dashboard</a>
+      <a href="/intro.html">🧑‍💼 Be a Life Coach</a>
+      <a href="/handbook.html">📖 Handbook</a>
+      <a href="/directives.html">🎙 Life Coaching</a>
+    </div>
     <div class="meta">
-      Cycle <b id="hdr-cycle">—</b> / 8
+      Tick <b id="hdr-cycle">—</b> / 80
       <span style="margin-left:18px;">refreshes every 5s</span>
     </div>
   </div>
