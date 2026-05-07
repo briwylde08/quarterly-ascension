@@ -404,6 +404,10 @@
       font-size: 10px;
       color: var(--text-muted);
     }
+    .manager-identity .title-coach {
+      color: var(--navy);
+      font-weight: 600;
+    }
     /* Trait line hidden in the leaderboard row to save vertical space — still
        surfaced in the click-modal for anyone who wants the detail. */
     .manager-identity .traits { display: none; }
@@ -1963,7 +1967,7 @@
         + '<div class="rank">' + rank + '</div>'
         + '<div class="manager-identity">'
         +   '<div class="name">' + namePrefix + escape(a.name) + '</div>'
-        +   '<div class="title">' + escape(a.title) + '</div>'
+        +   '<div class="title">' + escape(a.title) + (a.claimedByName ? ' · <span class="title-coach">🎙 ' + escape(a.claimedByName) + '</span>' : '') + '</div>'
         +   (traitText ? '<div class="traits">' + traitText + '</div>' : '')
         +   (badges ? '<div class="badges">' + badges + '</div>' : '')
         + '</div>'

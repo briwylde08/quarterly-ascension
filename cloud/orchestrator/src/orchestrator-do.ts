@@ -805,6 +805,7 @@ export class GameOrchestrator {
           balance: await stellar.getAssetBalance(a.publicKey),
           statusEffects: a.statusEffects,
           allies: a.allies,
+          claimedByName: a.claimedByName ?? null,
           explorerUrl: stellar.getExplorerAccountUrl(a.publicKey),
         }))
       );
