@@ -390,7 +390,6 @@
         tile.href = `/agent.html?id=${encodeURIComponent(a.id)}`;
         const photoUrl = `/images/${encodeURIComponent(a.name)}.png`;
         tile.innerHTML = `
-          ${claimed ? `<div class="claimed-badge">Coached</div>` : ''}
           <div class="agent-photo">
             <img src="${photoUrl}" alt="${escape(a.name)}" loading="lazy" onerror="this.style.display='none'">
           </div>
