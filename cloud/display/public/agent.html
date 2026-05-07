@@ -29,10 +29,10 @@
       margin: 28px auto 60px;
       padding: 0 24px;
       display: grid;
-      /* Left column (wide): coach panel + recent activity — what the coach
-         actually acts on. Right column (compressed): manager profile —
-         reference info. Reversed from earlier layout where profile dominated. */
-      grid-template-columns: 1fr 320px;
+      /* Left column (compressed): manager profile — reference info.
+         Right column (wide): coach panel + recent activity — what the
+         coach actually acts on. */
+      grid-template-columns: 320px 1fr;
       gap: 24px;
     }
     @media (max-width: 880px) { .layout { grid-template-columns: 1fr; } }
@@ -232,6 +232,13 @@
   </header>
 
   <main class="layout">
+    <aside class="panel">
+      <div class="panel-head">Manager Profile</div>
+      <div class="panel-body" id="profile-body">
+        <div style="text-align:center;padding:40px 0;color:var(--text-faint)">Loading…</div>
+      </div>
+    </aside>
+
     <section id="side-col" style="display:flex;flex-direction:column;gap:16px;">
       <div id="claim-area"></div>
       <div id="coach-area"></div>
@@ -240,13 +247,6 @@
         <div class="activity-list" id="activity-list"></div>
       </section>
     </section>
-
-    <aside class="panel">
-      <div class="panel-head">Manager Profile</div>
-      <div class="panel-body" id="profile-body">
-        <div style="text-align:center;padding:40px 0;color:var(--text-faint)">Loading…</div>
-      </div>
-    </aside>
   </main>
 
   <script>
