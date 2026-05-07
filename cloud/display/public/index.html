@@ -1557,6 +1557,10 @@
         // force reflow to restart animation
         void document.getElementById('banner').offsetWidth;
         document.getElementById('banner').classList.add('tick-pulse');
+        // Advance the Cycle Order highlight to the pair that just started
+        // acting — pair index = (tick - 1) % 5. Without this, the gold pill
+        // wouldn't move until the next periodic state poll (~15s later).
+        syncUpNext([]);
       }
 
       // Paid action: merge into existing pending/settled entry by tx hash.
@@ -2065,18 +2069,22 @@
       banner.classList.remove('empty');
 
       // When we know the full 10-manager shuffle, render 5 fixed pairs and
-      // highlight whichever pair is up next. Otherwise fall back to a status
-      // line so the banner slot stays visible.
+      // highlight the pair that's currently acting / most recently acted.
+      // Pair index = (tick - 1) % 5 — tick 1 fires pair 0, tick 5 fires pair 4,
+      // tick 6 wraps back to pair 0, etc. Derive from tick (not nextAgents)
+      // because the orchestrator advances turn_index at the *start* of a tick,
+      // so nextAgents already points to the *next* pair while the current pair
+      // is still mid-action — which made the highlight skip ahead.
       const haveOrder = Array.isArray(lastTurnOrder) && lastTurnOrder.length === 10;
-      const nextIds = new Set((nextAgents || []).map(a => a.id));
       if (haveOrder && currentStatus === 'running') {
         namesEl.textContent = '';
         const pairs = [];
         for (let i = 0; i < 5; i++) {
           pairs.push([lastTurnOrder[i * 2], lastTurnOrder[i * 2 + 1]]);
         }
+        const activeIdx = currentTick > 0 ? ((currentTick - 1) % 5) : 0;
         pairsEl.innerHTML = pairs.map((pair, idx) => {
-          const isActive = pair.some(p => p && nextIds.has(p.id));
+          const isActive = idx === activeIdx;
           const names = pair.map(p => p ? escape(p.name.split(' ')[0]) : '?').join(' & ');
           return `<div class="cycle-pair${isActive ? ' active' : ''}">`
                + `<span class="slot-num">${idx + 1}</span>${names}`
