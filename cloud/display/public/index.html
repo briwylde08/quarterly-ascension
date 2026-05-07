@@ -1371,7 +1371,10 @@
     // row involving that manager (acted or targeted) in gold. Lets each
     // coach see "their" manager pop on a shared dashboard URL.
     // ============================================================
-    const myCoachedAgent = new URLSearchParams(location.search).get('coach') || null;
+    // mutable: validateCoachClaim() may null this out if the localStorage-
+    // derived ?coach=<id> points at an agent that's no longer claimed in
+    // the DB (e.g., after a game reset wiped claims).
+    let myCoachedAgent = new URLSearchParams(location.search).get('coach') || null;
     function applyCoachHighlight(row) {
       if (!myCoachedAgent || !row || !row.dataset) return;
       const a = row.dataset.agentId;
@@ -1943,6 +1946,18 @@
     function renderLeaderboard(agents) {
       const sorted = agents.slice().sort((a, b) => b.prestige - a.prestige);
       const lb = document.getElementById('leaderboard');
+
+      // Validate the localStorage-injected ?coach=<id>: if that agent isn't
+      // actually claimed in the DB (e.g., a game reset wiped claims but the
+      // browser still has the stale value cached), clear the cache and drop
+      // the highlight so dashboard + /intro stay in sync.
+      if (myCoachedAgent) {
+        const me = agents.find(a => a.id === myCoachedAgent);
+        if (!me || !me.claimedByName) {
+          try { localStorage.removeItem('qa.myCoachedAgent'); } catch {}
+          myCoachedAgent = null;
+        }
+      }
 
       // Surface the "You coach: X" pill once the agents list resolves
       // the coach's name. Stays hidden if no ?coach=<id> param or the
