@@ -1237,37 +1237,54 @@ export class GameOrchestrator {
         const target = opts.target ?? 200;
         const stellar = this.makeStellar();
         const agents = await db.getAllAgents();
-        const snapshot = await Promise.all(
-          agents.map(async (a) => ({ agent: a, balance: await stellar.getAssetBalance(a.publicKey) }))
-        );
         let burns = 0, mints = 0, failures = 0;
-        // Burns: parallel (different source accounts)
-        await Promise.all(
-          snapshot
-            .filter((e) => target - e.balance < -0.01)
-            .map(async (e) => {
-              const amount = Math.round((e.balance - target) * 100) / 100;
-              try {
-                await stellar.burn(e.agent.secretKey, amount);
-                burns++;
-              } catch (err) {
-                console.error(`[reset] burn failed for ${e.agent.name}:`, err);
-                failures++;
-              }
-            })
-        );
-        // Mints: sequential (single source = issuer; sequence number)
-        for (const e of snapshot) {
-          const amount = Math.round((target - e.balance) * 100) / 100;
-          if (amount <= 0.01) continue;
-          try {
-            await stellar.sendAsset(this.env.ASSET_ISSUER_SECRET, e.agent.publicKey, amount);
-            mints++;
-          } catch (err) {
-            console.error(`[reset] mint failed for ${e.agent.name}:`, err);
-            failures++;
+
+        // One pass = snapshot Horizon, burn what's over, mint what's under.
+        // We run TWO passes because the first snapshot can be stale: if a
+        // tick was just in flight, Stellar settles ~5s after submission, so
+        // a balance read taken too soon misses the in-flight payments and
+        // we under-correct. Pass 2 cleans up any residual drift, plus any
+        // CF edge-cached Horizon responses that lagged the first pass.
+        const runPass = async () => {
+          const snapshot = await Promise.all(
+            agents.map(async (a) => ({ agent: a, balance: await stellar.getAssetBalance(a.publicKey) }))
+          );
+          // Burns: parallel (different source accounts).
+          await Promise.all(
+            snapshot
+              .filter((e) => target - e.balance < -0.01)
+              .map(async (e) => {
+                const amount = Math.round((e.balance - target) * 100) / 100;
+                try {
+                  await stellar.burn(e.agent.secretKey, amount);
+                  burns++;
+                } catch (err) {
+                  console.error(`[reset] burn failed for ${e.agent.name}:`, err);
+                  failures++;
+                }
+              })
+          );
+          // Mints: sequential (single source = issuer; sequence number).
+          for (const e of snapshot) {
+            const amount = Math.round((target - e.balance) * 100) / 100;
+            if (amount <= 0.01) continue;
+            try {
+              await stellar.sendAsset(this.env.ASSET_ISSUER_SECRET, e.agent.publicKey, amount);
+              mints++;
+            } catch (err) {
+              console.error(`[reset] mint failed for ${e.agent.name}:`, err);
+              failures++;
+            }
           }
-        }
+        };
+
+        await runPass();
+        // Sleep long enough for testnet ledger close (~5–6s) so pass 2 sees
+        // pass 1's transactions, plus any settlements still landing from the
+        // pre-reset tick.
+        await new Promise((resolve) => setTimeout(resolve, 7000));
+        await runPass();
+
         normResult = { burns, mints, failures };
       }
     }
