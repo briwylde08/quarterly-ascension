@@ -65,6 +65,21 @@
       margin: 32px auto 60px;
       padding: 0 24px;
     }
+    /* In-fiction "this is the agents' handbook" framing — stamped header,
+       then a coach-facing note explaining what coaches are actually reading. */
+    .confidential-stamp {
+      display: inline-block;
+      background: #fadbd8;
+      color: #922b21;
+      border: 2px dashed #c0392b;
+      font-size: 10px;
+      font-weight: 700;
+      letter-spacing: 1.5px;
+      text-transform: uppercase;
+      padding: 4px 12px;
+      margin-bottom: 14px;
+      transform: rotate(-1deg);
+    }
     .doc h1 {
       font-size: 28px;
       color: var(--navy);
@@ -74,8 +89,27 @@
     .doc .subtitle {
       color: var(--text-muted);
       font-size: 13px;
-      margin-bottom: 24px;
+      margin-bottom: 18px;
       letter-spacing: 0.3px;
+      font-style: italic;
+    }
+    .audience-note {
+      background: #f3e8d8;
+      border-left: 3px solid #d4a02f;
+      padding: 12px 18px;
+      margin-bottom: 28px;
+      font-size: 13px;
+      line-height: 1.55;
+      color: var(--text);
+      border-radius: 3px;
+    }
+    .audience-note-label {
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: 1.5px;
+      font-weight: 700;
+      color: #8a6d2c;
+      margin-bottom: 6px;
     }
     .toc {
       background: var(--panel);
@@ -223,8 +257,18 @@
   </header>
 
   <div class="doc">
-    <h1>Employee Handbook &amp; Reference</h1>
-    <div class="subtitle">A comprehensive guide to corporate behaviors, deliverables, and disciplinary outcomes.</div>
+    <div class="confidential-stamp">📋 INTERNAL — Distributed to All Middle Managers</div>
+    <h1>MegaCorp Employee Handbook</h1>
+    <div class="subtitle">A comprehensive guide to corporate behaviors, deliverables, and disciplinary outcomes. Read in full at onboarding or be Documented.</div>
+
+    <div class="audience-note">
+      <div class="audience-note-label">👁️ Reading over their shoulder?</div>
+      This is the handbook every MegaCorp middle manager has internalized — the
+      <b>rules of the game from <em>their</em> perspective</b>. As a life coach, treat this
+      as your manager's mental model: their available actions, the threats they face,
+      and the incentive structures driving their behavior. Knowing what they know is
+      how you direct what they do.
+    </div>
 
     <div class="toc">
       <b>Contents:</b>
