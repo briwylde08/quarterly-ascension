@@ -477,6 +477,8 @@ export class GameOrchestrator {
       const rank = all.findIndex((a) => a.id === agent.id) + 1;
       const persona = getPersona(agent.personaId);
       const recentActions = await db.getRecentActionLogsForAgent(agent.id, 12);
+      const inboundEvents = await db.getEventsTargetingAgent(agent.id, 12);
+      const idToName = new Map(all.map((a) => [a.id, a.name]));
       const balance = await stellar.getAssetBalance(agent.publicKey);
       const gameStatus = await db.getGameStatus();
       const currentTick = await db.getCurrentTick();
@@ -521,6 +523,20 @@ export class GameOrchestrator {
           txHash: r.tx_hash,
           directiveAlignment: r.directive_alignment,
           directiveAtAction: r.directive_at_action,
+        })),
+        // Things done *to* this agent (target_id = me). Top-level events only
+        // — no sub-events — so the activity feed doesn't double-count one
+        // sabotage as multiple inbound rows.
+        inboundEvents: inboundEvents.map((e) => ({
+          tick: e.tick,
+          actorId: e.agentId ?? null,
+          actorName: e.agentId ? (idToName.get(e.agentId) || e.agentId) : null,
+          actionType: e.actionType,
+          description: e.description,
+          reasoning: e.reasoning,
+          // Note: prestigeChange on the event is the *actor's* delta; the
+          // target's hit lives in their separate prestige update (already
+          // reflected in the agent's current score).
         })),
       });
     }

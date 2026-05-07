@@ -122,8 +122,26 @@
     .activity-list { display: flex; flex-direction: column; gap: 0; max-height: 420px; overflow-y: auto; }
     .activity-row { padding: 10px 16px; border-bottom: 1px solid var(--border); font-size: 12px; }
     .activity-row:last-child { border-bottom: 0; }
+    /* Inbound row — something done *to* this manager. Red left edge + tinted
+       background so coaches can scan "what hit me" without reading every row. */
+    .activity-row.inbound { background: #fdf3f2; border-left: 3px solid #c0392b; }
+    .activity-row.inbound .activity-action { color: #922b21; }
+    .activity-direction {
+      display: inline-block;
+      font-size: 9px;
+      font-weight: 700;
+      letter-spacing: 1px;
+      text-transform: uppercase;
+      padding: 1px 6px;
+      border-radius: 2px;
+      margin-right: 6px;
+      vertical-align: middle;
+    }
+    .activity-direction.in  { background: #fadbd8; color: #922b21; }
+    .activity-direction.out { background: #e8f0f8; color: var(--navy); }
     .activity-tick { font-family: monospace; color: var(--text-faint); font-size: 10px; margin-bottom: 2px; }
     .activity-action { font-weight: 600; color: var(--navy); }
+    .activity-actor { font-weight: 700; color: #922b21; }
     .activity-outcome { color: var(--text); margin-top: 2px; line-height: 1.4; }
     .activity-reasoning { color: var(--text-muted); font-style: italic; margin-top: 4px; padding-top: 4px; border-top: 1px dashed var(--border); font-size: 11px; line-height: 1.4; }
     .activity-prestige { display: inline-block; padding: 1px 6px; font-size: 10px; font-weight: 700; border-radius: 2px; margin-left: 6px; }
@@ -325,7 +343,7 @@
       }
       const a = await res.json();
       renderProfile(a);
-      renderActivity(a.recentActions || []);
+      renderActivity(a.recentActions || [], a.inboundEvents || []);
       renderClaim(a);
       renderCoach(a);
       lastCoachWindowOpen = !!(a.coachingWindow && a.coachingWindow.open);
@@ -420,45 +438,64 @@
         </div>`;
     }
 
-    function renderActivity(actions) {
+    function renderActivity(actions, inbound) {
       const list = document.getElementById('activity-list');
-      if (actions.length === 0) {
+      const outboundRows = (actions || []).map((a) => ({ ...a, _dir: 'out' }));
+      const inboundRows = (inbound || []).map((e) => ({ ...e, _dir: 'in' }));
+      const merged = outboundRows.concat(inboundRows);
+      if (merged.length === 0) {
         list.innerHTML = '<div style="padding:18px;color:var(--text-faint);font-size:12px;">No recent activity yet.</div>';
         return;
       }
       // Newest first — coaches scan the top of the list to see "what just
-      // happened with my last directive."
-      const sorted = actions.slice().sort((a, b) => b.tick - a.tick);
-      list.innerHTML = sorted.map((a) => {
-        const pc = a.prestigeChange;
-        const prestigeBadge = pc > 0
-          ? `<span class="activity-prestige up">+${pc}</span>`
-          : pc < 0
-            ? `<span class="activity-prestige down">${pc}</span>`
-            : '';
-        // Directive-alignment badge: LLM self-rated whether it followed,
-        // tilted from, or defied the active directive at the time of action.
-        // Only renders when a directive was actually in flight.
-        const align = a.directiveAlignment;
-        const alignBadge = align === 'followed'
-          ? `<span class="align-badge followed" title="The agent followed your directive.">✓ Followed</span>`
-          : align === 'tilted'
-            ? `<span class="align-badge tilted" title="The agent did something related to your directive but flavored by their personality / situation.">〰 Tilted</span>`
-            : align === 'defied'
-              ? `<span class="align-badge defied" title="The agent ignored your directive and did their own thing.">✘ Defied</span>`
-              : '';
-        const directiveBlock = a.directiveAtAction
-          ? `<div class="activity-directive"><span class="label">Directive:</span>"${escape(a.directiveAtAction)}"</div>`
-          : '';
-        return `
-          <div class="activity-row">
-            <div class="activity-tick">tick ${a.tick}</div>
-            <div><span class="activity-action">${escape(a.actionType)}</span>${prestigeBadge}${alignBadge}</div>
-            <div class="activity-outcome">${escape(a.outcome || '')}</div>
-            ${a.reasoning ? `<div class="activity-reasoning">"${escape(a.reasoning)}"</div>` : ''}
-            ${directiveBlock}
-          </div>`;
+      // happened with my last directive" or "what just got done to me."
+      merged.sort((a, b) => b.tick - a.tick);
+      list.innerHTML = merged.map((row) => {
+        if (row._dir === 'in') return renderInboundRow(row);
+        return renderOutboundRow(row);
       }).join('');
+    }
+
+    function renderOutboundRow(a) {
+      const pc = a.prestigeChange;
+      const prestigeBadge = pc > 0
+        ? `<span class="activity-prestige up">+${pc}</span>`
+        : pc < 0
+          ? `<span class="activity-prestige down">${pc}</span>`
+          : '';
+      // Directive-alignment badge: LLM self-rated whether it followed, tilted
+      // from, or defied the active directive at the time of action. Only
+      // renders when a directive was actually in flight.
+      const align = a.directiveAlignment;
+      const alignBadge = align === 'followed'
+        ? `<span class="align-badge followed" title="The agent followed your directive.">✓ Followed</span>`
+        : align === 'tilted'
+          ? `<span class="align-badge tilted" title="The agent did something related to your directive but flavored by their personality / situation.">〰 Tilted</span>`
+          : align === 'defied'
+            ? `<span class="align-badge defied" title="The agent ignored your directive and did their own thing.">✘ Defied</span>`
+            : '';
+      const directiveBlock = a.directiveAtAction
+        ? `<div class="activity-directive"><span class="label">Directive:</span>"${escape(a.directiveAtAction)}"</div>`
+        : '';
+      return `
+        <div class="activity-row">
+          <div class="activity-tick">tick ${a.tick}</div>
+          <div><span class="activity-direction out" title="Action your manager took">→ Out</span><span class="activity-action">${escape(a.actionType)}</span>${prestigeBadge}${alignBadge}</div>
+          <div class="activity-outcome">${escape(a.outcome || '')}</div>
+          ${a.reasoning ? `<div class="activity-reasoning">"${escape(a.reasoning)}"</div>` : ''}
+          ${directiveBlock}
+        </div>`;
+    }
+
+    function renderInboundRow(e) {
+      const actionLabel = e.actionType || e.description || 'incoming';
+      return `
+        <div class="activity-row inbound">
+          <div class="activity-tick">tick ${e.tick}</div>
+          <div><span class="activity-direction in" title="Action another manager took against yours">← In</span><span class="activity-action">${escape(actionLabel)}</span><span style="color:var(--text-muted);"> from </span><span class="activity-actor">${escape(e.actorName || 'someone')}</span></div>
+          ${e.description ? `<div class="activity-outcome">${escape(e.description)}</div>` : ''}
+          ${e.reasoning ? `<div class="activity-reasoning">"${escape(e.reasoning)}"</div>` : ''}
+        </div>`;
     }
 
     function renderClaim(a) {

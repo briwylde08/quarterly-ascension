@@ -169,6 +169,23 @@ export class Db {
     return (result.results ?? []).map((r) => this.rowToEvent(r));
   }
 
+  /**
+   * Events where this agent is the *target* — used by agent.html to show
+   * "what's been done to you." Filters to top-level events (parent_event_id
+   * IS NULL) so we don't surface duplicate sub-events from the same action.
+   */
+  async getEventsTargetingAgent(targetId: string, limit: number): Promise<GameEvent[]> {
+    const result = await this.db
+      .prepare(
+        `SELECT * FROM events
+         WHERE target_id = ? AND parent_event_id IS NULL
+         ORDER BY tick DESC, timestamp DESC LIMIT ?`
+      )
+      .bind(targetId, limit)
+      .all<any>();
+    return (result.results ?? []).map((r) => this.rowToEvent(r));
+  }
+
   private rowToEvent(row: any): GameEvent {
     return {
       id: row.id,
