@@ -1185,6 +1185,19 @@ export class GameOrchestrator {
 
     await this.state.storage.deleteAlarm();
 
+    // Drain any in-flight tick before wiping. Otherwise the still-running
+    // processTick keeps writing events to D1 *after* DELETE FROM events runs,
+    // leaving zombie rows from the previous game (saw 2 events from tick 12
+    // survive a reset because the last tick was mid-flight). 30s upper bound
+    // is generous — a tick rarely exceeds 20s even with LLM + NPC + Stellar.
+    const drainStart = Date.now();
+    while (this.tickInFlight && Date.now() - drainStart < 30000) {
+      await new Promise((resolve) => setTimeout(resolve, 200));
+    }
+    if (this.tickInFlight) {
+      console.warn("[reset] in-flight tick did not drain within 30s; proceeding anyway");
+    }
+
     await D.prepare("DELETE FROM events").run();
     await D.prepare("DELETE FROM ticker").run();
     await D.prepare("DELETE FROM action_logs").run();
