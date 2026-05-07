@@ -360,6 +360,11 @@
         const r = await fetch(`${ORCHESTRATOR_BASE}/api/agent/${encodeURIComponent(agentId)}`);
         if (!r.ok) return;
         const a = await r.json();
+        // Profile + activity refresh every tick — no user input there to clobber.
+        renderProfile(a);
+        renderActivity(a.recentActions || [], a.inboundEvents || []);
+        // Coach panel re-renders only on a window/status flip — otherwise it'd
+        // wipe the directive textarea + password the coach is mid-typing.
         const isOpen = !!(a.coachingWindow && a.coachingWindow.open);
         const status = a.gameStatus;
         if (isOpen !== lastCoachWindowOpen || status !== lastGameStatus) {
