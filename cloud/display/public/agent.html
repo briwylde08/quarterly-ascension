@@ -178,6 +178,32 @@
       font-size: 13px;
       line-height: 1.5;
     }
+    /* Directive consideration pill — sits between the "Life-coaching is open"
+       state line and the current-directive quote. Tells the coach whether
+       their current directive has already been read by the manager (safe to
+       write the next one) or is still queued for this cycle. */
+    .directive-status {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 8px 12px;
+      border-radius: 2px;
+      font-size: 12px;
+      line-height: 1.4;
+      margin-bottom: 10px;
+      letter-spacing: 0.2px;
+    }
+    .directive-status.considered {
+      background: #e8f6ef;
+      border-left: 3px solid #27ae60;
+      color: #1e6b3f;
+    }
+    .directive-status.pending {
+      background: #fdf2e2;
+      border-left: 3px solid #d68910;
+      color: #8a5a08;
+    }
+    .directive-status .icon { font-size: 14px; flex-shrink: 0; }
     .coach-box textarea {
       width: 100%;
       padding: 10px 12px;
@@ -604,10 +630,32 @@
             : `Life-coaching unavailable (game ${a.gameStatus}).`;
       const stateClass = w.open ? 'open' : 'locked';
 
+      // "Has the manager read this directive yet?" — find the most recent
+      // action whose directiveAtAction matches the current directive verbatim.
+      // If found, the manager has already considered it and the coach is safe
+      // to overwrite. If not, the directive is still queued for this cycle.
+      let statusHtml = '';
+      if (dirText && w.open) {
+        const considered = (a.recentActions || []).find(r => r.directiveAtAction === dirText);
+        if (considered) {
+          const cycle = Math.max(1, Math.ceil(considered.tick / 5));
+          statusHtml = `<div class="directive-status considered">`
+                     + `<span class="icon">✓</span>`
+                     + `<span>Considered at cycle ${cycle} (tick ${considered.tick}). Safe to write your next directive.</span>`
+                     + `</div>`;
+        } else {
+          statusHtml = `<div class="directive-status pending">`
+                     + `<span class="icon">⏳</span>`
+                     + `<span>Not yet considered — your manager reads it the next time they act this cycle.</span>`
+                     + `</div>`;
+        }
+      }
+
       area.innerHTML = `
         <div class="coach-box">
           <h3>⏱ Life-coach ${escape(a.name.split(' ')[0])}</h3>
           <div class="coach-state ${stateClass}">${escape(stateText)}</div>
+          ${statusHtml}
           ${dirText ? `<div class="current-directive">"${escape(dirText)}"</div>` : ''}
           ${w.open ? `
             <textarea id="coach-input" maxlength="280" placeholder="e.g. Go after Marcus. Hostile takeover his partnerships if you can."></textarea>
