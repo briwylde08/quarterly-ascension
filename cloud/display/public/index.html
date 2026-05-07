@@ -331,6 +331,18 @@
       font-weight: 700;
     }
     .cycle-pair.active .slot-num { color: var(--navy); opacity: 0.85; }
+    .cycle-pair .now-tag {
+      display: inline-block;
+      margin-left: 6px;
+      padding: 1px 5px;
+      font-size: 9px;
+      font-weight: 800;
+      letter-spacing: 1.5px;
+      background: var(--navy);
+      color: #f1c40f;
+      border-radius: 2px;
+      vertical-align: 1px;
+    }
 
     /* Tx ticker column */
     .tx-ticker-col {
@@ -579,6 +591,21 @@
     .manager-row.yours-row {
       box-shadow: inset 0 0 0 2px #f1c40f;
       border-radius: 4px;
+    }
+    /* Explicit "this row is yours" tag so the gold inset stripe isn't the
+       only signal a viewer has — labels reinforce color for accessibility
+       + projector readability. */
+    .yours-tag {
+      display: inline-block;
+      padding: 1px 6px;
+      font-size: 9px;
+      font-weight: 700;
+      letter-spacing: 1px;
+      background: #f1c40f;
+      color: var(--navy);
+      border-radius: 2px;
+      margin-left: 6px;
+      vertical-align: 1px;
     }
     /* Nested children for parent events (Hit the Wall, Problematic per-cycle
        passive decay, etc.). Parent stays as a normal row; children are
@@ -1351,6 +1378,19 @@
       const t = row.dataset.targetId;
       if (a === myCoachedAgent || t === myCoachedAgent) {
         row.classList.add('yours-row');
+        // Add an explicit text label so the gold inset stripe isn't the only
+        // signal. Inserted once per row — guard against duplicates if this
+        // function gets re-applied.
+        if (!row.querySelector(':scope > .feed-head .yours-tag, :scope > .manager-identity .yours-tag')) {
+          const head = row.querySelector(':scope > .feed-head');
+          if (head) {
+            const tag = document.createElement('span');
+            tag.className = 'yours-tag';
+            tag.textContent = '🎙 YOURS';
+            tag.title = 'This event involves the manager you\'re coaching';
+            head.appendChild(tag);
+          }
+        }
       }
     }
 
@@ -2015,11 +2055,15 @@
       // Row is a div, not a link — clicking opens an inline modal so the
       // viewer stays on the dashboard. Event delegation in initManagerModal()
       // handles clicks via data-agent-id.
-      const yoursClass = (myCoachedAgent && a.id === myCoachedAgent) ? ' yours-row' : '';
+      const isYours = !!(myCoachedAgent && a.id === myCoachedAgent);
+      const yoursClass = isYours ? ' yours-row' : '';
+      const yoursTag = isYours
+        ? ' <span class="yours-tag" title="This is the manager you\'re coaching">🎙 YOURS</span>'
+        : '';
       return '<div class="manager-row rank-' + rank + (isWinner ? ' winner' : '') + yoursClass + '" data-agent-id="' + a.id + '" title="Click for character summary">'
         + '<div class="rank">' + rank + '</div>'
         + '<div class="manager-identity">'
-        +   '<div class="name">' + namePrefix + escape(a.name) + '</div>'
+        +   '<div class="name">' + namePrefix + escape(a.name) + yoursTag + '</div>'
         +   '<div class="title">' + escape(a.title) + (a.claimedByName ? ' · <span class="title-coach">🎙 ' + escape(a.claimedByName) + '</span>' : '') + '</div>'
         +   (traitText ? '<div class="traits">' + traitText + '</div>' : '')
         +   (badges ? '<div class="badges">' + badges + '</div>' : '')
@@ -2086,8 +2130,9 @@
         pairsEl.innerHTML = pairs.map((pair, idx) => {
           const isActive = idx === activeIdx;
           const names = pair.map(p => p ? escape(p.name.split(' ')[0]) : '?').join(' & ');
+          const nowTag = isActive ? `<span class="now-tag">NOW</span>` : '';
           return `<div class="cycle-pair${isActive ? ' active' : ''}">`
-               + `<span class="slot-num">${idx + 1}</span>${names}`
+               + `<span class="slot-num">${idx + 1}</span>${names}${nowTag}`
                + `</div>`;
         }).join('');
         return;
