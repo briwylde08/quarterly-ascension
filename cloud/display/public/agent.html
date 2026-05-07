@@ -552,6 +552,9 @@
             // to the dashboard from intro/handbook/directives would lose the
             // gold-highlight context.
             try { localStorage.setItem('qa.myCoachedAgent', agentId); } catch {}
+            // Cache password in sessionStorage so directive submissions don't
+            // require re-typing. Per-tab scope, cleared when tab closes.
+            try { sessionStorage.setItem(`qa.password.${agentId}`, password); } catch {}
             msg.className = 'claim-msg success';
             msg.innerHTML = `
               <div style="margin-bottom: 12px;">Claim confirmed! Directives go live as soon as you submit them.</div>
@@ -624,23 +627,32 @@
 
       if (w.open) {
         const input = document.getElementById('coach-input');
+        const pwInput = document.getElementById('coach-pw');
         const counter = document.getElementById('coach-len');
         // NOTE: don't pre-fill the textarea with the existing directive —
         // submissions always replace, so a blank textarea is the safer default.
         counter.textContent = String(input.value.length);
         input.addEventListener('input', () => { counter.textContent = String(input.value.length); });
 
+        // Pre-fill password from sessionStorage so the coach doesn't have
+        // to re-type on every directive submission. sessionStorage is per-tab
+        // and clears when the tab closes — appropriate scope for a 33-min game.
+        try {
+          const cached = sessionStorage.getItem(`qa.password.${a.id}`);
+          if (cached) pwInput.value = cached;
+        } catch {}
+
         const msg = document.getElementById('coach-msg');
         document.getElementById('coach-save').addEventListener('click', async () => {
           const directive = input.value.trim();
-          const password = document.getElementById('coach-pw').value;
+          const password = pwInput.value;
           if (!directive) { msg.style.color = 'var(--danger)'; msg.textContent = 'Directive is empty.'; return; }
           if (!password) { msg.style.color = 'var(--danger)'; msg.textContent = 'Password required.'; return; }
-          await sendCoach({ method: 'POST', body: { agentId: a.id, password, directive } });
+          await sendCoach({ method: 'POST', body: { agentId: a.id, password, directive }, password });
         });
         const clearBtn = document.getElementById('coach-clear');
         clearBtn?.addEventListener('click', async () => {
-          const password = document.getElementById('coach-pw').value;
+          const password = pwInput.value;
           if (!password) {
             const m = document.getElementById('coach-msg');
             m.style.color = 'var(--danger)';
@@ -648,12 +660,12 @@
             return;
           }
           if (!confirm('Clear the current directive? Your manager reverts to base personality + default behavior.')) return;
-          await sendCoach({ method: 'DELETE', body: { agentId: a.id, password } });
+          await sendCoach({ method: 'DELETE', body: { agentId: a.id, password }, password });
         });
       }
     }
 
-    async function sendCoach({ method, body }) {
+    async function sendCoach({ method, body, password }) {
       const msg = document.getElementById('coach-msg');
       msg.style.color = 'var(--text-muted)';
       msg.textContent = method === 'DELETE' ? 'Clearing…' : 'Saving…';
@@ -665,6 +677,11 @@
         });
         const data = await r.json();
         if (r.ok) {
+          // Cache the (now-validated) password so the next submit doesn't
+          // require re-typing. Only on success — wrong passwords don't get cached.
+          if (password && body.agentId) {
+            try { sessionStorage.setItem(`qa.password.${body.agentId}`, password); } catch {}
+          }
           msg.style.color = 'var(--success)';
           msg.textContent = method === 'DELETE' ? 'Cleared. Reloading…' : 'Saved. Reloading…';
           setTimeout(() => location.reload(), 800);
