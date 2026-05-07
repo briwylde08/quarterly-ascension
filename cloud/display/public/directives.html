@@ -281,6 +281,18 @@
 
     refresh();
     setInterval(refresh, 5000);
+
+    // If this browser previously claimed a manager (localStorage written by
+    // agent.html on claim success), inject ?coach=<id> into the Dashboard
+    // nav link so the dashboard highlights their manager.
+    try {
+      const claimed = localStorage.getItem('qa.myCoachedAgent');
+      if (claimed) {
+        document.querySelectorAll('a[href="/"]').forEach(a => {
+          a.href = '/?coach=' + encodeURIComponent(claimed);
+        });
+      }
+    } catch {}
   </script>
 </body>
 </html>

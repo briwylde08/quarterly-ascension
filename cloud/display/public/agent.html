@@ -547,6 +547,11 @@
           });
           const data = await r.json();
           if (r.ok) {
+            // Persist the claim so all pages' Dashboard nav links can carry
+            // the ?coach=<id> param automatically — without this, navigating
+            // to the dashboard from intro/handbook/directives would lose the
+            // gold-highlight context.
+            try { localStorage.setItem('qa.myCoachedAgent', agentId); } catch {}
             msg.className = 'claim-msg success';
             msg.innerHTML = `
               <div style="margin-bottom: 12px;">Claim confirmed! Directives go live as soon as you submit them.</div>
