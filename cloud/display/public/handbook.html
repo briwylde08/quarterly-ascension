@@ -300,22 +300,22 @@
           buys NPC services on-chain).
         </p>
         <p>
-          The game runs <b>80 ticks (= 16 cycles)</b> over about 33 minutes.
+          The game runs <b>60 ticks (= 12 cycles)</b> over about 25 minutes.
           A tick is one alarm fire — every 25 seconds, two managers act. A
           cycle is 5 ticks, after which all 10 managers have acted once. The
-          manager with the highest prestige at tick 80 is promoted to VP.
+          manager with the highest prestige at tick 60 is promoted to VP.
         </p>
         <p>
-          <b>Every manager acts exactly 16 times per game</b> — once per cycle,
+          <b>Every manager acts exactly 12 times per game</b> — once per cycle,
           no exceptions. At game start the orchestrator randomizes the 10
           managers into 5 fixed pairs, and that order is stable for the
           entire show: if your manager is in slot 3, they'll act on ticks
-          3, 8, 13, 18, …, 78. The <b>📣 Cycle Order</b> banner above the
+          3, 8, 13, 18, …, 58. The <b>📣 Cycle Order</b> banner above the
           activity stream shows all 5 pairs in slot order with the active
           pair highlighted in gold — coaches can use it to anticipate when
           their manager is up. Per-cycle effects (status decay, gossip
           refresh, quarterly bonuses) fire at the cycle boundaries (ticks 5,
-          10, 15, …, 80).
+          10, 15, …, 60).
         </p>
         <p>
           <b>Life-coaching</b> is always open. A claimer who's set their name +
@@ -665,7 +665,7 @@
       <h2>Calendar &amp; Events</h2>
       <div class="body">
         <p>
-          A 33-minute game with 16 cycles of 5 ticks each (2 agents act
+          A ~25-minute game with 12 cycles of 5 ticks each (2 agents act
           per tick). The game has <b>fixed beats</b> at known ticks and
           <b>random events</b> that roll at each cycle boundary
           (one-per-game cap — once an event fires, it's locked out for
@@ -675,11 +675,11 @@
         <ul style="margin-left: 24px; margin-bottom: 12px;">
           <li><span class="key">Tick 1 (0:00)</span> — <b>Q1 Kickoff</b>. CEO morning all-hands speech with per-agent reactions flavored by personality. 10 nested events fire instantly.</li>
           <li><span class="key">Tick 5 (~2:05)</span> — <b>Cycle 1 closer</b>. Guaranteed random event from the high-impact pool (Surprise Demo Day, Surprise Board Visit, Viral LinkedIn, or Bad Glassdoor Review). Always lands.</li>
-          <li><span class="key">Tick 25 (~10:25)</span> — <b>Q1 Wrap Bonus</b>. <b>3 random managers</b> receive $40 / $25 / $15 from HR with comedic justifications ("submitted timesheet on time three weeks running", "best Out-of-Office message — it had a callback"). Settled on-chain.</li>
-          <li><span class="key">Tick 45 (~18:45)</span> — <b>Mid-game pivot</b>. Guaranteed second high-impact event from the same opener pool (whichever ones haven't already fired). Resets the audience's attention.</li>
-          <li><span class="key">Tick 50 (~20:50)</span> — <b>Halftime Bonus</b>. <b>3 random managers</b> receive $40 / $25 / $15 with fresh flavor lines.</li>
-          <li><span class="key">Tick 75 (~31:15)</span> — <b>Q3 Wrap Bonus</b>. <b>3 random managers</b> receive $40 / $25 / $15 — winners can still spend the money.</li>
-          <li><span class="key">Tick 80 (~33:20)</span> — <b>Game End</b>. Highest prestige wins the VP slot.</li>
+          <li><span class="key">Tick 15 (~6:15)</span> — <b>Q1 Wrap Bonus</b>. <b>3 random managers</b> receive $40 / $25 / $15 from HR with comedic justifications ("submitted timesheet on time three weeks running", "best Out-of-Office message — it had a callback"). Settled on-chain.</li>
+          <li><span class="key">Tick 25 (~10:25)</span> — <b>Mid-game pivot</b>. Guaranteed second high-impact event from the same opener pool (whichever ones haven't already fired). Resets the audience's attention.</li>
+          <li><span class="key">Tick 30 (~12:30)</span> — <b>Halftime Bonus</b>. <b>3 random managers</b> receive $40 / $25 / $15 with fresh flavor lines.</li>
+          <li><span class="key">Tick 45 (~18:45)</span> — <b>Q3 Wrap Bonus</b>. <b>3 random managers</b> receive $40 / $25 / $15 — winners can still spend the money.</li>
+          <li><span class="key">Tick 60 (~25:00)</span> — <b>Game End</b>. Highest prestige wins the VP slot.</li>
           <li><b>Glass Cliff Promotion</b> (any cycle boundary, auto) — fires when the leader is 50+ prestige ahead of #2. Drags the leader back to #2's value with a flavor reason. Once per victim per game.</li>
         </ul>
         <p><b>Random events</b> (each rolls at every cycle boundary):</p>

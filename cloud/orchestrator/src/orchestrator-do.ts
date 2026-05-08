@@ -1441,7 +1441,7 @@ function buildJudgePrompt(
     return `Coach: ${c.coachName}\nManager: ${c.agentName}\nDirectives:\n${lines.join("\n")}`;
   }).join("\n\n---\n\n");
 
-  return `You are judging a 1-hour corporate-satire game where each human coach whispered "life-coach" directives to one AI middle-manager who acted on them (or didn't) over 80 ticks. Below are every distinct directive each coach wrote, in order. Pick winners for these four awards:
+  return `You are judging a 25-minute corporate-satire game where each human coach whispered "life-coach" directives to one AI middle-manager who acted on them (or didn't) over 60 ticks. Below are every distinct directive each coach wrote, in order. Pick winners for these four awards:
 
 1. **most_entertaining_coach** — best overall body of work, the coach whose directives were funniest / spiciest / most fun for the audience to read on the big screen
 2. **most_committed_to_character** — the coach who steered their manager into the most in-character corporate-satire mayhem (sabotage chains, alliance betrayals, dramatic falls)

@@ -126,17 +126,18 @@ export async function processRandomEvents(
   // always has narration material in the first ~2 minutes. Skips the
   // regular probabilistic rolls for this cycle boundary, AND marks the
   // chosen event as fired so it doesn't roll again later (one-per-game).
-  // Tick 45: GUARANTEED mid-game pivot (post-game-8). Same opener pool,
+  // Tick 25: GUARANTEED mid-game pivot (post-game-8). Same opener pool,
   // pulls only events that haven't already fired so the audience reliably
   // gets a second high-energy beat at the show's middle pivot point.
-  if (tick === 5 || tick === 45) {
+  // (Was tick 45 in the 80-tick game; scaled to tick 25 for 60-tick.)
+  if (tick === 5 || tick === 25) {
     const allOpeners = [
       { id: "surprise_demo_day", fn: surpriseDemoDay },
       { id: "surprise_board_visit", fn: surpriseBoardVisit },
       { id: "viral_linkedin", fn: viralLinkedIn },
       { id: "bad_glassdoor_review", fn: badGlassdoorReview },
     ];
-    // For tick 45, only pick from openers that haven't fired yet so the
+    // For tick 25, only pick from openers that haven't fired yet so the
     // mid-game beat is fresh. If somehow all four already fired (rare),
     // fall through with no event rather than repeating one.
     const openers = tick === 5
@@ -152,18 +153,19 @@ export async function processRandomEvents(
     }
   }
 
-  // Quarterly Bonus split into THREE smaller checkpoints (post-game-8):
-  //   Q1 wrap   (tick 25, ~10 min in)
-  //   Halftime  (tick 50, ~21 min in — peak audience attention)
-  //   Q3 wrap   (tick 75, late game; winners can still flex it)
+  // Quarterly Bonus split into THREE smaller checkpoints, evenly spaced
+  // across the 60-tick game (was 25/50/75 for the 80-tick version):
+  //   Q1 wrap   (tick 15, ~5 min in)
+  //   Halftime  (tick 30, ~12 min in — peak audience attention)
+  //   Q3 wrap   (tick 45, late game; winners can still flex it)
   // Smaller per-bonus amounts ($40/$25/$15 vs the old $100/$60/$40 finale)
   // so the cumulative payout stays comparable but the cadence gives the
   // audience three "winners are paid" beats instead of one ceremonial close.
-  if (tick === 25) {
+  if (tick === 15) {
     events.push(...(await quarterlyBonus(deps, tick, [40, 25, 15], "Q1 Wrap")));
-  } else if (tick === 50) {
+  } else if (tick === 30) {
     events.push(...(await quarterlyBonus(deps, tick, [40, 25, 15], "Halftime")));
-  } else if (tick === 75) {
+  } else if (tick === 45) {
     events.push(...(await quarterlyBonus(deps, tick, [40, 25, 15], "Q3 Wrap")));
   }
 
@@ -188,7 +190,7 @@ export async function processRandomEvents(
 
   // Probabilities bumped slightly post-game-2 since each event can now
   // fire only once per game and we want ~10 random events spread across
-  // 16 cycles. Sum ≈ 0.85/cycle. Plus 2 fixed Quarterly Bonuses + 0-2
+  // 12 cycles. Sum ≈ 0.85/cycle. Plus 3 fixed Quarterly Bonuses + 0-2
   // Glass Cliffs ≈ 10/game expected.
   if (roll("surprise_board_visit", 0.10))   events.push(...(await surpriseBoardVisit(deps, tick)));
   if (roll("bad_glassdoor_review", 0.10))   events.push(...(await badGlassdoorReview(deps, tick)));
