@@ -126,18 +126,20 @@ export async function processRandomEvents(
   // always has narration material in the first ~2 minutes. Skips the
   // regular probabilistic rolls for this cycle boundary, AND marks the
   // chosen event as fired so it doesn't roll again later (one-per-game).
-  // Tick 25: GUARANTEED mid-game pivot (post-game-8). Same opener pool,
+  // Tick 35: GUARANTEED mid-game pivot (post-game-8). Same opener pool,
   // pulls only events that haven't already fired so the audience reliably
-  // gets a second high-energy beat at the show's middle pivot point.
-  // (Was tick 45 in the 80-tick game; scaled to tick 25 for 60-tick.)
-  if (tick === 5 || tick === 25) {
+  // gets a second high-energy beat — placed JUST AFTER Halftime (tick 30)
+  // when audience attention historically dips. (Was tick 45 in 80-tick;
+  // first scaled to tick 25 then moved to 35 to space out the bonus cluster
+  // around Halftime instead of front-loading drama before it.)
+  if (tick === 5 || tick === 35) {
     const allOpeners = [
       { id: "surprise_demo_day", fn: surpriseDemoDay },
       { id: "surprise_board_visit", fn: surpriseBoardVisit },
       { id: "viral_linkedin", fn: viralLinkedIn },
       { id: "bad_glassdoor_review", fn: badGlassdoorReview },
     ];
-    // For tick 25, only pick from openers that haven't fired yet so the
+    // For tick 35, only pick from openers that haven't fired yet so the
     // mid-game beat is fresh. If somehow all four already fired (rare),
     // fall through with no event rather than repeating one.
     const openers = tick === 5
