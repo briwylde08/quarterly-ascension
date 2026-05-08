@@ -486,6 +486,7 @@
     .badge.technical_difficulties { color: var(--danger); background: var(--danger-bg); }
     .badge.has_deliverable { color: var(--success); background: var(--success-bg); }
     .badge.marked          { color: #c0392b; background: #fadbd8; border-style: dashed; }
+    .badge.hr_audit        { color: #6c3483; background: #ebdef0; border-style: dashed; }
     .badge.mandatory_motivation { color: var(--warning); background: var(--warning-bg); }
     .badge.meeting_blocked { color: var(--text-muted); background: var(--neutral-bg); }
     .badge[title] { cursor: help; }
@@ -2024,12 +2025,14 @@
       marked: 'Documented',
       mysterious_influence: 'Mysterious Influence',
       questionable_judgment: 'Questionable Judgment',
+      hr_audit: 'HR Audit',
     };
     const STATUS_TOOLTIPS = {
       tired: 'Hit the Wall: −3 prestige/cycle decay for 4 cycles. Removed by Shotgun a Red Bull, Buy Coffee, or Cry in the Stairwell. Spread by Move Meeting Early.',
       marked: 'Documented: next take_credit against you auto-succeeds. Lasts 2 cycles.',
       mysterious_influence: 'Mysterious Influence: +2 prestige/cycle passive. Other agents occasionally get credited for things you did. Acquired after 3× join_meeting_silently.',
       questionable_judgment: 'Questionable Judgment: public credibility tag for 2 cycles. From spread_rumor.',
+      hr_audit: 'HR Audit: triggered after 2 successful take_credits in 8 ticks. take_credit unavailable for 8 ticks. Public — peers can see the pattern flag.',
       problematic: 'Problematic: −3 prestige/cycle decay for 4 cycles. Removed by cry_in_stairwell.',
       under_investigation: 'Under Investigation: cannot take hostile action against the filer for the duration.',
       has_deliverable: 'Has Deliverable: next CEO meeting awards +40 prestige (instead of -20).',

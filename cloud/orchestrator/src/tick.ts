@@ -833,6 +833,38 @@ async function executeAction(
             outcome = `Failed to take credit — ${target?.name ?? action.target} ${flavor}`;
           }
           await db.updateAgentPrestige(agent.id, prestigeChange);
+          // HR Audit gate: 2 successful TCs within 8 ticks lands the actor
+          // with hr_audit (expires tick+8), which the availableActions
+          // filter uses to remove take_credit from their menu. Game-11
+          // saw TC at 19% of all picks — this caps spam without breaking
+          // the documented chain (the audit triggers AFTER the 2nd hit,
+          // so a clean sabotage→TC chain still resolves first).
+          if (success) {
+            const HR_AUDIT_WINDOW = 8;
+            const HR_AUDIT_DURATION = 8;
+            const recentTcs = await db.getRecentActionLogsForAgent(agent.id, 12);
+            const priorSuccesses = recentTcs.filter(
+              (r) => r.action_type === "take_credit"
+                && r.tick > tick - HR_AUDIT_WINDOW
+                && r.tick < tick
+                && (r.prestige_change ?? 0) > 0
+            ).length;
+            const alreadyAudited = agent.statusEffects.some((e) => e.type === "hr_audit");
+            if (priorSuccesses >= 1 && !alreadyAudited) {
+              await db.updateAgentStatusEffects(agent.id, [
+                ...agent.statusEffects,
+                { type: "hr_audit", expiresAtTick: tick + HR_AUDIT_DURATION, source: "pattern_flag" },
+              ]);
+              await emit({
+                id: uuid(),
+                tick,
+                timestamp: new Date(),
+                type: "status_effect",
+                agentId: agent.id,
+                description: `${agent.name} flagged for HR Audit — pattern of take_credit filings triggered review. Locked out of take_credit through tick ${tick + HR_AUDIT_DURATION}.`,
+              });
+            }
+          }
           // Marked status is consumed once exploited. The saboteur (whoever
           // built the dossier — recorded in `marked.source`) earns a +5
           // finder's fee when SOMEONE ELSE chains their setup, so the

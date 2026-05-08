@@ -169,7 +169,7 @@ function buildContextPrompt(ctx: DecisionContext): string {
   // are hidden from peers; this whitelist surfaces only the actionable ones.
   const PUBLIC_STATUSES = new Set([
     "marked", "problematic", "tired", "meeting_blocked",
-    "mysterious_influence", "questionable_judgment",
+    "mysterious_influence", "questionable_judgment", "hr_audit",
   ]);
   const otherAgents = allAgents
     .filter((a) => a.id !== agent.id)
@@ -217,6 +217,11 @@ function buildContextPrompt(ctx: DecisionContext): string {
     //      every menu. Pre-flight #2 saw 6/10 agents grab MI; that's
     //      not the rare-trope-character beat we wanted.
     if (action.type === "join_meeting_silently" && (joinMeetingCount >= 3 || mysteriousInfluenceClaimed)) return false;
+    // HR Audit gate: applied automatically after the 2nd successful TC in 8
+    // ticks. Locks take_credit out for the audit duration so the agent has
+    // to find another play. Surfaced as a public status so peers see the
+    // pattern and route around. (Goal: bring TC pick-rate down from 19%.)
+    if (action.type === "take_credit" && agent.statusEffects.some((s) => s.type === "hr_audit")) return false;
     return true;
   });
 
@@ -228,6 +233,7 @@ function buildContextPrompt(ctx: DecisionContext): string {
       // Retreat additions:
       case "mysterious_influence": return "Mysterious Influence (+2 prestige/cycle passive; people occasionally credit you for things you didn't do)";
       case "questionable_judgment": return `Questionable Judgment (public credibility tag; expires tick ${s.expiresAtTick})`;
+      case "hr_audit": return `On HR Audit — pattern flag from too many take_credit filings. take_credit unavailable to you until tick ${s.expiresAtTick}.`;
       // Carryover from long-form:
       case "under_investigation": return `Under Investigation (can't take hostile action against ${s.source}; expires tick ${s.expiresAtTick})`;
       case "problematic": return `Problematic (-3 prestige/tick decay; expires tick ${s.expiresAtTick})`;

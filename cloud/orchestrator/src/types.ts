@@ -48,7 +48,11 @@ export type StatusEffectType =
    *  10% chance another agent's reasoning credits the holder for their own action. */
   | "mysterious_influence"
   /** Spread_rumor leaves the target with a public credibility tag. */
-  | "questionable_judgment";
+  | "questionable_judgment"
+  /** Lands on an agent who just took 2 successful take_credits within 8 ticks.
+   *  Locks them out of take_credit for 8 ticks. Public — peers can route
+   *  around. Diegetic cover for an anti-spam mechanic. */
+  | "hr_audit";
 
 export interface ActionResult {
   success: boolean;
