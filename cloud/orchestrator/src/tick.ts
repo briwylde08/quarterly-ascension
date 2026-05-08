@@ -1082,7 +1082,7 @@ async function executePaidAction(
         await db.updateAgentPrestige(action.target, 3);
         const target = await db.getAgent(action.target);
         const topics = [
-          "Q3 OKRs", "the new Slack reactions policy", "their kid's soccer schedule",
+          "Q3 OKRs", "the new Slack reactions policy", "their kids' soccer schedule",
           "remote-work norms", "the parking situation", "the office plant that died",
           "headcount rumors", "the new HRIS rollout", "their burnout, vaguely",
           "weekend plans they didn't actually have", "the all-hands deck typo",

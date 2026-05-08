@@ -346,6 +346,7 @@
       renderActivity(a.recentActions || [], a.inboundEvents || []);
       renderClaim(a);
       renderCoach(a);
+      syncDirectiveStatus(a);
       lastCoachWindowOpen = !!(a.coachingWindow && a.coachingWindow.open);
       lastGameStatus = a.gameStatus;
     }
@@ -363,12 +364,17 @@
         // Profile + activity refresh every tick — no user input there to clobber.
         renderProfile(a);
         renderActivity(a.recentActions || [], a.inboundEvents || []);
+        // Considered/Pending pill must refresh every poll so the coach sees
+        // it flip the moment their manager acts. Targeted DOM update — leaves
+        // the surrounding coach-box (textarea, password) untouched.
+        syncDirectiveStatus(a);
         // Coach panel re-renders only on a window/status flip — otherwise it'd
         // wipe the directive textarea + password the coach is mid-typing.
         const isOpen = !!(a.coachingWindow && a.coachingWindow.open);
         const status = a.gameStatus;
         if (isOpen !== lastCoachWindowOpen || status !== lastGameStatus) {
           renderCoach(a);
+          syncDirectiveStatus(a);
           lastCoachWindowOpen = isOpen;
           lastGameStatus = status;
         }
@@ -650,6 +656,31 @@
       });
     }
 
+    // Targeted update for the "Considered / Not yet considered" pill.
+    // Lives inside the coach-box but refreshes on every poll independently
+    // so it flips the moment the manager's tick fires — without touching
+    // the textarea or password fields the coach is mid-typing into.
+    function syncDirectiveStatus(a) {
+      const slot = document.getElementById('directive-status-slot');
+      if (!slot) return;
+      const dirText = a.directive || '';
+      const w = a.coachingWindow || { open: false };
+      if (!dirText || !w.open) { slot.innerHTML = ''; return; }
+      const considered = (a.recentActions || []).find(r => r.directiveAtAction === dirText);
+      if (considered) {
+        const cycle = Math.max(1, Math.ceil(considered.tick / 5));
+        slot.innerHTML = `<div class="directive-status considered">`
+                       + `<span class="icon">✓</span>`
+                       + `<span>Considered at cycle ${cycle} (tick ${considered.tick}). Safe to write your next directive.</span>`
+                       + `</div>`;
+      } else {
+        slot.innerHTML = `<div class="directive-status pending">`
+                       + `<span class="icon">⏳</span>`
+                       + `<span>Not yet considered — your manager reads it the next time they act this cycle.</span>`
+                       + `</div>`;
+      }
+    }
+
     // ============================================================
     // Retreat-mode coaching: always-open. Anyone with the right password
     // can set or clear the directive at any tick during a running/halted
@@ -672,26 +703,11 @@
             : `Life-coaching unavailable (game ${a.gameStatus}).`;
       const stateClass = w.open ? 'open' : 'locked';
 
-      // "Has the manager read this directive yet?" — find the most recent
-      // action whose directiveAtAction matches the current directive verbatim.
-      // If found, the manager has already considered it and the coach is safe
-      // to overwrite. If not, the directive is still queued for this cycle.
-      let statusHtml = '';
-      if (dirText && w.open) {
-        const considered = (a.recentActions || []).find(r => r.directiveAtAction === dirText);
-        if (considered) {
-          const cycle = Math.max(1, Math.ceil(considered.tick / 5));
-          statusHtml = `<div class="directive-status considered">`
-                     + `<span class="icon">✓</span>`
-                     + `<span>Considered at cycle ${cycle} (tick ${considered.tick}). Safe to write your next directive.</span>`
-                     + `</div>`;
-        } else {
-          statusHtml = `<div class="directive-status pending">`
-                     + `<span class="icon">⏳</span>`
-                     + `<span>Not yet considered — your manager reads it the next time they act this cycle.</span>`
-                     + `</div>`;
-        }
-      }
+      // "Has the manager read this directive yet?" pill is rendered in a
+      // sentinel div and re-synced on every poll (separately from the coach
+      // panel which only re-renders on window/status flips so it doesn't
+      // wipe the textarea). See syncDirectiveStatus().
+      const statusHtml = '<div id="directive-status-slot"></div>';
 
       area.innerHTML = `
         <div class="coach-box">
