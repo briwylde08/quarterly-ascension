@@ -346,6 +346,85 @@ export class GameOrchestrator {
       });
     }
 
+    // Coach awards — post-game ceremony. Pulls every (coach, directive)
+    // pair from action_logs (each row carries directive_at_action), groups
+    // by coach, hands the corpus to gpt-5.5 with a judging rubric, returns
+    // ranked categories. Host opens /awards.html to project. Safe to call
+    // while game is ended OR halted; refuses on setup (nothing to judge).
+    if (path === "/judge-directives" && request.method === "POST") {
+      const status = await db.getGameStatus();
+      if (status === "setup") {
+        return Response.json({ error: "No game data to judge — start a game first." }, { status: 400 });
+      }
+      const rows = await this.env.DB.prepare(
+        `SELECT a.id AS agentId, a.name AS agentName, a.claimed_by_name AS coachName,
+                al.directive_at_action AS directive,
+                MIN(al.tick) AS firstTick, COUNT(*) AS persistedTicks
+         FROM action_logs al
+         JOIN agents a ON a.id = al.agent_id
+         WHERE al.directive_at_action IS NOT NULL
+           AND TRIM(al.directive_at_action) <> ''
+           AND a.claimed_by_name IS NOT NULL
+         GROUP BY a.id, al.directive_at_action
+         ORDER BY a.id, MIN(al.tick) ASC`
+      ).all<any>();
+
+      const byCoach = new Map<string, {
+        coachName: string;
+        agentId: string;
+        agentName: string;
+        directives: Array<{ text: string; firstTick: number; persistedTicks: number }>;
+      }>();
+      for (const r of rows.results || []) {
+        const key = r.coachName;
+        if (!byCoach.has(key)) {
+          byCoach.set(key, { coachName: r.coachName, agentId: r.agentId, agentName: r.agentName, directives: [] });
+        }
+        byCoach.get(key)!.directives.push({
+          text: r.directive,
+          firstTick: r.firstTick,
+          persistedTicks: r.persistedTicks,
+        });
+      }
+      const coaches = Array.from(byCoach.values());
+      if (coaches.length === 0) {
+        return Response.json({ error: "No coached directives found in this game." }, { status: 400 });
+      }
+
+      const judgePrompt = buildJudgePrompt(coaches);
+      const { OpenAI } = await import("openai");
+      const openai = new OpenAI({
+        apiKey: this.env.OPENAI_API_KEY,
+        baseURL: this.env.OPENAI_BASE_URL,
+        defaultHeaders: this.env.CF_AIG_TOKEN
+          ? { "cf-aig-authorization": `Bearer ${this.env.CF_AIG_TOKEN}` }
+          : undefined,
+      });
+
+      try {
+        const llmResp = await openai.chat.completions.create({
+          model: "openai/gpt-5.5",
+          max_completion_tokens: 3000,
+          response_format: { type: "json_object" },
+          messages: [
+            { role: "system", content: "You are the host of a corporate-satire awards ceremony. Punchy, in-the-moment, no-fluff. Output strictly the JSON the user asks for." },
+            { role: "user", content: judgePrompt },
+          ],
+        });
+        const content = llmResp.choices[0]?.message?.content || "{}";
+        let parsed: unknown;
+        try {
+          parsed = JSON.parse(content);
+        } catch {
+          return Response.json({ error: "Judge returned malformed JSON", raw: content.slice(0, 500) }, { status: 502 });
+        }
+        return Response.json({ ok: true, coaches, awards: parsed });
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        return Response.json({ error: `Judge call failed: ${msg}` }, { status: 502 });
+      }
+    }
+
     // Cancel the post-game cleanup alarm. Use during testing when you want
     // the game record to stick around past the 5-minute auto-wipe window.
     // Once cancelled, the cleanup must be triggered manually via /admin/reset.
@@ -1340,4 +1419,53 @@ function withCors(res: Response): Response {
   const headers = new Headers(res.headers);
   for (const [k, v] of Object.entries(corsHeaders())) headers.set(k, v);
   return new Response(res.body, { status: res.status, statusText: res.statusText, headers });
+}
+
+/**
+ * Build the LLM prompt for the post-game coach awards. Returns a JSON
+ * structure the /awards.html page renders. Categories chosen so multiple
+ * coaches get a moment in the spotlight rather than one all-night winner.
+ */
+function buildJudgePrompt(
+  coaches: Array<{
+    coachName: string;
+    agentId: string;
+    agentName: string;
+    directives: Array<{ text: string; firstTick: number; persistedTicks: number }>;
+  }>
+): string {
+  const corpus = coaches.map((c) => {
+    const lines = c.directives.map(
+      (d) => `  - tick ${d.firstTick}, persisted ${d.persistedTicks} action(s): "${d.text.replace(/"/g, '\\"')}"`
+    );
+    return `Coach: ${c.coachName}\nManager: ${c.agentName}\nDirectives:\n${lines.join("\n")}`;
+  }).join("\n\n---\n\n");
+
+  return `You are judging a 1-hour corporate-satire game where each human coach whispered "life-coach" directives to one AI middle-manager who acted on them (or didn't) over 80 ticks. Below are every distinct directive each coach wrote, in order. Pick winners for these four awards:
+
+1. **most_entertaining_coach** — best overall body of work, the coach whose directives were funniest / spiciest / most fun for the audience to read on the big screen
+2. **most_committed_to_character** — the coach who steered their manager into the most in-character corporate-satire mayhem (sabotage chains, alliance betrayals, dramatic falls)
+3. **best_single_directive** — one specific directive, regardless of coach, that stands alone as a great line
+4. **most_chaotic** — the coach who wrote directives that were the most unhinged or cursed (in a fun way)
+
+For each award return:
+- coachName: exact match from the input
+- agentName: their AI manager's name
+- winningDirective: the verbatim directive that earned it (for category 3, the standalone line; for the others, the single directive most representative of why they won)
+- citation: 1-2 sentences of judge commentary, in the voice of an awards-show host. Reference specifics from the directive — make it feel earned, not generic.
+
+Respond as a single JSON object with this exact shape, no prose, no fences:
+
+{
+  "most_entertaining_coach": { "coachName": "...", "agentName": "...", "winningDirective": "...", "citation": "..." },
+  "most_committed_to_character": { "coachName": "...", "agentName": "...", "winningDirective": "...", "citation": "..." },
+  "best_single_directive": { "coachName": "...", "agentName": "...", "winningDirective": "...", "citation": "..." },
+  "most_chaotic": { "coachName": "...", "agentName": "...", "winningDirective": "...", "citation": "..." }
+}
+
+Same coach can win multiple categories ONLY if their work is genuinely the best in each — don't force it. If only one or two coaches have meaningful submissions, leave the lower-tier categories with citation "Insufficient material — no winner this category" and empty strings elsewhere.
+
+THE COACHES AND THEIR DIRECTIVES:
+
+${corpus}`;
 }

@@ -1,0 +1,387 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>MegaCorp · Coach Awards Ceremony</title>
+  <link rel="icon" type="image/svg+xml" href="/favicon.svg">
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    :root {
+      --navy: #1c3a64;
+      --navy-2: #2c5896;
+      --bg: #0e1a2b;
+      --gold: #f1c40f;
+      --gold-2: #e0b00a;
+      --card: #ffffff;
+      --text: #1c3a64;
+      --text-muted: #7a8b99;
+    }
+    html, body {
+      font-family: Calibri, "Segoe UI", Arial, sans-serif;
+      color: var(--text);
+      background: radial-gradient(ellipse at top, #1c3a64 0%, #0e1a2b 70%);
+      min-height: 100vh;
+    }
+    .header {
+      background: var(--navy);
+      color: #fff;
+      padding: 18px 32px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      border-bottom: 4px solid var(--gold);
+      flex-wrap: wrap;
+      gap: 14px;
+    }
+    .header .nav-links a {
+      color: rgba(255,255,255,0.85);
+      margin-left: 14px;
+      text-decoration: none;
+      font-size: 13px;
+      letter-spacing: 0.4px;
+    }
+    .header .nav-links a:hover { color: #ffffff; text-decoration: underline; }
+    .header .title {
+      font-size: 28px;
+      font-weight: 700;
+      letter-spacing: 1px;
+      text-transform: uppercase;
+    }
+
+    .stage {
+      max-width: 1100px;
+      margin: 0 auto;
+      padding: 40px 24px 80px;
+    }
+
+    .intro {
+      text-align: center;
+      padding: 24px 16px 16px;
+      color: rgba(255,255,255,0.85);
+    }
+    .intro h2 {
+      font-size: 36px;
+      letter-spacing: 2px;
+      text-transform: uppercase;
+      color: var(--gold);
+      margin-bottom: 6px;
+    }
+    .intro p { font-size: 14px; color: rgba(255,255,255,0.6); letter-spacing: 0.4px; }
+
+    .controls {
+      display: flex;
+      justify-content: center;
+      gap: 12px;
+      margin: 24px 0 36px;
+      flex-wrap: wrap;
+    }
+    .btn {
+      background: var(--gold);
+      color: var(--navy);
+      border: 0;
+      padding: 12px 22px;
+      font-size: 13px;
+      font-weight: 700;
+      letter-spacing: 1.5px;
+      text-transform: uppercase;
+      cursor: pointer;
+      font-family: inherit;
+      border-radius: 2px;
+      transition: background 0.15s, transform 0.1s;
+    }
+    .btn:hover { background: var(--gold-2); }
+    .btn:active { transform: translateY(1px); }
+    .btn:disabled { opacity: 0.4; cursor: not-allowed; }
+    .btn.secondary {
+      background: rgba(255,255,255,0.10);
+      color: #fff;
+    }
+    .btn.secondary:hover { background: rgba(255,255,255,0.18); }
+
+    .status-line {
+      text-align: center;
+      color: rgba(255,255,255,0.6);
+      font-family: Consolas, "SF Mono", Menlo, monospace;
+      font-size: 13px;
+      min-height: 20px;
+      margin-bottom: 30px;
+    }
+    .status-line.error { color: #e8786a; }
+
+    .awards-grid {
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 28px;
+    }
+
+    .award-card {
+      background: var(--card);
+      border-radius: 4px;
+      box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+      overflow: hidden;
+      opacity: 0;
+      transform: translateY(20px);
+      transition: opacity 0.5s ease, transform 0.5s ease;
+    }
+    .award-card.revealed {
+      opacity: 1;
+      transform: translateY(0);
+    }
+    .award-banner {
+      background: linear-gradient(90deg, var(--navy) 0%, var(--navy-2) 100%);
+      color: var(--gold);
+      padding: 16px 24px;
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      border-bottom: 3px solid var(--gold);
+    }
+    .award-banner .trophy { font-size: 30px; flex-shrink: 0; }
+    .award-banner .label {
+      font-size: 11px;
+      letter-spacing: 2.5px;
+      text-transform: uppercase;
+      color: rgba(241,196,15,0.7);
+      font-weight: 600;
+      margin-bottom: 2px;
+    }
+    .award-banner .name {
+      font-size: 22px;
+      font-weight: 700;
+      letter-spacing: 0.6px;
+    }
+
+    .award-body { padding: 28px 28px 24px; }
+    .winner-line {
+      display: flex;
+      align-items: baseline;
+      gap: 14px;
+      margin-bottom: 20px;
+      flex-wrap: wrap;
+    }
+    .winner-coach {
+      font-size: 28px;
+      font-weight: 700;
+      color: var(--navy);
+      letter-spacing: 0.4px;
+    }
+    .winner-mgr {
+      font-size: 14px;
+      color: var(--text-muted);
+      font-family: Consolas, "SF Mono", Menlo, monospace;
+    }
+    .winner-mgr::before { content: "coaching "; opacity: 0.6; }
+    .winner-mgr b { color: var(--navy); }
+
+    .winner-quote {
+      background: #fef5e7;
+      border-left: 4px solid var(--gold);
+      padding: 18px 22px;
+      font-style: italic;
+      font-size: 18px;
+      line-height: 1.5;
+      color: #1c3a64;
+      margin-bottom: 18px;
+      position: relative;
+      border-radius: 2px;
+    }
+    .winner-quote::before { content: "“"; color: var(--gold); font-size: 36px; line-height: 0; vertical-align: -10px; margin-right: 4px; }
+    .winner-quote::after { content: "”"; color: var(--gold); font-size: 36px; line-height: 0; vertical-align: -16px; margin-left: 2px; }
+
+    .citation {
+      font-size: 14px;
+      line-height: 1.6;
+      color: var(--text-muted);
+      padding: 12px 0 0;
+      border-top: 1px dashed #e6ebf1;
+    }
+    .citation::before {
+      content: "FROM THE JUDGE — ";
+      font-weight: 700;
+      color: var(--navy);
+      font-size: 11px;
+      letter-spacing: 1.5px;
+    }
+
+    .empty-card {
+      padding: 28px;
+      text-align: center;
+      color: var(--text-muted);
+      font-style: italic;
+      font-size: 14px;
+    }
+
+    .reveal-controls {
+      text-align: center;
+      margin-top: 30px;
+      color: rgba(255,255,255,0.5);
+      font-size: 12px;
+      letter-spacing: 0.4px;
+    }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <div class="title">🏆 Coach Awards Ceremony</div>
+    <div class="nav-links">
+      <a href="/">📊 Dashboard</a>
+      <a href="/intro.html">🧑‍💼 Be a Life Coach</a>
+      <a href="/handbook.html">📖 Handbook</a>
+      <a href="/directives.html">🎙 Life Coaching</a>
+    </div>
+  </div>
+
+  <div class="stage">
+    <div class="intro">
+      <h2>The Quarterly Ascension Awards</h2>
+      <p>Judging every directive whispered into a manager's ear this quarter.</p>
+    </div>
+
+    <div class="controls">
+      <button class="btn" id="run-btn">🎬 Run Awards (Judge the Game)</button>
+      <button class="btn secondary" id="reveal-btn" style="display:none;">▶ Reveal Next Award</button>
+    </div>
+
+    <div class="status-line" id="status"></div>
+
+    <div class="awards-grid" id="awards-grid"></div>
+  </div>
+
+  <script>
+    const ORCHESTRATOR_BASE = window.ORCHESTRATOR_BASE
+      || 'https://orchestrator.briana-761.workers.dev';
+
+    const CATEGORIES = [
+      { key: 'most_entertaining_coach',     label: 'Most Entertaining Coach',     trophy: '🏆' },
+      { key: 'most_committed_to_character', label: 'Most Committed to Character', trophy: '🎭' },
+      { key: 'best_single_directive',       label: 'Best Single Directive',       trophy: '✍️' },
+      { key: 'most_chaotic',                label: 'Most Chaotic / Unhinged',     trophy: '💀' },
+    ];
+
+    function escape(s) {
+      return String(s ?? '')
+        .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+    }
+
+    function getAdminSecret() {
+      let s = sessionStorage.getItem('adminSecret');
+      if (s) return s;
+      s = prompt('Admin secret (kept in sessionStorage for this tab):');
+      if (s) sessionStorage.setItem('adminSecret', s);
+      return s;
+    }
+
+    let awardsData = null;
+    let revealIndex = 0;
+
+    async function runAwards() {
+      const secret = getAdminSecret();
+      if (!secret) return;
+      const runBtn = document.getElementById('run-btn');
+      const status = document.getElementById('status');
+      runBtn.disabled = true;
+      status.classList.remove('error');
+      status.textContent = 'Calling the judge — this may take 20–40 seconds…';
+
+      try {
+        const r = await fetch(ORCHESTRATOR_BASE + '/admin/judge-directives', {
+          method: 'POST',
+          headers: { 'Authorization': 'Bearer ' + secret },
+        });
+        if (r.status === 401 || r.status === 403) {
+          sessionStorage.removeItem('adminSecret');
+          status.classList.add('error');
+          status.textContent = 'Admin secret rejected. Refresh and try again.';
+          runBtn.disabled = false;
+          return;
+        }
+        const data = await r.json();
+        if (!r.ok) {
+          status.classList.add('error');
+          status.textContent = data.error || `Failed (HTTP ${r.status})`;
+          runBtn.disabled = false;
+          return;
+        }
+        awardsData = data;
+        status.textContent = `Judge done. ${data.coaches?.length ?? 0} coach${data.coaches?.length === 1 ? '' : 'es'} considered, ${CATEGORIES.length} awards. Tap "Reveal Next" to project them one at a time.`;
+        runBtn.style.display = 'none';
+        prepareCards();
+      } catch (e) {
+        status.classList.add('error');
+        status.textContent = 'Network error: ' + e.message;
+        runBtn.disabled = false;
+      }
+    }
+
+    function prepareCards() {
+      const grid = document.getElementById('awards-grid');
+      grid.innerHTML = '';
+      revealIndex = 0;
+      for (const cat of CATEGORIES) {
+        const award = awardsData.awards?.[cat.key];
+        const card = document.createElement('div');
+        card.className = 'award-card';
+        card.dataset.category = cat.key;
+        if (!award || (!award.coachName && !award.citation)) {
+          card.innerHTML = `
+            <div class="award-banner">
+              <span class="trophy">${cat.trophy}</span>
+              <div>
+                <div class="label">Award</div>
+                <div class="name">${escape(cat.label)}</div>
+              </div>
+            </div>
+            <div class="empty-card">Insufficient material — no winner this category.</div>`;
+        } else {
+          card.innerHTML = `
+            <div class="award-banner">
+              <span class="trophy">${cat.trophy}</span>
+              <div>
+                <div class="label">Award</div>
+                <div class="name">${escape(cat.label)}</div>
+              </div>
+            </div>
+            <div class="award-body">
+              <div class="winner-line">
+                <div class="winner-coach">${escape(award.coachName || '—')}</div>
+                <div class="winner-mgr"><b>${escape(award.agentName || '?')}</b></div>
+              </div>
+              ${award.winningDirective ? `<div class="winner-quote">${escape(award.winningDirective)}</div>` : ''}
+              ${award.citation ? `<div class="citation">${escape(award.citation)}</div>` : ''}
+            </div>`;
+        }
+        grid.appendChild(card);
+      }
+      document.getElementById('reveal-btn').style.display = '';
+    }
+
+    function revealNext() {
+      const cards = document.querySelectorAll('.award-card:not(.revealed)');
+      if (cards.length === 0) return;
+      cards[0].classList.add('revealed');
+      cards[0].scrollIntoView({ behavior: 'smooth', block: 'center' });
+      revealIndex++;
+      if (revealIndex >= CATEGORIES.length) {
+        const btn = document.getElementById('reveal-btn');
+        btn.textContent = '✓ All revealed';
+        btn.disabled = true;
+      }
+    }
+
+    document.getElementById('run-btn').addEventListener('click', runAwards);
+    document.getElementById('reveal-btn').addEventListener('click', revealNext);
+
+    // Inject ?coach=<id> into Dashboard nav link if browser cached one.
+    try {
+      const claimed = localStorage.getItem('qa.myCoachedAgent');
+      if (claimed) {
+        document.querySelectorAll('a[href="/"]').forEach(a => {
+          a.href = '/?coach=' + encodeURIComponent(claimed);
+        });
+      }
+    } catch {}
+  </script>
+</body>
+</html>
