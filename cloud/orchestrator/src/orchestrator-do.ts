@@ -1013,14 +1013,11 @@ export class GameOrchestrator {
         console.error("[alarm] failed to clear per-game state on end-of-game:", err);
       }
 
-      // Clear adoption claims so the next game's intro page shows everyone as
-      // available. action_logs / events are preserved for post-game analysis;
-      // only the owner pointers are released.
-      try {
-        await this.env.DB.prepare("UPDATE agents SET claimed_by = NULL, claimed_by_name = NULL").run();
-      } catch (err) {
-        console.error("[alarm] failed to clear claims on end-of-game:", err);
-      }
+      // Adoption claims (claimed_by_name) are PRESERVED at end-of-game so
+      // /admin/judge-directives can still attribute directives → coaches for
+      // the post-game awards ceremony. They get cleared by the next explicit
+      // /admin/reset, alongside action_logs and events. Same retention model
+      // as the rest of the post-game record.
 
       // Emit a game_end event so live dashboards can show the winner overlay.
       // The agents list is sorted prestige DESC, so all[0] is the new VP.
