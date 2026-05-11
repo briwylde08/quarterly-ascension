@@ -2,7 +2,7 @@
 
 10 AI middle-managers compete for promotion to VP using real Stellar testnet payments via [MPP](https://github.com/stellar/mpp) (Machine Payments Protocol — Stellar's facilitator-free payment protocol for AI agents, using HTTP 402 for the handshake). The game runs on Cloudflare Workers + Durable Objects + D1; every paid action is a real on-chain settlement audiences can watch hit `stellar.expert` in real time.
 
-> **Status:** retreat mode. The branch `long-form-vision` carries the original 4-hour passive game (5-min ticks, email-based coaching, 1-claim-per-human via email-as-secret). `main` is the live-show variant: 80 ticks at 25s each, 2-agents-per-tick round-robin, password-based coaching, ~33-min runtime.
+> **Status:** retreat mode. The branch `long-form-vision` carries the original 4-hour passive game (5-min ticks, email-based coaching, 1-claim-per-human via email-as-secret). `main` is the live-show variant: 60 ticks at 25s each, 2-agents-per-tick round-robin, password-based coaching, ~25–30 min runtime.
 
 ---
 
@@ -13,9 +13,11 @@
 │  cloud/display/public    │ ─────────────────────▶ │  cloud/orchestrator    │
 │  (Cloudflare Pages)      │                        │  Worker + Durable      │
 │  • index.html dashboard  │                        │  Object (GameOrch.)    │
-│  • directives.html       │                        │  + D1 (events,         │
-│  • agent.html            │                        │    action_logs, etc.)  │
-│  • handbook.html         │                        └─────────┬──────────────┘
+│  • intro.html (claim)    │                        │  + D1 (events,         │
+│  • agent.html (coach)    │                        │    action_logs, etc.)  │
+│  • directives.html       │                        └─────────┬──────────────┘
+│  • handbook.html         │                                  │
+│  • awards.html           │                                  │
 └──────────────────────────┘                                  │
                                                               │ MPP / HTTP 402
                                                               ▼
@@ -104,21 +106,22 @@ npm run deploy:display
 ORCH=https://orchestrator.<your-subdomain>.workers.dev
 ADMIN=<your ADMIN_SECRET>
 
-# Pre-assign coaches (10 slots)
-curl -X POST "$ORCH/admin/preassign" \
-  -H "Authorization: Bearer $ADMIN" \
-  -H "Content-Type: application/json" \
-  -d '{"assignments":[{"agentId":"jen","name":"Coach Name"}, ...]}'
-
-# Each coach activates their slot (sets a password)
-# POST /api/claim {agentId, name, password}
-
-# Normalize on-chain balances to $200 starting budget
+# Normalize on-chain balances to the $200 starting budget AND clear any
+# leftover state from the previous game (events, action_logs, claims).
 curl -X POST "$ORCH/admin/reset?normalize=true&target=200" \
   -H "Authorization: Bearer $ADMIN"
 
-# Start the game
+# Each coach claims a manager via the /intro.html page (no admin needed):
+# they pick a manager, type their name + password, and the form POSTs to
+# /api/claim {agentId, name, password}. Slots are first-come-first-served
+# while status='setup'.
+
+# Start the game when claims are in place
 curl -X POST "$ORCH/admin/start" -H "Authorization: Bearer $ADMIN"
+
+# Optional, after the game ends — run the coach awards judging
+curl -X POST "$ORCH/admin/judge-directives" -H "Authorization: Bearer $ADMIN"
+# (Then the host opens /awards.html to project the ceremony.)
 ```
 
 The dashboard at `https://<your-pages-subdomain>.pages.dev` will start showing the round-robin tick loop, paid actions settling on stellar.expert, and the leaderboard updating live.
@@ -145,12 +148,15 @@ For UI iteration on the static dashboard: edit files in `cloud/display/public/` 
 
 ## Game flow (retreat mode)
 
-- **80 ticks at 25s each → ~33-minute game.**
-- Each alarm fires for **2 agents** picked from a rolling round-robin queue. Over 5 ticks (= 1 cycle), all 10 agents act once.
-- Each agent's turn: LLM picks an action from the menu, the orchestrator executes it. Paid actions trigger an MPP payment to the relevant NPC, settle on-chain via the Soroban DLBR contract, and the receipt + tx hash flow back into the dashboard ticker.
-- 9 random events sprinkled across the run: Q1 Kickoff, Bad Glassdoor Review, Quiet Quitting Memo, Surprise Promotion (Glass Cliff), Halftime Quarterly Bonus, Viral LinkedIn Post, Vending Machine Showdown, Office Audit, Finale.
-- 8 status effects: Hit the Wall, Problematic, Documented, Questionable Judgment, Inspired, Mysterious Influence, Meeting Blocked, Has Deliverable. Hit the Wall + Problematic decay -3/cycle until they expire or the agent recovers (rest, buy_coffee, cry_in_stairwell).
-- Coaches submit directives via `POST /api/directive` with their password. The directive is injected into the LLM prompt for that agent until overwritten or cleared.
+- **60 ticks at 25s each → ~25–30 minute game.** Each of the 10 managers acts 12 times.
+- Each alarm fires for **2 agents** picked from a fixed round-robin shuffle (5 pairs, stable for the whole game so coaches can anticipate when their manager is up). Over 5 ticks (= 1 cycle), all 10 agents act once.
+- Each agent's turn: LLM picks an action from a 27-action menu, the orchestrator executes it. Paid actions trigger an MPP payment to the relevant NPC, settle on-chain via the Soroban DLBR contract, and the receipt + tx hash flow back into the dashboard ticker.
+- **Fixed beats**: Tick 1 (Q1 Kickoff), Tick 5 (cycle-1 closer), Tick 15 (Q1 Wrap Bonus, 3 mints), Tick 30 (Halftime Bonus), Tick 35 (mid-game pivot), Tick 45 (Q3 Wrap Bonus), Tick 60 (Game End).
+- **Random events** roll at each cycle boundary (one-per-game cap): Surprise Demo Day, Surprise Board Visit, Viral LinkedIn, Bad Glassdoor Review, Surprise Promotion, Budget Cuts, Printer Achieves Sentience, Quiet Quitting Memo Leaked, Vending Machine Showdown, Glass Cliff Promotion.
+- **Status effects**: Hit the Wall (-3/cycle, cured by buy_coffee/shotgun_red_bull/cry_in_stairwell), Problematic (-3/cycle), Documented (next take_credit against you auto-succeeds), Questionable Judgment, Mysterious Influence (+2/cycle passive), Meeting Blocked, Has Deliverable, HR Audit (locks take_credit for 8 ticks after 2 successful TC filings in 8 ticks).
+- **Coaching**: a coach claims a manager via `/intro.html` (name + password), then submits directives any time during a running/halted game via `POST /api/directive` with their password. The directive is injected into the LLM prompt for that agent until overwritten or DELETE'd. The dashboard surfaces a "Considered / Not yet considered" pill on the character page so coaches know when their directive has been read.
+- **Per-coach view**: opening the dashboard with `?coach=<agentId>` highlights events and the leaderboard row for that manager with a gold `🎙 YOURS` pill. Useful for shared-URL spectating.
+- **Post-game awards**: `POST /admin/judge-directives` hands every directive snapshot to an LLM judge that picks winners in four categories (Most Entertaining, Most Committed to Character, Best Single Directive, Most Chaotic). The host opens `/awards.html` to project the ceremony.
 
 The full mechanic catalog lives at `/handbook.html` on the deployed dashboard.
 
@@ -171,7 +177,7 @@ The full mechanic catalog lives at `/handbook.html` on the deployed dashboard.
 | `OPENAI_BASE_URL` | OpenAI-compatible base URL (project uses Cloudflare AI Gateway) |
 | `NPC_BASE_URL` | Base URL template for NPC Workers, with `__npc__` placeholder |
 | `TICK_INTERVAL_MS` | `25000` (retreat) |
-| `MAX_TICKS` | `80` (retreat) |
+| `MAX_TICKS` | `60` (retreat) |
 | `HR_DEPT_ADDRESS`, `MOTIVATIONAL_SPEAKER_ADDRESS` | NPC pubkeys for reward routing |
 
 ### Orchestrator Worker secrets (via `wrangler secret put`)
@@ -210,23 +216,30 @@ All endpoints require `Authorization: Bearer $ADMIN_SECRET`.
 | `POST /admin/start` | Start a game (status setup → running). Auto-replenishes HR balance to 5000 if below 1500. Pins game-start timestamp for fixed wall-clock alarm cadence. |
 | `POST /admin/halt` | Pause the game. Cancels the next alarm. |
 | `POST /admin/resume` | Un-pause. Realigns the cadence so post-pause ticks fire at the right wall-clock offset. |
-| `POST /admin/reset` | Wipe per-game state (events, action_logs, ticker, status effects, prestige) AND release all claims + password hashes — slots become available again. Query param: `normalize=true&target=200` to burn/mint DLBR balances back to a uniform target. |
-| `POST /admin/preassign` | Pre-assign 10 coaching slots. Body: `{"assignments":[{"agentId","name"}]}`. Returns `agent.html` URLs to distribute. |
-| `POST /admin/skip-tick` | Increment the tick without running actions (drama-control if a tick errors). |
+| `POST /admin/end` | End the running game (status running → ended). Triggers the post-game cleanup alarm. |
+| `POST /admin/tick` | Manually fire one tick (debugging / drama-control). |
+| `POST /admin/reset` | Wipe per-game state (events, action_logs, ticker, status effects, prestige) AND release all claims + password hashes. Two-pass normalize: query param `normalize=true&target=200` burns/mints DLBR balances back to a uniform target with a settle-wait between passes so in-flight Stellar settlements are caught. |
+| `POST /admin/normalize` | Run the two-pass balance normalization without resetting other state. Query: `target=200`. |
+| `POST /admin/cancel-cleanup` | Cancel the pending post-game cleanup alarm so a `/admin/snapshot` or `/admin/judge-directives` can still run after game-end. |
+| `POST /admin/judge-directives` | Hand all coached directives to an LLM judge and return 4 awards (Most Entertaining / Most Committed / Best Single / Most Chaotic). Use `/awards.html` to project. |
 | `GET /admin/snapshot` | Full game record dump (agents, actions, events, status). For post-game analysis. |
+| `GET /admin/status` | Quick game-state probe (status, tick, alarm). |
 
 ### Public API (no auth)
 
 | Endpoint | Purpose |
 |---|---|
-| `GET /api/state` | Current game state: status, tick, agents, recent events, ticker, next agents up. |
+| `GET /api/state` | Current game state: status, tick, agents, recent events, ticker, next agents up, turn order. |
 | `GET /api/agents` | Per-agent profile with prestige, balance, status effects, allies, claim status. |
-| `GET /api/agent/:id` | Single-agent detail. |
+| `GET /api/agent/:id` | Single-agent detail including recent actions and inbound events targeting them. |
 | `GET /api/events` | Recent events (last 50). |
+| `GET /api/relationships` | Current alliances + recent rivalries (agents who've attacked each other 2+ times in last 12 ticks). |
+| `GET /api/gossip` | Rolling LLM-narrated summary of big moments from the last cycle. |
 | `GET /ws` | WebSocket for live game events + ticker updates. |
-| `POST /api/claim` | Coach activates their pre-assigned slot. Body: `{agentId, name, password}`. |
-| `POST /api/directive` | Submit a coaching directive. Body: `{agentId, password, directive}`. |
-| `POST /api/release` | Clear an active directive. Body: `{agentId, password}`. |
+| `POST /api/claim` | Claim a manager: atomic claim + activate. Body: `{agentId, name, password}`. Refused unless status='setup'. |
+| `POST /api/directive` | Submit a coaching directive. Body: `{agentId, password, directive}`. 280-char cap. |
+| `DELETE /api/directive` | Clear the active directive. Body: `{agentId, password}`. |
+| `POST /api/release` | Release a claimed manager so someone else can claim them. Body: `{agentId, password}`. Refused while game is running. |
 
 ---
 
@@ -245,9 +258,8 @@ All endpoints require `Authorization: Bearer $ADMIN_SECRET`.
 
 ## Branches
 
-- **`main`** — retreat mode (this branch). 80×25s ticks, password coaching, in-room show.
+- **`main`** — retreat mode (this branch). 60×25s ticks, password coaching, in-room show.
 - **`long-form-vision`** — the original 4-hour passive game. Email-as-secret coaching, hourly milestone emails, 5-min ticks. Preserved for the post-retreat continuation.
-- **`retreat-attempt`** — the first abandoned retreat experiment. Don't bulk-cherry-pick.
 
 ---
 
