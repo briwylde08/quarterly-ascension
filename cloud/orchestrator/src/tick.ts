@@ -1143,15 +1143,22 @@ async function executePaidAction(
       if ("target" in action) {
         const target = await db.getAgent(action.target);
         if (target) {
-          // $15 Problematic source — cheaper than Sensitivity Training
-          // ($30) but smaller prestige hit (-3 vs -20). Designed to make
-          // the Problematic chain (→ Bad Glassdoor) more reachable.
-          await db.updateAgentPrestige(action.target, -3);
-          await db.updateAgentStatusEffects(action.target, [
-            ...target.statusEffects.filter((e) => e.type !== "problematic"),
-            // 2 cycles × 5 ticks/cycle (per-cycle decay gate, see applyPassiveStatusDecay)
-            { type: "problematic", expiresAtTick: tick + 10, source: agent.id },
-          ]);
+          // Mechanical twin of sensitivity_training — same cost, same
+          // effects, same cooldown. Two flavors of the same play so the
+          // LLM has narrative choice (paper-trail vs public corrective)
+          // without distorting the action economy. Cooldown registers
+          // under "sensitivity_training" so an attacker can't twin-tap
+          // a single target by chaining handbook → sensitivity training.
+          const cd = await checkTargetCooldown(deps, agent.id, "sensitivity_training", action.target, tick);
+          if (cd.onCooldown) {
+            outcome = fizzleOutcome("invoke_handbook", target.name);
+            break;
+          }
+          await recordTargetUse(deps, agent.id, "sensitivity_training", action.target, tick);
+          prestigeChange = 5;
+          await db.updateAgentPrestige(agent.id, prestigeChange);
+          const wellAllied = target.allies.length >= 3;
+          const hit = wellAllied ? -10 : -20;
           const sections = [
             "section 4.7.b ('Decorum in Shared Spaces')",
             "section 12.3 ('Communications Standards')",
@@ -1161,7 +1168,15 @@ async function executePaidAction(
           ];
           const section = sections[Math.floor(Math.random() * sections.length)];
           actionDetail = section;
-          outcome = `Cited ${section} against ${target.name}. They lose 3 prestige and gain Problematic for 2 cycles. The handbook is a weapon.`;
+          outcome = wellAllied
+            ? `Cited ${section} against ${target.name} (+5 to you for accountability); their partnerships softened the blow (${hit} prestige instead of -20)`
+            : `Cited ${section} against ${target.name} (+5 to you for accountability; ${hit} prestige to them + Problematic for 4 cycles). The handbook is a weapon.`;
+          await db.updateAgentPrestige(action.target, hit);
+          await db.updateAgentStatusEffects(action.target, [
+            ...target.statusEffects.filter((e) => e.type !== "problematic"),
+            // 4 cycles × 5 ticks/cycle — matches sensitivity_training
+            { type: "problematic", expiresAtTick: tick + 20, source: agent.id },
+          ]);
         }
       }
       break;
