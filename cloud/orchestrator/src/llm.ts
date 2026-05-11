@@ -98,7 +98,7 @@ const ALL_ACTIONS = [
 
   // === EXPENSIVE ($30 – $50) ===
   { type: "sensitivity_training", description: "Send rival to sensitivity training (you +5 'managerial accountability' prestige; target -20 + Problematic for 4 ticks at -3/tick. Setup play — Bad Glassdoor Review hits Problematic targets for an extra -10.)", cost: 30, requiresTarget: true },
-  { type: "schedule_conflict", description: "Cancel target's CEO meeting (clears their Has Deliverable + Meeting-Blocked for 2 ticks)", cost: 30, requiresTarget: true },
+  { type: "schedule_conflict", description: "Cancel target's pending CEO meeting ($30). Devastates anyone holding HAS DELIVERABLE — they lose the +40 payout AND get Meeting-Blocked 2 cycles. Best counter to a leader sitting on a Strategy Report. Use it BEFORE they cash in.", cost: 30, requiresTarget: true },
   { type: "hostile_takeover", description: "Mount a hostile takeover of target's cross-functional partnerships ($35). Their existing partners become YOUR partners; target's partner list goes to zero. Mid-to-late game power move.", cost: 35, requiresTarget: true },
   { type: "sabotage_plan", description: "Commission a dossier on target (-10 prestige + Documented for 2 cycles, meaning the next Take Credit against them is a guaranteed +30 prestige to the attacker). If you chain it yourself: 40-prestige swing. If someone ELSE cashes in the chain: you still earn a +5 finder's fee for setting it up — so the dossier always pays off. The biggest setup play in the game.", cost: 40, requiresTarget: true },
   { type: "book_ceo_time", description: "Meet with CEO (+40 prestige with Has Deliverable, -20 without; -10 if Meeting-Blocked)", cost: 40 },
@@ -170,6 +170,12 @@ function buildContextPrompt(ctx: DecisionContext): string {
   const PUBLIC_STATUSES = new Set([
     "marked", "problematic", "tired", "meeting_blocked",
     "mysterious_influence", "questionable_judgment", "hr_audit",
+    // has_deliverable is public so rivals know to schedule_conflict the
+    // pending CEO meeting before it cashes in for +40. Games 12-13 saw
+    // schedule_conflict picked zero times because Has Deliverable was
+    // invisible to other agents — they couldn't target what they
+    // couldn't see. Surfacing it creates intentional late-game tension.
+    "has_deliverable",
   ]);
   const otherAgents = allAgents
     .filter((a) => a.id !== agent.id)
