@@ -215,6 +215,7 @@
     .badge-demo.tag-well-allied { color: var(--info); background: var(--info-bg); }
     .badge-demo.mysterious_influence { color: #6c3483; background: #f4ecf7; border-color: #a569bd; }
     .badge-demo.questionable_judgment { color: var(--warning); background: var(--warning-bg); border-style: dashed; }
+    .badge-demo.hr_audit { color: #6c3483; background: #ebdef0; border-style: dashed; }
 
     .group-header td {
       background: var(--panel-head);
@@ -469,9 +470,9 @@
             </tr>
             <tr>
               <td class="action">Invoke the Employee Handbook</td>
-              <td class="cost">$15</td>
+              <td class="cost">$30</td>
               <td class="target yes">yes</td>
-              <td>Cite a section of the handbook against target. Target loses 3 prestige and gains Problematic for 2 cycles. The cheap source of Problematic — pairs with Bad Glassdoor Review for compound damage.</td>
+              <td>Cite a section of the handbook against target. You gain +5 "managerial accountability" prestige. Target loses 20 prestige and gains Problematic for 4 cycles. <em>Halved against well-allied targets.</em> Mechanically identical to Sensitivity Training — same cost, same effects, shared cooldown. The difference is flavor: handbook citations are precise and paper-trail; sensitivity training is public corrective. Pick whichever fits your character.</td>
             </tr>
             <tr>
               <td class="action">Drop a Slack Bomb</td>
@@ -483,7 +484,7 @@
               <td class="action">File HR Complaint</td>
               <td class="cost">$22</td>
               <td class="target yes">yes</td>
-              <td>You gain +5 "diligence" prestige. Target gains Under Investigation for 1 cycle (can't retaliate against you). Defensive shielding wrapped in an attack.</td>
+              <td>You gain +5 "diligence" prestige — the <b>only hostile action that pays you instead of costing you</b>. Target gains Under Investigation for 1 cycle, locked from retaliating against you specifically. Best after you've punched someone hard and want them muzzled while you reposition.</td>
             </tr>
             <tr>
               <td class="action">Send to Sensitivity Training</td>
@@ -603,6 +604,11 @@
               <td>Public credibility tag from Spread a Rumor. Lasts 2 cycles. <b>Take Credit against you succeeds at 65% (instead of 50%)</b> while held — the rumor weakens your defense.</td>
               <td>Wears off automatically.</td>
             </tr>
+            <tr>
+              <td><span class="badge-demo hr_audit">HR Audit</span></td>
+              <td>Pattern flag. Triggers automatically when you land 2 successful Take Credits within 8 ticks. Take Credit is locked out of your menu while flagged. Public tag — peers see the flag and route around. Anti-spam mechanic; doesn't apply unless you're actively chaining Take Credits.</td>
+              <td>Wears off automatically after 8 ticks.</td>
+            </tr>
           </tbody>
         </table>
       </div>
@@ -642,7 +648,7 @@
             </tr>
             <tr>
               <td><span class="badge-demo tired">Hit the Wall</span></td>
-              <td>Bleeding −2 prestige/cycle for 3 cycles. Spread by a rival's Move Meeting Early.</td>
+              <td>Bleeding −3 prestige/cycle for 4 cycles. Spread by a rival's Move Meeting Early, or auto-applied after 5 turns without recovery.</td>
             </tr>
             <tr>
               <td><span class="badge-demo meeting_blocked">Meeting Blocked</span></td>
@@ -655,6 +661,14 @@
             <tr>
               <td><span class="badge-demo mysterious_influence">Mysterious Influence</span></td>
               <td>Office cipher who somehow gets credit for everything. Passive +2 prestige/cycle for 8 cycles and the occasional misattribution.</td>
+            </tr>
+            <tr>
+              <td><span class="badge-demo has_deliverable">Has Deliverable</span></td>
+              <td>Sitting on a Strategy Report — their next Book CEO Time scores +40. <b>Schedule Conflict</b> cancels it before they can cash in.</td>
+            </tr>
+            <tr>
+              <td><span class="badge-demo hr_audit">HR Audit</span></td>
+              <td>Got pattern-flagged for too many Take Credits. Locked out of Take Credit for 8 ticks — they can't punch via that lane right now.</td>
             </tr>
           </tbody>
         </table>
