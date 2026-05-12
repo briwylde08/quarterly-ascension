@@ -215,6 +215,24 @@
     .kpi-tile.your-manager-tile .kpi-label,
     .kpi-tile.your-manager-tile .kpi-sublabel { color: var(--navy); }
     .kpi-tile.your-manager-tile .kpi-value { color: var(--navy); font-size: 18px; }
+    /* Quick jump to the claimer's character/coaching page. Sits inside the
+       gold Your Manager tile so coaches can hop to the coaching form in one
+       click instead of fishing for it from the nav. */
+    .kpi-tile.your-manager-tile .go-coach {
+      display: inline-block;
+      margin-top: 8px;
+      padding: 4px 10px;
+      background: var(--navy);
+      color: #f1c40f;
+      font-size: 10px;
+      font-weight: 700;
+      letter-spacing: 1.2px;
+      text-transform: uppercase;
+      text-decoration: none;
+      border-radius: 2px;
+      transition: background 0.15s;
+    }
+    .kpi-tile.your-manager-tile .go-coach:hover { background: var(--navy-2); }
     .kpi-tile {
       background: var(--panel);
       border: 1px solid var(--border);
@@ -1300,6 +1318,7 @@
       <div class="kpi-label">Your Manager</div>
       <div class="kpi-sublabel">Highlighted In Stream + Leaderboard</div>
       <div class="kpi-value your-manager-name" id="your-coach-name">—</div>
+      <a class="go-coach" id="your-coach-link" href="#">🎙 Go Coach →</a>
     </div>
   </section>
 
@@ -1962,14 +1981,17 @@
 
       // Surface the "You coach: X" pill once the agents list resolves
       // the coach's name. Stays hidden if no ?coach=<id> param or the
-      // id doesn't match any agent.
+      // id doesn't match any agent. Also wires the "Go Coach" link to
+      // the manager's character page (which has the coaching form).
       if (myCoachedAgent) {
         const me = agents.find(a => a.id === myCoachedAgent);
         const pill = document.getElementById('your-coach-pill');
         const nameEl = document.getElementById('your-coach-name');
+        const link = document.getElementById('your-coach-link');
         if (me && pill && nameEl) {
           nameEl.textContent = me.name;
           pill.style.display = '';
+          if (link) link.href = '/agent.html?id=' + encodeURIComponent(me.id);
         }
       }
 
