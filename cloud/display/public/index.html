@@ -1216,7 +1216,7 @@
         <img id="ended-portrait-img" alt="">
       </div>
       <div class="ended-headline" id="ended-headline">Congratulations!</div>
-      <div class="ended-sub" id="ended-sub">You've been promoted to VP of Q1 Operations.</div>
+      <div class="ended-sub" id="ended-sub">You've been promoted to VP of Prestige.</div>
       <div class="ended-stats">
         <div><b id="ended-prestige">—</b>Final Prestige</div>
         <div><b id="ended-rank">#1</b>Closing Rank</div>
@@ -2618,7 +2618,7 @@
       document.getElementById('ended-headline').textContent =
         `Congratulations, ${winner.name}!`;
       document.getElementById('ended-sub').textContent =
-        `${firstName} has been promoted to Vice President of Q1 Operations. The break-room cake is on its way.`;
+        `${firstName} has been promoted to Vice President of Prestige. The break-room cake is on its way.`;
       document.getElementById('ended-prestige').textContent = String(winner.prestige);
       const rank = (data.agents.findIndex((a) => a.id === winner.id) + 1) || 1;
       document.getElementById('ended-rank').textContent = `#${rank}`;
