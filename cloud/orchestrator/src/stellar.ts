@@ -24,17 +24,48 @@ export class Stellar {
 
   async getAssetBalance(publicKey: string): Promise<number> {
     if (!this.cfg.assetIssuer) return 0;
+    // ROOT-CAUSE FIX (retreat post-mortem): we used to call
+    // `this.horizon.loadAccount(publicKey)`, which goes through stellar-sdk's
+    // internal fetch. Under Cloudflare Workers, that fetch can be served
+    // from the edge cache, returning a stale snapshot. Once a stale $0 read
+    // got cached during the reset's burn/mint window, every subsequent tick
+    // saw $0, the LLM's available-actions filter dropped every paid action,
+    // and 41 of 60 ticks went silent on-chain.
+    //
+    // The fix: direct fetch with `cache: 'no-store'` so each balance read
+    // hits Horizon live. Structured logs on the catch path so future
+    // failures are forensically visible instead of silently falling to 0.
+    const url = `${this.cfg.horizonUrl}/accounts/${publicKey}`;
     try {
-      const account = await this.horizon.loadAccount(publicKey);
+      // Cloudflare Workers don't honor the standard `cache: 'no-store'`
+      // RequestInit — they expose cache control via the `cf` property and
+      // standard HTTP Cache-Control headers. Belt-and-suspenders: both.
+      const r = await fetch(url, {
+        cf: { cacheTtl: 0, cacheEverything: false },
+        headers: { "Cache-Control": "no-cache, no-store" },
+      });
+      if (!r.ok) {
+        console.error(`[stellar] balance read non-OK for ${publicKey.slice(0, 8)}…: HTTP ${r.status}`);
+        return 0;
+      }
+      const account = await r.json() as {
+        balances: Array<{
+          asset_type: string;
+          asset_code?: string;
+          asset_issuer?: string;
+          balance: string;
+        }>;
+      };
       const balance = account.balances.find(
-        (b): b is Horizon.HorizonApi.BalanceLineAsset =>
+        (b) =>
           (b.asset_type === "credit_alphanum4" || b.asset_type === "credit_alphanum12") &&
           b.asset_code === this.cfg.assetCode &&
           b.asset_issuer === this.cfg.assetIssuer
       );
       return balance ? parseFloat(balance.balance) : 0;
     } catch (error) {
-      console.error(`Failed to get balance for ${publicKey}:`, error);
+      const msg = error instanceof Error ? error.message : String(error);
+      console.error(`[stellar] balance read threw for ${publicKey.slice(0, 8)}…: ${msg}`);
       return 0;
     }
   }
