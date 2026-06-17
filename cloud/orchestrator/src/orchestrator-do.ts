@@ -267,11 +267,11 @@ export class GameOrchestrator {
 
     if (path === "/tick" && request.method === "POST") {
       // Manual tick trigger for smoke testing without waiting for the alarm.
-      // Uses the same round-robin picker as the alarm (2 agents per tick).
+      // Uses the same round-robin picker as the alarm (5 agents per tick).
       if (this.tickInFlight) {
         return Response.json({ error: "Tick already in progress" }, { status: 409 });
       }
-      const activeAgentIds = await this.pickActiveAgentsForRoundRobin(2);
+      const activeAgentIds = await this.pickActiveAgentsForRoundRobin(5);
       await this.runTick(activeAgentIds);
       return Response.json({ ok: true, tick: await db.getCurrentTick(), activeAgents: activeAgentIds });
     }
@@ -963,11 +963,11 @@ export class GameOrchestrator {
             .map((a) => ({ id: a.id, name: a.name }));
           let idx = parseInt(turnIndexRaw, 10);
           if (order.length > 0 && idx >= order.length) idx = 0;
-          const ids = order.slice(idx, idx + 2);
-          // If we still don't have 2 names (idx near the end of order),
+          const ids = order.slice(idx, idx + 5);
+          // If we still don't have 5 names (idx near the end of order),
           // wrap to grab the rest from the top.
-          if (ids.length < 2 && order.length >= 2) {
-            ids.push(...order.slice(0, 2 - ids.length));
+          if (ids.length < 5 && order.length >= 5) {
+            ids.push(...order.slice(0, 5 - ids.length));
           }
           nextAgents = ids
             .map((id) => agents.find((a) => a.id === id))
@@ -1125,14 +1125,15 @@ export class GameOrchestrator {
       return;
     }
 
-    // Retreat round-robin: each alarm fires for 2 agents' turns. Picks
-    // the next 2 from the rolling turn-order queue.
-    const activeAgentIds = await this.pickActiveAgentsForRoundRobin(2);
+    // Public-mode round-robin: each alarm fires for 5 agents' turns —
+    // half the roster per tick — so 8-min ticks feel like a real news
+    // beat instead of one-or-two agents being idle most of the day.
+    const activeAgentIds = await this.pickActiveAgentsForRoundRobin(5);
     await this.runTick(activeAgentIds);
 
-    // After the tick, refresh the gossip narrative every 5 ticks (= once
-    // per cycle in 2-agents-per-tick mode). Cheap (one mini call), failure
-    // shouldn't break the tick loop.
+    // After the tick, refresh the gossip narrative every 5 ticks — wall-clock
+    // cycle boundary, kept independent of agents-per-tick changes. Cheap
+    // (one mini call), failure shouldn't break the tick loop.
     const newTick = await db.getCurrentTick();
     if (newTick > 0 && newTick % 5 === 0) {
       try {
@@ -1268,12 +1269,14 @@ export class GameOrchestrator {
   }
 
   /**
-   * Round-robin turn picker — 2 agents per tick. Each cycle (5 ticks ×
-   * 2 agents = 10 agents) operates on a randomized permutation of the
-   * full roster. Stored in game_state as `turn_order` (JSON array) and
-   * `turn_index`. When the index runs out, a fresh order is generated.
+   * Round-robin turn picker — 5 agents per tick by default. Each pair of
+   * ticks (5 agents × 2 ticks = 10) covers a full roster pass; the random
+   * events / status-decay "cycle" boundary is still every 5 ticks (= 2.5
+   * roster passes), so wall-clock NPC pacing is unchanged. The randomized
+   * permutation is stored in game_state as `turn_order` (JSON array) and
+   * `turn_index`. When the index runs out, the same order wraps (no reshuffle).
    */
-  private async pickActiveAgentsForRoundRobin(count: number = 2): Promise<string[]> {
+  private async pickActiveAgentsForRoundRobin(count: number = 5): Promise<string[]> {
     const db = new Db(this.env.DB);
     const orderRaw = await db.getGameStateValue("turn_order");
     const indexRaw = await db.getGameStateValue("turn_index");
