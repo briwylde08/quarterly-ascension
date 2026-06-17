@@ -13,12 +13,8 @@ export interface Agent {
   statusEffects: StatusEffect[];
   allies: string[];       // Agent IDs
   pendingAlliance: string | null;  // Agent ID who proposed
-  /** Legacy email column from the long-form claim flow. Always NULL in
-   *  retreat mode — auth is password-based; the password hash lives in
-   *  game_state under password_<agentId>. Kept on the Agent type so the
-   *  DB row mapper stays simple. */
-  claimedBy: string | null;
-  claimedByName: string | null;  // Player name (set at /api/claim)
+  claimedBy: string | null;        // Player email (set at /api/claim; used by email sender)
+  claimedByName: string | null;    // Player name (set at /api/claim)
 }
 
 export interface StatusEffect {
