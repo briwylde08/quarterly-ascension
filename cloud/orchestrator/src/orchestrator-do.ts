@@ -1016,12 +1016,25 @@ export class GameOrchestrator {
     const db = new Db(this.env.DB);
     const status = await db.getGameStatus();
 
-    // Game has ended — never auto-wipe. Final standings + action_logs +
-    // events stay in D1 for post-game analysis until someone explicitly
-    // calls /admin/reset. If an alarm somehow fires while we're in this
-    // state (shouldn't happen — we don't schedule one), just no-op.
+    // Post-game cleanup window. End-of-game schedules an alarm 60 min out
+    // so the leaderboard stays visible + finale emails land. When it fires,
+    // we wipe state and reopen the lobby for the next batch of claimers.
     if (status === "ended") {
-      console.log("[alarm] fired while ended; ignoring (no auto-cleanup).");
+      const cleanupAfterRaw = await db.getGameStateValue("cleanup_after_at");
+      const cleanupAfter = cleanupAfterRaw ? parseInt(cleanupAfterRaw, 10) : null;
+      if (cleanupAfter && Date.now() >= cleanupAfter) {
+        console.log("[alarm] post-game cleanup window elapsed; resetting for next game.");
+        try {
+          await this.performReset({
+            normalizeBalances: false,
+            broadcastNotice: "🔄 New game lobby open — first claim starts the next round.",
+          });
+        } catch (err) {
+          console.error("[alarm] auto-reset failed:", err);
+        }
+      } else {
+        console.log("[alarm] fired while ended; cleanup not yet due.");
+      }
       return;
     }
 
@@ -1102,10 +1115,13 @@ export class GameOrchestrator {
         console.error("[alarm] finale email batch failed:", err);
       }
 
-      // Don't schedule a cleanup alarm. Final standings, action_logs, and
-      // events stay in D1 until someone explicitly calls /admin/reset, so
-      // we can always pull /admin/snapshot for post-game analysis.
-      console.log(`[alarm] game ended at tick ${tick}; data preserved until /admin/reset`);
+      // Schedule the post-game cleanup alarm. After 60 min the next alarm
+      // will run performReset() and reopen the lobby for the next round.
+      // Leaderboard + finale emails get their visibility window in between.
+      const cleanupAt = Date.now() + 60 * 60 * 1000;
+      await db.setGameStateValue("cleanup_after_at", String(cleanupAt));
+      await this.state.storage.setAlarm(cleanupAt);
+      console.log(`[alarm] game ended at tick ${tick}; cleanup scheduled at ${new Date(cleanupAt).toISOString()}`);
       return;
     }
 
