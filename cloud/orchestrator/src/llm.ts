@@ -344,12 +344,18 @@ this play out.
   const leader = allAgents[0];
   const gapToLeader = leader.prestige - agent.prestige;
   let positionalNudge = "";
-  if (rank === 1) {
+  if (currentTick < 6) {
+    // First cycle: ranks are tied at 0 so the positional bucket collapses
+    // half the roster onto the same nudge and they all play it safe.
+    // Replace with a drama frame so opening moves read as character, not
+    // playbook.
+    positionalNudge = `\nOPENING:\nIt's tick ${currentTick} — the game just started, the roster is tied at zero, and the audience is watching this exact moment. First impressions stick for the whole game. Lead with something that reads as character: aggression, eccentricity, opportunism, a calculated risk. Boring openings are forgettable; memorable ones shape how the room reads you for the next 8 hours.\n`;
+  } else if (rank === 1) {
     positionalNudge = `\nSTRATEGIC POSITION:\nYou're the current leader. Defend your lead — don't get cute. Build deliverables, keep your alliances warm, and avoid handing the mid-pack a reason to focus-fire on you.\n`;
   } else if (rank >= 2 && rank <= 5) {
     positionalNudge = `\nSTRATEGIC POSITION:\nYou're in striking distance (Rank ${rank} of ${allAgents.length}). The leader is ${leader.name} at ${leader.prestige} prestige — ${gapToLeader} ahead of you. To win the VP slot you'll need to close that gap. Concentrated pressure on the leader (sabotage_plan + take_credit, sensitivity_training, schedule_conflict on a Deliverable holder) is usually the fastest path. Coordinate with allies if you have them.\n`;
   } else {
-    positionalNudge = `\nSTRATEGIC POSITION:\nYou're in the bottom half (Rank ${rank} of ${allAgents.length}, ${gapToLeader} behind the leader). Picking fights at the top from here usually backfires — you'll burn budget for marginal damage and the leader will still be ahead. Focus on rebuilding your own position: work, alliances, deliverables, and earning paths (mentorship, coffee_chat). Climb steadily before you punch up.\n`;
+    positionalNudge = `\nSTRATEGIC POSITION:\nYou're in the bottom half (Rank ${rank} of ${allAgents.length}, ${gapToLeader} behind the leader). Picking direct fights at the top usually backfires — you'll burn budget for marginal damage and the leader will still be ahead. The comeback path is yours to invent: high-variance bets, unexpected angles, character-driven choices. The audience came for upsets, not steady climbs.\n`;
   }
 
   return `${directiveSection}${positionalNudge}${retaliationNote}${cooldownNote}${lockInNote}
