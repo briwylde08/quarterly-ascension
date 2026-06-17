@@ -313,9 +313,9 @@
     }
     .up-next.empty { display: none; }
 
-    /* 5-pair cycle order strip — shows all 5 fixed pairs in slot order,
-       highlights the pair currently up next in gold. Renders inline in
-       the up-next banner. */
+    /* Cycle order strip — two groups of 5 agents (the alarm fires 5 per
+       tick now), highlights the group currently up next in gold. Renders
+       inline in the up-next banner. */
     .cycle-pairs {
       display: flex;
       gap: 6px;
@@ -325,7 +325,7 @@
     }
     .cycle-pair {
       flex: 1;
-      min-width: 110px;
+      min-width: 220px;
       background: rgba(255,255,255,0.08);
       border: 1px solid rgba(255,255,255,0.12);
       border-radius: 3px;
@@ -1566,7 +1566,7 @@
       currentStatus = data.status;
       // Up Next banner — must run AFTER currentStatus AND lastTurnOrder are set,
       // since syncUpNext branches on currentStatus for placeholder copy and on
-      // lastTurnOrder to render the 5-pair cycle strip.
+      // lastTurnOrder to render the two-group cycle strip.
       lastTurnOrder = Array.isArray(data.turnOrder) ? data.turnOrder : [];
       syncUpNext(data.nextAgents || []);
       nextAlarmAt = data.nextAlarmAt ?? null;
@@ -1620,8 +1620,8 @@
         // force reflow to restart animation
         void document.getElementById('banner').offsetWidth;
         document.getElementById('banner').classList.add('tick-pulse');
-        // Advance the Cycle Order highlight to the pair that just started
-        // acting — pair index = (tick - 1) % 5. Without this, the gold pill
+        // Advance the Cycle Order highlight to the group that just started
+        // acting — group index = (tick - 1) % 2. Without this, the gold pill
         // wouldn't move until the next periodic state poll (~15s later).
         syncUpNext([]);
       }
@@ -2147,7 +2147,7 @@
 
 
     // ============================================================
-    // Up Next banner — surface the next 2 agents who'll act
+    // Up Next banner — surface the next 5 agents who'll act
     // ============================================================
     function syncUpNext(nextAgents) {
       const banner = document.getElementById('up-next');
@@ -2156,24 +2156,24 @@
       if (!banner || !namesEl || !pairsEl) return;
       banner.classList.remove('empty');
 
-      // When we know the full 10-manager shuffle, render 5 fixed pairs and
-      // highlight the pair that's currently acting / most recently acted.
-      // Pair index = (tick - 1) % 5 — tick 1 fires pair 0, tick 5 fires pair 4,
-      // tick 6 wraps back to pair 0, etc. Derive from tick (not nextAgents)
-      // because the orchestrator advances turn_index at the *start* of a tick,
-      // so nextAgents already points to the *next* pair while the current pair
-      // is still mid-action — which made the highlight skip ahead.
+      // When we know the full 10-manager shuffle, render 2 groups of 5 and
+      // highlight the group currently acting / most recently acted. Group
+      // index = (tick - 1) % 2 — tick 1 fires group 0, tick 2 fires group 1,
+      // tick 3 wraps back. Derive from tick (not nextAgents) because the
+      // orchestrator advances turn_index at the *start* of a tick, so
+      // nextAgents points to the *next* group while the current group is
+      // still mid-action.
       const haveOrder = Array.isArray(lastTurnOrder) && lastTurnOrder.length === 10;
       if (haveOrder && currentStatus === 'running') {
         namesEl.textContent = '';
-        const pairs = [];
-        for (let i = 0; i < 5; i++) {
-          pairs.push([lastTurnOrder[i * 2], lastTurnOrder[i * 2 + 1]]);
+        const groups = [];
+        for (let i = 0; i < 2; i++) {
+          groups.push(lastTurnOrder.slice(i * 5, i * 5 + 5));
         }
-        const activeIdx = currentTick > 0 ? ((currentTick - 1) % 5) : 0;
-        pairsEl.innerHTML = pairs.map((pair, idx) => {
+        const activeIdx = currentTick > 0 ? ((currentTick - 1) % 2) : 0;
+        pairsEl.innerHTML = groups.map((group, idx) => {
           const isActive = idx === activeIdx;
-          const names = pair.map(p => p ? escape(p.name.split(' ')[0]) : '?').join(' & ');
+          const names = group.map(p => p ? escape(p.name.split(' ')[0]) : '?').join(' · ');
           const nowTag = isActive ? `<span class="now-tag">NOW</span>` : '';
           return `<div class="cycle-pair${isActive ? ' active' : ''}">`
                + `<span class="slot-num">${idx + 1}</span>${names}${nowTag}`
@@ -2184,9 +2184,9 @@
 
       pairsEl.innerHTML = '';
       if (nextAgents && nextAgents.length > 0 && currentStatus === 'running') {
-        namesEl.textContent = nextAgents.map(a => a.name).join(' & ');
+        namesEl.textContent = nextAgents.map(a => a.name).join(' · ');
       } else if (currentStatus === 'running') {
-        namesEl.textContent = 'computing the next pair…';
+        namesEl.textContent = 'computing the next group…';
       } else if (currentStatus === 'halted') {
         namesEl.textContent = 'paused';
       } else if (currentStatus === 'ended') {
