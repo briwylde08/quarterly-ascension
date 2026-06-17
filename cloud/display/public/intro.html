@@ -374,8 +374,30 @@
         const mm = Math.floor(remainingMs / 60000);
         const ss = Math.floor((remainingMs % 60000) / 1000).toString().padStart(2, '0');
         banner.className = 'game-state-banner running';
-        banner.innerHTML = `🟢 <b>Lobby open</b> — game starts in <b>${mm}:${ss}</b>. Claim a manager now to coach them through an 8-hour workday.`;
+        // If this browser is the coach who opened the lobby, show a "Start
+        // Now" button — they can skip the wait with their claim password.
+        let myAgentId = null;
+        try { myAgentId = localStorage.getItem('qa.myCoachedAgent'); } catch {}
+        const isOpener = myAgentId && data.lobbyOpenedBy === myAgentId;
+        const startNowBtn = isOpener
+          ? `<button id="lobby-start-now" style="margin-left:14px;padding:6px 14px;background:var(--navy);color:#fff;border:0;border-radius:3px;font-size:12px;font-weight:700;letter-spacing:0.5px;cursor:pointer;">Start Now →</button>`
+          : '';
+        banner.innerHTML = `🟢 <b>Lobby open</b> — game starts in <b>${mm}:${ss}</b>. Claim a manager now to coach them through an 8-hour workday.${startNowBtn}`;
         banner.hidden = false;
+        if (isOpener) {
+          document.getElementById('lobby-start-now').addEventListener('click', async () => {
+            const pw = prompt('Re-enter your password to start the game now:');
+            if (!pw) return;
+            const r = await fetch(`${ORCHESTRATOR_BASE}/api/start-game`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ agentId: myAgentId, password: pw }),
+            });
+            const out = await r.json();
+            if (r.ok) location.reload();
+            else alert(out.error || `Start failed (${r.status})`);
+          });
+        }
       } else {
         banner.hidden = true;
       }

@@ -683,14 +683,16 @@ export class GameOrchestrator {
         return Response.json({ error: "could not store password; please try again" }, { status: 500 });
       }
 
-      // First claim opens the lobby: set lobby_opened_at and schedule the
-      // start-of-game alarm. Subsequent claims piggyback on the existing alarm.
+      // First claim opens the lobby: set lobby_opened_at + record the agent
+      // who opened it (so that coach can skip the wait with their password)
+      // and schedule the start-of-game alarm. Subsequent claims piggyback.
       const existingLobbyOpen = await db.getGameStateValue("lobby_opened_at");
       const lobbyDurationMs = parseInt(this.env.LOBBY_DURATION_MS, 10);
       let lobbyOpenedAt: number;
       if (!existingLobbyOpen) {
         lobbyOpenedAt = Date.now();
         await db.setGameStateValue("lobby_opened_at", String(lobbyOpenedAt));
+        await db.setGameStateValue("lobby_opened_by", agentId);
         await this.state.storage.setAlarm(lobbyOpenedAt + lobbyDurationMs);
       } else {
         lobbyOpenedAt = parseInt(existingLobbyOpen, 10);
@@ -724,6 +726,49 @@ export class GameOrchestrator {
         activated: true,
         lobbyOpenedAt,
         lobbyStartsAt: lobbyOpenedAt + lobbyDurationMs,
+      });
+    }
+
+    // Start the game early — only the coach who opened the lobby (first
+    // claimer) can do this, gated by their password. Skips the 30-min wait.
+    // Falls back to the natural lobby alarm if anyone misuses it.
+    if (path === "/start-game" && request.method === "POST") {
+      let body: { agentId?: string; password?: string };
+      try {
+        body = await request.json();
+      } catch {
+        return Response.json({ error: "invalid JSON body" }, { status: 400 });
+      }
+      const { agentId, password } = body;
+      if (!agentId || !password) {
+        return Response.json({ error: "agentId and password both required" }, { status: 400 });
+      }
+
+      const status = await db.getGameStatus();
+      if (status !== "setup") {
+        return Response.json({ error: `Game is already ${status}.` }, { status: 400 });
+      }
+      const lobbyOpenedBy = await db.getGameStateValue("lobby_opened_by");
+      if (!lobbyOpenedBy) {
+        return Response.json({ error: "No lobby is open — claim a manager first." }, { status: 400 });
+      }
+      if (lobbyOpenedBy !== agentId) {
+        return Response.json(
+          { error: "Only the coach who opened the lobby can start the game early." },
+          { status: 403 }
+        );
+      }
+      const storedHash = await db.getGameStateValue(`password_${agentId}`);
+      if (!storedHash || !(await verifyPassword(password, storedHash))) {
+        return Response.json({ error: "password does not match the claim record" }, { status: 403 });
+      }
+
+      const { hrFunding } = await this.startGame(db);
+      return Response.json({
+        ok: true,
+        status: "running",
+        startedAt: new Date().toISOString(),
+        hrFunding,
       });
     }
 
@@ -897,7 +942,7 @@ export class GameOrchestrator {
     }
 
     if (path === "/state") {
-      const [agents, status, tick, recentEvents, ticker, stats, storageAlarm, turnOrderRaw, turnIndexRaw, gameStartedAtRaw, lobbyOpenedAtRaw] = await Promise.all([
+      const [agents, status, tick, recentEvents, ticker, stats, storageAlarm, turnOrderRaw, turnIndexRaw, gameStartedAtRaw, lobbyOpenedAtRaw, lobbyOpenedByRaw] = await Promise.all([
         db.getAllAgents(),
         db.getGameStatus(),
         db.getCurrentTick(),
@@ -913,6 +958,7 @@ export class GameOrchestrator {
         db.getGameStateValue("turn_index"),
         db.getGameStateValue("game_started_at"),
         db.getGameStateValue("lobby_opened_at"),
+        db.getGameStateValue("lobby_opened_by"),
       ]);
 
       // While a tick is processing (LLM + Stellar work, ~20-28s) the storage
@@ -995,6 +1041,7 @@ export class GameOrchestrator {
           avgSettlementTime: stats.avgSettlement,
         },
         lobbyOpenedAt: lobbyOpenedAtRaw ? parseInt(lobbyOpenedAtRaw, 10) : null,
+        lobbyOpenedBy: lobbyOpenedByRaw ?? null,
         lobbyDurationMs: parseInt(this.env.LOBBY_DURATION_MS, 10),
       });
     }
