@@ -155,6 +155,29 @@ leaderboard updating live.
 
 ---
 
+## Forking this repo
+
+If you cloned this to run your own instance, several deployment-specific
+strings are committed verbatim. Swap them for your own values before
+deploying:
+
+| Where | What | Notes |
+|---|---|---|
+| `cloud/orchestrator/wrangler.jsonc` | `database_id` (D1) | Create your own D1 via `npx wrangler d1 create <name>`; copy the new ID in. |
+| `cloud/orchestrator/wrangler.jsonc` | `OPENAI_BASE_URL` | Embeds the account ID + AI Gateway slug. Create your own gateway under your CF account, swap the URL. |
+| `cloud/orchestrator/wrangler.jsonc` | `NPC_BASE_URL` | `__npc__.<your-workers-subdomain>.workers.dev`. Workers subdomain is shown in the CF dashboard under Workers > Subdomain. |
+| `cloud/orchestrator/wrangler.jsonc` | `ASSET_ISSUER` + `ASSET_SAC` | If you want your own DLBR variant; otherwise reuse these testnet contracts. |
+| `cloud/orchestrator/wrangler.jsonc` | `HR_DEPT_ADDRESS` + `MOTIVATIONAL_SPEAKER_ADDRESS` | NPC funding-source public keys; generate via `scripts/create-issuer.ts` if you want fresh ones. |
+| `cloud/orchestrator/src/email.ts` | `FROM_EMAIL` / `FROM_NAME` | `hr@megacorp.lol` — swap for an email address on a domain you've onboarded via `wrangler email sending enable`. |
+
+None of the committed identifiers are credentials. Cloudflare requires an
+API token for any account-level action, the AI Gateway rejects requests
+without `CF_AIG_TOKEN`, and Stellar testnet addresses are public by design.
+But if you fork and deploy without swapping these, your Worker would point
+at the original author's gateway/NPC subdomain/D1 and fail at runtime.
+
+---
+
 ## Local development
 
 There's no local-dev fast path — the project depends on Durable Objects, D1, and live Stellar testnet, so iterations happen against the deployed worker.

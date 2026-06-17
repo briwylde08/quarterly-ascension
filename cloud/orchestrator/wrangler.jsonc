@@ -11,6 +11,11 @@
     "ASSET_SAC": "CDJA3FKDCWFVWJ544X2AZRFO54IZ6RALRAVDDCA5IIWY4EERZQD23XZD",
     "STELLAR_NETWORK": "testnet",
     "HORIZON_URL": "https://horizon-testnet.stellar.org",
+    // The two URLs below embed the Cloudflare account ID + AI Gateway slug +
+    // Workers subdomain. None of those are credentials — Cloudflare requires
+    // an API token for any account-level action, and the gateway rejects
+    // requests without CF_AIG_TOKEN. They're committed for convenience; rotate
+    // (new gateway slug / new subdomain) if you ever want to scrub them.
     "OPENAI_BASE_URL": "https://gateway.ai.cloudflare.com/v1/761663b4f4fb18d989e23e5dd4a7e165/quarterly-ascension/compat",
     "NPC_BASE_URL": "https://__npc__.briana-761.workers.dev",
     "TICK_INTERVAL_MS": "480000",
