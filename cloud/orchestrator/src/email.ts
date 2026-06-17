@@ -108,7 +108,7 @@ export function claimConfirmationEmail(opts: {
   </div>
 
   <p style="font-size:13px;line-height:1.6;">
-    You'll receive a quarterly performance summary at cycles 12, 24, and 36, plus a final outcome report at cycle 48. There is nothing to do — your manager will make their own decisions, on the corporate testnet, with real on-chain payments.
+    You'll receive performance summaries at ticks 15, 30, and 45 (≈2, 4, and 6 hours in), plus a final outcome report at game end. There is nothing to do — your manager will make their own decisions, on the corporate testnet, with real on-chain payments.
   </p>
 
   <p style="margin-top:18px;">
@@ -285,7 +285,7 @@ function hrCommentary(actionType: string, outcome: string): string {
   return pickFlavor(pool);
 }
 
-// --- Progress summary (ticks 12, 24, 36) -----------------------------------
+// --- Progress summary (ticks 15, 30, 45) -----------------------------------
 
 export interface ProgressSummaryInput {
   agent: Agent;

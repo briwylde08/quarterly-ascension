@@ -15,6 +15,7 @@ import type { Agent, GameEvent, TickerEntry } from "./types.js";
 import type { LlmDeps, GossipMoment } from "./llm.js";
 import { generateGossip } from "./llm.js";
 import { getPersona } from "./personas.js";
+import { sendEmail, claimConfirmationEmail, progressSummaryEmail, finaleEmail } from "./email.js";
 
 interface BroadcastMessage {
   type: "game_event" | "ticker_update";
@@ -695,6 +696,27 @@ export class GameOrchestrator {
         lobbyOpenedAt = parseInt(existingLobbyOpen, 10);
       }
 
+      // Fire-and-forget claim confirmation email. Failures must not block claim.
+      try {
+        const agent = await db.getAgent(agentId);
+        if (agent) {
+          const stellar = this.makeStellar();
+          const balance = await stellar.getAssetBalance(agent.publicKey).catch(() => 0);
+          const allAgents = await db.getAllAgents();
+          const rank = allAgents.findIndex((a) => a.id === agent.id) + 1;
+          const tmpl = claimConfirmationEmail({
+            agent,
+            balance,
+            rank: rank || allAgents.length,
+            total: allAgents.length,
+            claimerName: trimmedName,
+          });
+          await sendEmail(this.env.EMAIL, { ...tmpl, to: trimmedEmail });
+        }
+      } catch (err) {
+        console.error("[email] claim confirmation failed (non-fatal):", err);
+      }
+
       return Response.json({
         ok: true,
         agentId,
@@ -1072,6 +1094,14 @@ export class GameOrchestrator {
         console.error("[alarm] failed to emit game_end event:", err);
       }
 
+      // Send finale emails. One per claimed coach. Failures are logged per
+      // coach; never block the end-of-game transition.
+      try {
+        await this.sendFinaleEmails();
+      } catch (err) {
+        console.error("[alarm] finale email batch failed:", err);
+      }
+
       // Don't schedule a cleanup alarm. Final standings, action_logs, and
       // events stay in D1 until someone explicitly calls /admin/reset, so
       // we can always pull /admin/snapshot for post-game analysis.
@@ -1093,6 +1123,16 @@ export class GameOrchestrator {
         await this.runGossipPass(newTick);
       } catch (err) {
         console.error(`[gossip] refresh at tick ${newTick} failed:`, err);
+      }
+    }
+
+    // Progress emails at the quarter marks of an 8-hour game. One email per
+    // claimed coach. Failures are logged per-coach and don't break the tick.
+    if (newTick === 15 || newTick === 30 || newTick === 45) {
+      try {
+        await this.sendProgressEmails(newTick);
+      } catch (err) {
+        console.error(`[email] progress batch at tick ${newTick} failed:`, err);
       }
     }
 
@@ -1306,6 +1346,117 @@ export class GameOrchestrator {
     await this.env.DB.prepare("DELETE FROM game_state WHERE key = 'lobby_opened_at'").run();
     await this.state.storage.setAlarm(Date.now() + 100);
     return { hrFunding };
+  }
+
+  /**
+   * Mid-game progress summary emails. Fires at ticks 15, 30, 45 (≈2, 4, 6
+   * hours into an 8-hour game). One email per claimed coach. Failures are
+   * logged per-coach; never break the tick loop.
+   */
+  private async sendProgressEmails(tick: number): Promise<void> {
+    const db = new Db(this.env.DB);
+    const stellar = this.makeStellar();
+    const all = await db.getAllAgents();
+    const claimed = all.filter((a) => a.claimedBy);
+    if (claimed.length === 0) return;
+
+    const tickStart = Math.max(0, tick - 15);
+    const cycleLabel =
+      tick === 15 ? "Tick 15 — morning check-in"
+      : tick === 30 ? "Tick 30 — mid-day"
+      : tick === 45 ? "Tick 45 — late afternoon"
+      : `Tick ${tick}`;
+
+    for (const agent of claimed) {
+      try {
+        const balance = await stellar.getAssetBalance(agent.publicKey);
+        const rank = all.findIndex((a) => a.id === agent.id) + 1;
+        const actions = await db.getAgentActionLogs(agent.id, tickStart, tick);
+
+        const prestigeStartRow = await this.env.DB
+          .prepare(
+            `SELECT COALESCE(SUM(prestige_change), 0) AS delta FROM action_logs WHERE agent_id = ? AND tick > ? AND tick <= ?`
+          )
+          .bind(agent.id, tickStart, tick)
+          .first<{ delta: number }>();
+        const prestigeStart = agent.prestige - (prestigeStartRow?.delta ?? 0);
+
+        const budgetStart = balance;
+        const inboundEvents: Array<{ tick: number; description: string }> = [];
+
+        const notableQuotes = actions
+          .filter((a) => a.reasoning && a.reasoning.length > 20)
+          .slice(0, 3)
+          .map((a) => a.reasoning as string);
+
+        const tmpl = progressSummaryEmail({
+          agent,
+          balance,
+          rank,
+          total: all.length,
+          claimerName: agent.claimedByName ?? "MegaCorp Stakeholder",
+          claimerEmail: agent.claimedBy ?? "",
+          cycle: tick,
+          cycleLabel,
+          actions: actions.map((a) => ({
+            tick: a.tick,
+            action_type: a.action_type,
+            outcome: a.outcome ?? "",
+            reasoning: a.reasoning ?? null,
+            prestige_change: a.prestige_change ?? null,
+          })),
+          inboundEvents,
+          prestigeStart,
+          budgetStart,
+          notableQuotes,
+        });
+        await sendEmail(this.env.EMAIL, { ...tmpl, to: agent.claimedBy! });
+      } catch (err) {
+        console.error(`[email] progress summary for ${agent.name} failed:`, err);
+      }
+    }
+  }
+
+  /**
+   * End-of-game finale emails. One per claimed coach with rank, final
+   * balance, total paid actions, and a "you won / you didn't" framing.
+   */
+  private async sendFinaleEmails(): Promise<void> {
+    const db = new Db(this.env.DB);
+    const stellar = this.makeStellar();
+    const all = await db.getAllAgents();
+    const claimed = all.filter((a) => a.claimedBy);
+    if (claimed.length === 0) return;
+
+    const winner = all[0]; // sorted prestige DESC by getAllAgents
+
+    for (const agent of claimed) {
+      try {
+        const balance = await stellar.getAssetBalance(agent.publicKey);
+        const finalRank = all.findIndex((a) => a.id === agent.id) + 1;
+        const allActions = await db.getRecentActionLogsForAgent(agent.id, 50);
+        const totalPaidActions = allActions.filter((a) => a.tx_hash).length;
+        const notableQuotes = allActions
+          .filter((a) => a.reasoning && a.reasoning.length > 20)
+          .slice(0, 5)
+          .map((a) => a.reasoning as string);
+
+        const tmpl = finaleEmail({
+          agent,
+          balance,
+          finalRank,
+          total: all.length,
+          claimerName: agent.claimedByName ?? "MegaCorp Stakeholder",
+          winnerName: winner.name,
+          isWinner: agent.id === winner.id,
+          notableQuotes,
+          totalPaidActions,
+        });
+        await sendEmail(this.env.EMAIL, { ...tmpl, to: agent.claimedBy! });
+      } catch (err) {
+        console.error(`[email] finale for ${agent.name} failed:`, err);
+      }
+    }
   }
 
   /**
