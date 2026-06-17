@@ -234,6 +234,32 @@ export class GameOrchestrator {
       });
     }
 
+    // Debug-only: send a single test email through the EMAIL binding so we
+    // can verify Cloudflare Email Sending end-to-end without waiting for the
+    // tick-15 progress batch. Admin-gated.
+    if (path === "/test-email" && request.method === "POST") {
+      let body: { to?: string };
+      try {
+        body = await request.json();
+      } catch {
+        return Response.json({ error: "invalid JSON body" }, { status: 400 });
+      }
+      const to = body.to;
+      if (!to) return Response.json({ error: "to is required" }, { status: 400 });
+      try {
+        await this.env.EMAIL.send({
+          to,
+          from: { email: "hr@megacorp.lol", name: "MegaCorp HR" },
+          subject: "Quarterly Ascension — binding test",
+          html: "<p>This was sent through the Worker's <code>send_email</code> binding. If you see it, end-to-end delivery works.</p>",
+          text: "This was sent through the Worker's send_email binding. If you see it, end-to-end delivery works.",
+        });
+        return Response.json({ ok: true, to });
+      } catch (err) {
+        return Response.json({ error: String(err) }, { status: 500 });
+      }
+    }
+
     if (path === "/halt" && request.method === "POST") {
       const current = await db.getGameStatus();
       if (current !== "running") {
