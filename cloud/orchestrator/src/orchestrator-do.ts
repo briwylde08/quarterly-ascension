@@ -622,17 +622,17 @@ export class GameOrchestrator {
 
     // Claim flow — atomic.
     if (path === "/claim" && request.method === "POST") {
-      // Retreat-mode claim: atomic claim+activate with name + password.
-      // No email — coaching auth is password-based for the in-room show.
-      let body: { agentId?: string; name?: string; password?: string };
+      // Public-mode claim: atomic claim+activate with name + email + password.
+      // Email is required (game sends 5 status updates over 8 hours).
+      let body: { agentId?: string; name?: string; email?: string; password?: string };
       try {
         body = await request.json();
       } catch {
         return Response.json({ error: "invalid JSON body" }, { status: 400 });
       }
-      const { agentId, name, password } = body;
-      if (!agentId || !name || !password) {
-        return Response.json({ error: "agentId, name, and password are all required" }, { status: 400 });
+      const { agentId, name, email, password } = body;
+      if (!agentId || !name || !email || !password) {
+        return Response.json({ error: "agentId, name, email, and password are all required" }, { status: 400 });
       }
       if (password.length < PASSWORD_MIN_LENGTH || password.length > PASSWORD_MAX_LENGTH) {
         return Response.json(
@@ -643,6 +643,10 @@ export class GameOrchestrator {
       const trimmedName = name.trim().slice(0, 80);
       if (trimmedName.length === 0) {
         return Response.json({ error: "name is required" }, { status: 400 });
+      }
+      const trimmedEmail = email.trim().slice(0, 200);
+      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(trimmedEmail)) {
+        return Response.json({ error: "email looks invalid" }, { status: 400 });
       }
 
       const claimStatus = await db.getGameStatus();
@@ -656,14 +660,14 @@ export class GameOrchestrator {
         );
       }
 
-      // Atomic: only set claimed_by_name if currently NULL. Then store the
+      // Atomic: only set claim fields if currently unclaimed. Then store the
       // password hash. If the claim succeeded but hashing failed, roll back
       // to keep the slot available.
       const updateRes = await this.env.DB
         .prepare(
-          "UPDATE agents SET claimed_by_name = ? WHERE id = ? AND claimed_by_name IS NULL"
+          "UPDATE agents SET claimed_by_name = ?, claimed_by = ? WHERE id = ? AND claimed_by_name IS NULL"
         )
-        .bind(trimmedName, agentId)
+        .bind(trimmedName, trimmedEmail, agentId)
         .run();
       const changes = updateRes.meta?.changes ?? 0;
       if (changes === 0) {
@@ -681,7 +685,7 @@ export class GameOrchestrator {
       } catch (err) {
         console.error("[claim] password hashing failed; releasing claim:", err);
         await this.env.DB
-          .prepare("UPDATE agents SET claimed_by_name = NULL WHERE id = ?")
+          .prepare("UPDATE agents SET claimed_by_name = NULL, claimed_by = NULL WHERE id = ?")
           .bind(agentId)
           .run();
         return Response.json({ error: "could not store password; please try again" }, { status: 500 });

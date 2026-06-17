@@ -583,11 +583,13 @@
         <div class="claim-box">
           <h3>Adopt ${escape(a.name.split(' ')[0])}</h3>
           <p style="font-size:12px;color:var(--text-muted);">
-            Pick a password — you'll re-enter it each time you submit a directive during the show. Don't lose it; there's no recovery.
+            Pick a password — you'll re-enter it each time you submit a directive. We'll email you updates as your manager makes their moves.
           </p>
           <form id="claim-form">
             <label>Your name</label>
             <input id="claim-name" type="text" required maxlength="80" placeholder="Briana Stahl">
+            <label>Email</label>
+            <input id="claim-email" type="email" required maxlength="200" placeholder="you@work.example">
             <label>Password</label>
             <input id="claim-pw" type="password" required minlength="4" maxlength="128" placeholder="anything 4+ characters">
             <label>Confirm password</label>
@@ -600,6 +602,7 @@
       document.getElementById('claim-form').addEventListener('submit', async (e) => {
         e.preventDefault();
         const name = document.getElementById('claim-name').value.trim();
+        const email = document.getElementById('claim-email').value.trim();
         const password = document.getElementById('claim-pw').value;
         const password2 = document.getElementById('claim-pw2').value;
         const btn = document.getElementById('claim-submit');
@@ -617,7 +620,7 @@
           const r = await fetch(`${ORCHESTRATOR_BASE}/api/claim`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ agentId: a.id, name, password }),
+            body: JSON.stringify({ agentId: a.id, name, email, password }),
           });
           const data = await r.json();
           if (r.ok) {
