@@ -44,7 +44,7 @@ export async function generateGossip(
     .join("\n");
   const userPrompt = `Current cycle: ${currentTick}. Recent activity:\n\n${lines}\n\nGive me the dish.`;
   const response = await openai.chat.completions.create({
-    model: "openai/gpt-5.5",
+    model: "openai/gpt-5-mini",
     max_completion_tokens: 400,
     messages: [
       { role: "system", content: GOSSIP_SYSTEM_PROMPT },
@@ -624,7 +624,7 @@ export async function getAgentDecision(
 
   try {
     const response = await openai.chat.completions.create({
-      model: "openai/gpt-5.5",
+      model: "openai/gpt-5-mini",
       max_completion_tokens: 2000,
       response_format: { type: "json_object" },
       messages: [

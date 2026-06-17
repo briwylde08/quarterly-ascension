@@ -348,7 +348,7 @@ export class GameOrchestrator {
 
     // Coach awards — post-game ceremony. Pulls every (coach, directive)
     // pair from action_logs (each row carries directive_at_action), groups
-    // by coach, hands the corpus to gpt-5.5 with a judging rubric, returns
+    // by coach, hands the corpus to the LLM with a judging rubric, returns
     // ranked categories. Host opens /awards.html to project. Safe to call
     // while game is ended OR halted; refuses on setup (nothing to judge).
     if (path === "/judge-directives" && request.method === "POST") {
@@ -403,7 +403,7 @@ export class GameOrchestrator {
 
       try {
         const llmResp = await openai.chat.completions.create({
-          model: "openai/gpt-5.5",
+          model: "openai/gpt-5-mini",
           max_completion_tokens: 3000,
           response_format: { type: "json_object" },
           messages: [
