@@ -68,7 +68,7 @@ export async function generateGossip(
 const ALL_ACTIONS = [
   // === FREE (12) ===
   { type: "work", description: "Do actual work (+5 prestige, +$2 base salary, free). Boring. The audience does not enjoy watching this.", cost: 0 },
-  { type: "expense_report", description: "File an expense report (+$25 reimbursed; 10% chance Finance flags it for -5 prestige). Safe income path — when budgets get tight, this is the cleanest refill.", cost: 0 },
+  { type: "expense_report", description: "File an expense report (+$40 reimbursed; 10% chance Finance flags it for -5 prestige). Safe income path — when budgets get tight, this is the cleanest refill.", cost: 0 },
   { type: "find_budget", description: "Snoop for unused budget in another department (free). 60% chance: HR transfers $30 to you. 40% chance: get caught — lose 10 prestige + Meeting Blocked for 1 cycle. Risky cash grab; bigger upside than expense_report but real downside.", cost: 0 },
   { type: "shotgun_red_bull", description: "Shotgun a Red Bull in the breakroom (free). Removes Hit the Wall instantly. Mildly unprofessional but effective. The kitchen smells like sugar for an hour. The free way to recover.", cost: 0 },
   { type: "take_credit", description: "Attempt to claim credit for someone's work (40% base success: +30 prestige, 60% fail: -20 prestige — slightly EV-negative without setup). Auto-succeeds against a Documented target (Sabotage Plan setup). Bumped to 65% against Questionable Judgment (Spread Rumor setup). Pair with a setup action; raw is a bad bet.", cost: 0, requiresTarget: true },

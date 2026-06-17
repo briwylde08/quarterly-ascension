@@ -317,6 +317,41 @@ export async function processTick(deps: TickDeps, activeAgentIds?: string[]): Pr
     // signal in random-events for compat but ignored here.
   }
 
+  // Phase 2b: Synergy Dividend — every cycle boundary (NOT kickoff), HR pays
+  // every manager $10 to keep paid actions affordable across an 8-hour game.
+  // Came out of game-1 data: 5/tick spending outpaced income by ~$185/agent
+  // over 34 ticks, leaving 5 of 10 managers near-bankrupt by the midpoint.
+  // Cycle-tied salary preserves drama (attacks stay costly) while preventing
+  // the back-half collapse into free-action-only play.
+  if (isCycleBoundary && !isKickoff) {
+    const dividendFlavors = [
+      "Q1 synergy dividend distributed: every manager +$10. HR notes this is not a raise.",
+      "Synergy Dividend (Cycle %CYCLE%): +$10/manager. Compensation Team reminds you that gratitude is the highest-yielding asset.",
+      "Synergy Dividend posted: +$10/manager. Finance categorized it as 'engagement preservation.'",
+      "Synergy Dividend: +$10/manager. Slack reaction tracker reports 0.8 average 🙏 per recipient.",
+      "Synergy Dividend cleared in HR's payroll batch: +$10/manager. Direct deposits arrived 13 minutes after the announcement, which is the company's stated SLA.",
+      "Synergy Dividend issued: +$10/manager. Comp & Benefits emphasizes this is 'discretionary, performance-aligned, and not contractual.'",
+    ];
+    const cycle = Math.floor(tick / 5);
+    const flavor = dividendFlavors[cycle % dividendFlavors.length].replace("%CYCLE%", String(cycle));
+    let paidCount = 0;
+    for (const agent of refreshedAgents) {
+      try {
+        await stellar.sendAsset(rewards.hrDeptSecret, agent.publicKey, 10);
+        paidCount += 1;
+      } catch (err) {
+        console.error(`[synergy-dividend] payout to ${agent.name} failed:`, err);
+      }
+    }
+    await emit({
+      id: uuid(),
+      tick,
+      timestamp: new Date(),
+      type: "random_event",
+      description: `💰 ${flavor} (${paidCount}/${refreshedAgents.length} delivered.)`,
+    });
+  }
+
   // Phase 3: get decisions for the active agents this tick (typically 2).
   // Resolve in turn-order — earlier agents in activeAgentIds act first
   // and their state changes are visible to subsequent agents within the
@@ -648,10 +683,10 @@ async function executeAction(
         const flavor = expenseFlavors[Math.floor(Math.random() * expenseFlavors.length)];
         actionDetail = flavor;
         try {
-          await stellar.sendAsset(rewards.hrDeptSecret, agent.publicKey, 25);
+          await stellar.sendAsset(rewards.hrDeptSecret, agent.publicKey, 40);
           outcome = audited
-            ? `Filed expense report — ${flavor}. +$25 reimbursed; Finance flagged it for review (-5 prestige).`
-            : `Filed expense report — ${flavor}. +$25 reimbursed.`;
+            ? `Filed expense report — ${flavor}. +$40 reimbursed; Finance flagged it for review (-5 prestige).`
+            : `Filed expense report — ${flavor}. +$40 reimbursed.`;
         } catch (err) {
           console.error(`[expense-report] HR payout to ${agent.name} failed:`, err);
           outcome = audited
