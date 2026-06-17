@@ -367,6 +367,15 @@
         banner.className = 'game-state-banner ended';
         banner.innerHTML = `🏁 <b>Game ended.</b> Roster's open — coach a manager for the next round.`;
         banner.hidden = false;
+      } else if (status === 'setup' && data.lobbyOpenedAt && data.lobbyDurationMs) {
+        // First claim has fired; lobby is counting down toward game start.
+        const startsAt = data.lobbyOpenedAt + data.lobbyDurationMs;
+        const remainingMs = Math.max(0, startsAt - Date.now());
+        const mm = Math.floor(remainingMs / 60000);
+        const ss = Math.floor((remainingMs % 60000) / 1000).toString().padStart(2, '0');
+        banner.className = 'game-state-banner running';
+        banner.innerHTML = `🟢 <b>Lobby open</b> — game starts in <b>${mm}:${ss}</b>. Claim a manager now to coach them through an 8-hour workday.`;
+        banner.hidden = false;
       } else {
         banner.hidden = true;
       }

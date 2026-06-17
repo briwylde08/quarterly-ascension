@@ -225,16 +225,7 @@ export class GameOrchestrator {
       if (current === "running") {
         return Response.json({ error: "Game already running" }, { status: 400 });
       }
-      // Top up HR Department's DLBR balance before kickoff so payouts never
-      // stall mid-show. Best-effort — if it fails, the game still starts;
-      // we just log and surface in the response for visibility.
-      const hrFunding = await this.ensureHrFunded();
-      await db.setGameStatus("running");
-      // Pin game-start time so the alarm handler can target a fixed wall-clock
-      // cadence (gameStartedAt + tick * interval) instead of drifting on work time.
-      await db.setGameStateValue("game_started_at", String(Date.now()));
-      // First tick fires immediately; subsequent ones are alarm-scheduled.
-      await this.state.storage.setAlarm(Date.now() + 100);
+      const { hrFunding } = await this.startGame(db);
       return Response.json({
         status: "running",
         startedAt: new Date().toISOString(),
@@ -691,7 +682,27 @@ export class GameOrchestrator {
         return Response.json({ error: "could not store password; please try again" }, { status: 500 });
       }
 
-      return Response.json({ ok: true, agentId, claimedByName: trimmedName, activated: true });
+      // First claim opens the lobby: set lobby_opened_at and schedule the
+      // start-of-game alarm. Subsequent claims piggyback on the existing alarm.
+      const existingLobbyOpen = await db.getGameStateValue("lobby_opened_at");
+      const lobbyDurationMs = parseInt(this.env.LOBBY_DURATION_MS, 10);
+      let lobbyOpenedAt: number;
+      if (!existingLobbyOpen) {
+        lobbyOpenedAt = Date.now();
+        await db.setGameStateValue("lobby_opened_at", String(lobbyOpenedAt));
+        await this.state.storage.setAlarm(lobbyOpenedAt + lobbyDurationMs);
+      } else {
+        lobbyOpenedAt = parseInt(existingLobbyOpen, 10);
+      }
+
+      return Response.json({
+        ok: true,
+        agentId,
+        claimedByName: trimmedName,
+        activated: true,
+        lobbyOpenedAt,
+        lobbyStartsAt: lobbyOpenedAt + lobbyDurationMs,
+      });
     }
 
     // Release a claim. Allowed only when the game is NOT running. Auth via
@@ -864,7 +875,7 @@ export class GameOrchestrator {
     }
 
     if (path === "/state") {
-      const [agents, status, tick, recentEvents, ticker, stats, storageAlarm, turnOrderRaw, turnIndexRaw, gameStartedAtRaw] = await Promise.all([
+      const [agents, status, tick, recentEvents, ticker, stats, storageAlarm, turnOrderRaw, turnIndexRaw, gameStartedAtRaw, lobbyOpenedAtRaw] = await Promise.all([
         db.getAllAgents(),
         db.getGameStatus(),
         db.getCurrentTick(),
@@ -879,6 +890,7 @@ export class GameOrchestrator {
         db.getGameStateValue("turn_order"),
         db.getGameStateValue("turn_index"),
         db.getGameStateValue("game_started_at"),
+        db.getGameStateValue("lobby_opened_at"),
       ]);
 
       // While a tick is processing (LLM + Stellar work, ~20-28s) the storage
@@ -960,6 +972,8 @@ export class GameOrchestrator {
           totalAmountMoved: stats.amountMoved,
           avgSettlementTime: stats.avgSettlement,
         },
+        lobbyOpenedAt: lobbyOpenedAtRaw ? parseInt(lobbyOpenedAtRaw, 10) : null,
+        lobbyDurationMs: parseInt(this.env.LOBBY_DURATION_MS, 10),
       });
     }
 
@@ -986,6 +1000,19 @@ export class GameOrchestrator {
     // state (shouldn't happen — we don't schedule one), just no-op.
     if (status === "ended") {
       console.log("[alarm] fired while ended; ignoring (no auto-cleanup).");
+      return;
+    }
+
+    // First-claim lobby alarm. When a player makes the first claim of a
+    // new round, we schedule an alarm for lobby_opened_at + LOBBY_DURATION_MS.
+    // When it fires (with status still "setup"), kick off the game.
+    if (status === "setup") {
+      console.log("[alarm] lobby window elapsed; starting game.");
+      try {
+        await this.startGame(db);
+      } catch (err) {
+        console.error("[alarm] lobby-triggered startGame failed:", err);
+      }
       return;
     }
 
@@ -1263,6 +1290,22 @@ export class GameOrchestrator {
       await db.setGameStateValue("latest_gossip_tick", String(currentTick));
       await db.setGameStateValue("latest_gossip_at", new Date().toISOString());
     }
+  }
+
+  /**
+   * Transition from "setup" → "running". Used by /admin/start (manual) and
+   * by the lobby alarm (first-claim-starts-game). Tops up HR funding, pins
+   * game_started_at for the wall-clock cadence, and schedules the first
+   * tick alarm.
+   */
+  private async startGame(db: Db): Promise<{ hrFunding: unknown }> {
+    const hrFunding = await this.ensureHrFunded();
+    await db.setGameStatus("running");
+    await db.setGameStateValue("game_started_at", String(Date.now()));
+    // Clear the lobby marker so a future game's first claim re-opens a lobby.
+    await this.env.DB.prepare("DELETE FROM game_state WHERE key = 'lobby_opened_at'").run();
+    await this.state.storage.setAlarm(Date.now() + 100);
+    return { hrFunding };
   }
 
   /**

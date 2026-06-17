@@ -20,6 +20,7 @@ export interface Env {
   NPC_BASE_URL: string;
   TICK_INTERVAL_MS: string;
   MAX_TICKS: string;
+  LOBBY_DURATION_MS: string;
 
   // Cloudflare Email Sending binding (configured via `send_email` in wrangler.jsonc).
   // Domain `megacorp.lol` must be onboarded with `wrangler email sending enable` before use.
