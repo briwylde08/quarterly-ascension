@@ -46,6 +46,11 @@ export async function generateGossip(
   const response = await openai.chat.completions.create({
     model: "openai/gpt-5-mini",
     max_completion_tokens: 400,
+    // gpt-5-mini is a reasoning model. Without minimal effort it eats the
+    // entire completion budget on internal reasoning tokens and returns
+    // empty visible content. Gossip is pure creative text — no reasoning
+    // needed.
+    reasoning_effort: "minimal",
     messages: [
       { role: "system", content: GOSSIP_SYSTEM_PROMPT },
       { role: "user", content: userPrompt },
