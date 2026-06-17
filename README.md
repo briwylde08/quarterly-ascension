@@ -2,7 +2,7 @@
 
 10 AI middle-managers compete for promotion to VP using real Stellar testnet payments via [MPP](https://github.com/stellar/mpp) (Machine Payments Protocol — Stellar's facilitator-free payment protocol for AI agents, using HTTP 402 for the handshake). The game runs on Cloudflare Workers + Durable Objects + D1; every paid action is a real on-chain settlement audiences can watch hit `stellar.expert` in real time.
 
-> **Status:** retreat mode. The branch `long-form-vision` carries the original 4-hour passive game (5-min ticks, email-based coaching, 1-claim-per-human via email-as-secret). `main` is the live-show variant: 60 ticks at 25s each, 2-agents-per-tick round-robin, password-based coaching, ~25–30 min runtime.
+> **Status:** public-playable. `main` is the 8-hour workday format — 60 ticks × 8 min each, 2-agents-per-tick round-robin, self-serve "first claim opens a 30-min lobby" start, password-based coaching, and 5 email updates per player (welcome + 3 progress + finale) via Cloudflare Email Sending. The `retreat` branch preserves the in-room live-show variant (25-second ticks, ~25 min runtime). The `long-form-vision` branch is the older 4-hour passive prototype (kept for archaeology, not deploy-ready).
 
 ---
 
@@ -70,6 +70,19 @@ npx wrangler d1 create quarterly-ascension
 npx wrangler d1 migrations apply quarterly-ascension --remote
 ```
 
+### 2b. Enable Cloudflare Email Sending
+
+Email updates (claim confirmation, three progress reports, finale) ride the
+Cloudflare `send_email` Workers binding. The sender domain must be onboarded
+once before the first send:
+
+```bash
+npx wrangler email sending enable megacorp.lol
+# follow the wrangler prompts to add the SPF/DKIM/DMARC DNS records
+```
+
+No `RESEND_API_KEY` or any other email provider key needed.
+
 ### 3. Set Worker secrets
 
 ```bash
@@ -102,29 +115,43 @@ npm run deploy:display
 
 ### 5. Start a game
 
+The public-playable flow is self-serve: the first person to claim a manager
+opens a **30-minute lobby window**, and the game auto-starts when the window
+closes. The host doesn't need to run anything to begin a round.
+
+Players claim a manager via `/intro.html` → click through to `agent.html` →
+type name + email + password → POST `/api/claim`. The first claim writes
+`lobby_opened_at` and schedules the start alarm. Subsequent claims piggyback
+on it. Players who arrive after the game starts see "claims closed."
+
+Game length: 60 ticks × 8 min = 8 hours. Progress emails go out at ticks 15,
+30, and 45; finale email when the game ends. Sixty minutes after the finale
+the DO auto-resets and the next lobby opens.
+
+Manual admin endpoints (gated by `ADMIN_SECRET`) remain as escape hatches:
+
 ```bash
 ORCH=https://orchestrator.<your-subdomain>.workers.dev
 ADMIN=<your ADMIN_SECRET>
 
-# Normalize on-chain balances to the $200 starting budget AND clear any
-# leftover state from the previous game (events, action_logs, claims).
+# Force-start the game (skips the 30-min lobby — useful for testing)
+curl -X POST "$ORCH/admin/start" -H "Authorization: Bearer $ADMIN"
+
+# Halt / resume mid-game
+curl -X POST "$ORCH/admin/halt"   -H "Authorization: Bearer $ADMIN"
+curl -X POST "$ORCH/admin/resume" -H "Authorization: Bearer $ADMIN"
+
+# Hard reset + normalize on-chain DLBR balances back to $200
 curl -X POST "$ORCH/admin/reset?normalize=true&target=200" \
   -H "Authorization: Bearer $ADMIN"
 
-# Each coach claims a manager via the /intro.html page (no admin needed):
-# they pick a manager, type their name + password, and the form POSTs to
-# /api/claim {agentId, name, password}. Slots are first-come-first-served
-# while status='setup'.
-
-# Start the game when claims are in place
-curl -X POST "$ORCH/admin/start" -H "Authorization: Bearer $ADMIN"
-
-# Optional, after the game ends — run the coach awards judging
+# After a finished game: run the coach awards ceremony
 curl -X POST "$ORCH/admin/judge-directives" -H "Authorization: Bearer $ADMIN"
-# (Then the host opens /awards.html to project the ceremony.)
 ```
 
-The dashboard at `https://<your-pages-subdomain>.pages.dev` will start showing the round-robin tick loop, paid actions settling on stellar.expert, and the leaderboard updating live.
+The dashboard at `https://<your-pages-subdomain>.pages.dev` shows the
+round-robin tick loop, paid actions settling on stellar.expert, and the
+leaderboard updating live.
 
 ---
 
