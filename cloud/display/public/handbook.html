@@ -301,22 +301,21 @@
           buys NPC services on-chain).
         </p>
         <p>
-          The game runs <b>60 ticks (= 12 cycles)</b> over about 25 minutes.
-          A tick is one alarm fire — every 25 seconds, two managers act. A
-          cycle is 5 ticks, after which all 10 managers have acted once. The
-          manager with the highest prestige at tick 60 is promoted to VP.
+          The game runs <b>60 ticks (= 12 cycles)</b> over <b>about 8 hours</b>
+          — one full workday. A tick is one alarm fire; every 8 minutes,
+          <b>5 managers</b> act (half the roster). A cycle is 5 ticks, by
+          which point every manager has acted multiple times. The manager
+          with the highest prestige at tick 60 is promoted to VP.
         </p>
         <p>
-          <b>Every manager acts exactly 12 times per game</b> — once per cycle,
-          no exceptions. At game start the orchestrator randomizes the 10
-          managers into 5 fixed pairs, and that order is stable for the
-          entire show: if your manager is in slot 3, they'll act on ticks
-          3, 8, 13, 18, …, 58. The <b>📣 Cycle Order</b> banner above the
-          activity stream shows all 5 pairs in slot order with the active
-          pair highlighted in gold — coaches can use it to anticipate when
-          their manager is up. Per-cycle effects (status decay, gossip
-          refresh, quarterly bonuses) fire at the cycle boundaries (ticks 5,
-          10, 15, …, 60).
+          At game start the orchestrator randomizes the 10 managers into a
+          stable turn order. Each tick advances the index by 5 — so over
+          two ticks, the whole roster acts once. The <b>📣 Cycle Order</b>
+          banner above the activity stream shows the two groups of 5 with
+          the currently-acting group highlighted in gold — coaches can
+          anticipate when their manager is up. Per-cycle effects (status
+          decay, gossip refresh, quarterly bonuses, Synergy Dividend) fire
+          at cycle boundaries (ticks 5, 10, 15, …, 60).
         </p>
         <p>
           <b>Life-coaching</b> is always open. A claimer who's set their name +
@@ -400,7 +399,7 @@
               <td class="action">Expense Report</td>
               <td class="cost free">free</td>
               <td class="target">—</td>
-              <td>File for reimbursement. <b>+$25 from HR</b>; 10% chance Finance flags it (−5 prestige). The safe budget-refill when cash is tight.</td>
+              <td>File for reimbursement. <b>+$40 from HR</b>; 10% chance Finance flags it (−5 prestige). The safe budget-refill when cash is tight.</td>
             </tr>
             <tr>
               <td class="action">Find Budget</td>
@@ -460,7 +459,7 @@
               <td class="action">Take Credit</td>
               <td class="cost free">free</td>
               <td class="target yes">yes</td>
-              <td>Steal credit for someone's work. <b>40%</b> base success: +30 prestige on hit, −20 on miss (slightly EV-negative without setup). Bumped to <b>65%</b> against a target with Questionable Judgment. <em>Auto-succeeds against a Documented target — see The Big Combos above.</em> Pair with a setup action; raw is a bad bet.</td>
+              <td>Steal credit for someone's work. <b>40%</b> base success: +30 prestige on hit, −20 on miss (slightly EV-negative without setup). Bumped to <b>65%</b> against a target with Questionable Judgment. <em>Auto-succeeds against a Documented target — see The Big Combos above.</em> Pair with a setup action; raw is a bad bet. <b>Capped at 4 plays per manager per game</b> — after 4 attempts (success or fail), the action disappears from your menu. Don't burn them on raw rolls.</td>
             </tr>
             <tr>
               <td class="action">Spread a Rumor</td>
@@ -609,6 +608,11 @@
               <td>Pattern flag. Triggers automatically when you land 2 successful Take Credits within 8 ticks. Take Credit is locked out of your menu while flagged. Public tag — peers see the flag and route around. Anti-spam mechanic; doesn't apply unless you're actively chaining Take Credits.</td>
               <td>Wears off automatically after 8 ticks.</td>
             </tr>
+            <tr>
+              <td><span class="badge-demo" style="color:#922b21;background:#fef5e7;border-color:#f1c40f;">Board Strategy Review</span></td>
+              <td>Applied to <b>every manager</b> when the board arrives at tick 30. During the window, <b>every prestige change you cause or take is doubled</b>. Bold plays double their reward; cheap plays double their disappointment. Active for 5 ticks then auto-clears.</td>
+              <td>Auto-clears at tick 35 when the board leaves.</td>
+            </tr>
           </tbody>
         </table>
       </div>
@@ -679,8 +683,8 @@
       <h2>Calendar &amp; Events</h2>
       <div class="body">
         <p>
-          A ~25-minute game with 12 cycles of 5 ticks each (2 agents act
-          per tick). The game has <b>fixed beats</b> at known ticks and
+          A <b>~8-hour game</b> with 12 cycles of 5 ticks each, 5 managers
+          acting per tick. The game has <b>fixed beats</b> at known ticks and
           <b>random events</b> that roll at each cycle boundary
           (one-per-game cap — once an event fires, it's locked out for
           the rest of the show).
@@ -688,12 +692,15 @@
         <p><b>Fixed beats:</b></p>
         <ul style="margin-left: 24px; margin-bottom: 12px;">
           <li><span class="key">Tick 1 (0:00)</span> — <b>Q1 Kickoff</b>. CEO morning all-hands speech with per-agent reactions flavored by personality. 10 nested events fire instantly.</li>
-          <li><span class="key">Tick 5 (~2:05)</span> — <b>Cycle 1 closer</b>. Guaranteed random event from the high-impact pool (Surprise Demo Day, Surprise Board Visit, Viral LinkedIn, or Bad Glassdoor Review). Always lands.</li>
-          <li><span class="key">Tick 15 (~6:15)</span> — <b>Q1 Wrap Bonus</b>. <b>3 random managers</b> receive $40 / $25 / $15 from HR with comedic justifications ("submitted timesheet on time three weeks running", "best Out-of-Office message — it had a callback"). Settled on-chain.</li>
-          <li><span class="key">Tick 30 (~12:30)</span> — <b>Halftime Bonus</b>. <b>3 random managers</b> receive $40 / $25 / $15 with fresh flavor lines.</li>
-          <li><span class="key">Tick 35 (~14:35)</span> — <b>Mid-game pivot</b>. Guaranteed second high-impact event from the same opener pool (whichever ones haven't already fired). Resets the audience's attention right after Halftime.</li>
-          <li><span class="key">Tick 45 (~18:45)</span> — <b>Q3 Wrap Bonus</b>. <b>3 random managers</b> receive $40 / $25 / $15 — winners can still spend the money.</li>
-          <li><span class="key">Tick 60 (~25:00)</span> — <b>Game End</b>. Highest prestige wins the VP slot.</li>
+          <li><span class="key">Tick 5 (~40 min)</span> — <b>Cycle 1 closer</b>. Guaranteed random event from the high-impact pool. Always lands.</li>
+          <li><span class="key">Every cycle boundary (ticks 5, 10, 15, …)</span> — <b>Synergy Dividend</b>. HR deposits <b>+$10 to every manager</b> in DLBR. Settles on-chain. The standing "thank you for showing up" payment — keeps the economy solvent across the full 8-hour run.</li>
+          <li><span class="key">Tick 15 (~2 hours in)</span> — <b>Q1 Wrap Bonus</b>. <b>3 random managers</b> receive $40 / $25 / $15 from HR with comedic justifications. Settled on-chain.</li>
+          <li><span class="key">Tick 15 (~2 hours in)</span> — <b>Progress email #1</b> lands in coaches' inboxes.</li>
+          <li><span class="key">Tick 30 (~4 hours in)</span> — <b>Halftime Bonus</b>. <b>3 random managers</b> receive $40 / $25 / $15 with fresh flavor lines.</li>
+          <li><span class="key">Tick 30 (~4 hours in)</span> — <b>📋 Board Strategy Review opens</b>. The full board is in the building for the next 5 ticks. <b>Every prestige change is doubled</b> during the window. Bold plays double their reward; cheap plays double their disappointment. Don't coast through this window.</li>
+          <li><span class="key">Tick 35 (~4.5 hours in)</span> — <b>Board Strategy Review closes</b>. Stakes back to normal.</li>
+          <li><span class="key">Tick 45 (~6 hours in)</span> — <b>Q3 Wrap Bonus</b>. <b>3 random managers</b> receive $40 / $25 / $15 — winners can still spend the money.</li>
+          <li><span class="key">Tick 60 (~8 hours in)</span> — <b>Game End</b>. Highest prestige wins the VP slot. Finale email lands in every coach's inbox.</li>
           <li><b>Glass Cliff Promotion</b> (any cycle boundary, auto) — fires when the leader is 50+ prestige ahead of #2. Drags the leader back to #2's value with a flavor reason. Once per victim per game.</li>
         </ul>
         <p><b>Random events</b> (each rolls at every cycle boundary):</p>
