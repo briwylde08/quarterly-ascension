@@ -1301,7 +1301,7 @@
     </div>
     <div class="kpi-tile state-tile">
       <div class="kpi-label">Tick</div>
-      <div class="kpi-sublabel" aria-hidden="true">&nbsp;</div>
+      <div class="kpi-sublabel" id="tick-countdown">&nbsp;</div>
       <div class="kpi-value"><span id="cycle">0</span><span class="kpi-suffix">/60</span></div>
     </div>
     <div class="kpi-tile state-tile">
@@ -2783,6 +2783,37 @@
         syncPauseLabel(d.status);
       } catch {}
     };
+
+    // ============================================================
+    // Tick countdown — re-added post game-3. At 8-min ticks there's
+    // plenty of headroom for a stable countdown (LLM + Stellar work
+    // rarely exceeds ~30s of the 480s budget). Renders into the Tick
+    // KPI tile's sublabel slot. Uses server-side nextAlarmAt corrected
+    // for clock skew so multiple dashboards stay in sync.
+    // ============================================================
+    const tickCountdownEl = document.getElementById('tick-countdown');
+    function renderTickCountdown() {
+      if (!tickCountdownEl) return;
+      if (currentStatus !== 'running') {
+        tickCountdownEl.innerHTML = '&nbsp;';
+        return;
+      }
+      if (tickInFlight) {
+        tickCountdownEl.textContent = 'Working…';
+        return;
+      }
+      if (!nextAlarmAt) {
+        tickCountdownEl.innerHTML = '&nbsp;';
+        return;
+      }
+      const remainingMs = Math.max(0, nextAlarmAt - (Date.now() - clockSkewMs));
+      const totalSec = Math.ceil(remainingMs / 1000);
+      const mm = Math.floor(totalSec / 60);
+      const ss = (totalSec % 60).toString().padStart(2, '0');
+      tickCountdownEl.textContent = `Next in ${mm}:${ss}`;
+    }
+    setInterval(renderTickCountdown, 1000);
+    renderTickCountdown();
   </script>
 </body>
 </html>

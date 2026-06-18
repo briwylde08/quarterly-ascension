@@ -935,7 +935,7 @@ async function executeAction(
                 timestamp: new Date(),
                 type: "status_effect",
                 agentId: agent.id,
-                description: `${agent.name} flagged for HR Audit — pattern of take_credit filings triggered review. Locked out of take_credit through tick ${tick + HR_AUDIT_DURATION}.`,
+                description: `${agent.name} flagged for HR Audit — pattern of Take Credit filings triggered review. Locked out of Take Credit through tick ${tick + HR_AUDIT_DURATION}.`,
               });
             }
           }

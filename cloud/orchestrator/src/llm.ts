@@ -657,6 +657,12 @@ export async function getAgentDecision(
       model: "openai/gpt-5-mini",
       max_completion_tokens: 2000,
       response_format: { type: "json_object" },
+      // gpt-5-mini is a reasoning model. With default reasoning_effort,
+      // game-3 saw occasional "Empty response" fallbacks because reasoning
+      // tokens ate the entire 2000-token budget, leaving none for the JSON
+      // output. "low" preserves enough reasoning for the LLM to weigh
+      // persona+state+cooldowns while reserving room for output.
+      reasoning_effort: "low",
       messages: [
         { role: "system", content: systemPrompt },
         { role: "user", content: userPrompt },
@@ -665,7 +671,23 @@ export async function getAgentDecision(
 
     const content = response.choices[0]?.message?.content;
     if (!content) {
-      return { action: { type: "work" }, reasoning: "Empty response" };
+      // Belt-and-suspenders flavor bank: even with reasoning_effort: low,
+      // if the LLM still returns empty (rate-limit, gateway hiccup, etc.),
+      // surface a small in-character reason instead of the bare debug string.
+      const distractedFlavors = [
+        "Got distracted by an email thread that turned into a 9-reply argument about whether to use bullet points.",
+        "Stared at the project tracker for a full minute before remembering they were the one who'd been assigned this.",
+        "Checked LinkedIn for twelve minutes. Did not learn anything actionable.",
+        "Spent the slot updating their Slack status to 'in deep focus.' Then forgot what they were doing.",
+        "Reorganized their Notion. The reorg took the entire turn.",
+        "Got pulled into a 'quick sync' that wasn't.",
+        "Lost ten minutes to a calendar invite they thought was a meeting and wasn't.",
+        "Got into it with the office printer. Did not win.",
+      ];
+      return {
+        action: { type: "work" },
+        reasoning: distractedFlavors[Math.floor(Math.random() * distractedFlavors.length)],
+      };
     }
 
     const { action, reasoning, directiveAlignment } = parseAction(content, agent);
