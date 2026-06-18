@@ -1478,6 +1478,8 @@
     let nextAlarmAt = null;       // server-reported timestamp; primary timer source
     let tickInFlight = false;     // server-reported: an alarm is currently processing a tick
     let clockSkewMs = 0;          // localClock - serverClock; used to keep countdowns aligned across machines
+    let lobbyOpenedAt = null;     // server-reported: when the first claim opened the lobby
+    let lobbyDurationMs = null;   // server-reported: how long the lobby auto-start window is
     let lastTickStartMs = Date.now();  // fallback only
     let currentTick = 0;
     let currentStatus = 'setup';
@@ -1571,6 +1573,8 @@
       syncUpNext(data.nextAgents || []);
       nextAlarmAt = data.nextAlarmAt ?? null;
       tickInFlight = !!data.tickInFlight;
+      lobbyOpenedAt = data.lobbyOpenedAt ?? null;
+      lobbyDurationMs = data.lobbyDurationMs ?? null;
       if (typeof data.serverTime === 'number') clockSkewMs = Date.now() - data.serverTime;
       lastTickStartMs = Date.now(); // fallback for fresh load if nextAlarmAt is missing
       document.getElementById('cycle').textContent = data.tick;
@@ -2794,6 +2798,23 @@
     const tickCountdownEl = document.getElementById('tick-countdown');
     function renderTickCountdown() {
       if (!tickCountdownEl) return;
+      const fmt = (ms) => {
+        const totalSec = Math.ceil(Math.max(0, ms) / 1000);
+        const mm = Math.floor(totalSec / 60);
+        const ss = (totalSec % 60).toString().padStart(2, '0');
+        return `${mm}:${ss}`;
+      };
+      // Setup state with a lobby open: count down to auto-start of the game.
+      // Mirrors the intro.html lobby banner so the dashboard says the same
+      // thing as the page where players first claim.
+      if (currentStatus === 'setup' && lobbyOpenedAt && lobbyDurationMs) {
+        const startsAt = lobbyOpenedAt + lobbyDurationMs;
+        const remainingMs = startsAt - (Date.now() - clockSkewMs);
+        if (remainingMs > 0) {
+          tickCountdownEl.textContent = `Lobby: ${fmt(remainingMs)}`;
+          return;
+        }
+      }
       if (currentStatus !== 'running') {
         tickCountdownEl.innerHTML = '&nbsp;';
         return;
@@ -2806,11 +2827,7 @@
         tickCountdownEl.innerHTML = '&nbsp;';
         return;
       }
-      const remainingMs = Math.max(0, nextAlarmAt - (Date.now() - clockSkewMs));
-      const totalSec = Math.ceil(remainingMs / 1000);
-      const mm = Math.floor(totalSec / 60);
-      const ss = (totalSec % 60).toString().padStart(2, '0');
-      tickCountdownEl.textContent = `Next in ${mm}:${ss}`;
+      tickCountdownEl.textContent = `Next in ${fmt(nextAlarmAt - (Date.now() - clockSkewMs))}`;
     }
     setInterval(renderTickCountdown, 1000);
     renderTickCountdown();
