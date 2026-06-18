@@ -2,7 +2,7 @@
 
 10 AI middle-managers compete for promotion to VP using real Stellar testnet payments via [MPP](https://github.com/stellar/mpp) (Machine Payments Protocol — Stellar's facilitator-free payment protocol for AI agents, using HTTP 402 for the handshake). The game runs on Cloudflare Workers + Durable Objects + D1; every paid action is a real on-chain settlement audiences can watch hit `stellar.expert` in real time.
 
-> **Status:** public-playable. `main` is the 8-hour workday format — 60 ticks × 8 min each, 2-agents-per-tick round-robin, self-serve "first claim opens a 30-min lobby" start, password-based coaching, and 5 email updates per player (welcome + 3 progress + finale) via Cloudflare Email Sending. The `retreat` branch preserves the in-room live-show variant (25-second ticks, ~25 min runtime). The `long-form-vision` branch is the older 4-hour passive prototype (kept for archaeology, not deploy-ready).
+> **Status:** public-playable. `main` is the 8-hour workday format — 60 ticks × 8 min each, **5-managers-per-tick** round-robin, self-serve "first claim opens a 30-min lobby" start, password-based coaching with a 5-step post-claim onboarding modal, in-page coaching hints, and 5 email updates per player (welcome + 3 progress + finale) via Cloudflare Email Sending. The `retreat` branch preserves the in-room live-show variant (25-second ticks, ~25 min runtime). The `long-form-vision` branch is the older 4-hour passive prototype (kept for archaeology, not deploy-ready).
 
 ---
 
@@ -36,7 +36,7 @@
                                            └──────────────────────────────┘
 ```
 
-**Orchestrator** is a single Durable Object. It owns the alarm-driven tick loop, picks the next 2 agents per round-robin, calls the LLM for each agent's action choice, executes the action (which may include a real MPP payment to the corresponding NPC), persists everything to D1, and broadcasts state changes over WebSocket.
+**Orchestrator** is a single Durable Object. It owns the alarm-driven tick loop, picks the next 5 agents per round-robin (half the roster per tick), calls the LLM for each agent's action choice, executes the action (which may include a real MPP payment to the corresponding NPC), persists everything to D1, and broadcasts state changes over WebSocket.
 
 **NPCs** are stateless Workers. Each implements one or more paid endpoints via `@stellar/mpp/charge/server`'s `createCharge`. They return HTTP 402 with a payment challenge; the orchestrator's MPP client signs the auth entry, the payment settles on-chain, and the NPC returns the actual response.
 
@@ -46,7 +46,7 @@
 
 ## Quick start (deploying from scratch)
 
-You need: a Cloudflare account (Workers + Pages + D1 enabled), a Stellar testnet keypair to fund the asset issuer, and an OpenAI-compatible LLM endpoint (the project uses Cloudflare AI Gateway pointing at OpenAI's `gpt-5.5`).
+You need: a Cloudflare account (Workers + Pages + D1 + Email Sending enabled), a Stellar testnet keypair to fund the asset issuer, and an OpenAI-compatible LLM endpoint (the project uses Cloudflare AI Gateway pointing at OpenAI's `gpt-5-mini`).
 
 ### 1. Install
 
@@ -196,16 +196,27 @@ For UI iteration on the static dashboard: edit files in `cloud/display/public/` 
 
 ---
 
-## Game flow (retreat mode)
+## Game flow (public-playable mode)
 
-- **60 ticks at 25s each → ~25–30 minute game.** Each of the 10 managers acts 12 times.
-- Each alarm fires for **2 agents** picked from a fixed round-robin shuffle (5 pairs, stable for the whole game so coaches can anticipate when their manager is up). Over 5 ticks (= 1 cycle), all 10 agents act once.
-- Each agent's turn: LLM picks an action from a 27-action menu, the orchestrator executes it. Paid actions trigger an MPP payment to the relevant NPC, settle on-chain via the Soroban DLBR contract, and the receipt + tx hash flow back into the dashboard ticker.
-- **Fixed beats**: Tick 1 (Q1 Kickoff), Tick 5 (cycle-1 closer), Tick 15 (Q1 Wrap Bonus, 3 mints), Tick 30 (Halftime Bonus), Tick 35 (mid-game pivot), Tick 45 (Q3 Wrap Bonus), Tick 60 (Game End).
-- **Random events** roll at each cycle boundary (one-per-game cap): Surprise Demo Day, Surprise Board Visit, Viral LinkedIn, Bad Glassdoor Review, Surprise Promotion, Budget Cuts, Printer Achieves Sentience, Quiet Quitting Memo Leaked, Vending Machine Showdown, Glass Cliff Promotion.
-- **Status effects**: Hit the Wall (-3/cycle, cured by buy_coffee/shotgun_red_bull/cry_in_stairwell), Problematic (-3/cycle), Documented (next take_credit against you auto-succeeds), Questionable Judgment, Mysterious Influence (+2/cycle passive), Meeting Blocked, Has Deliverable, HR Audit (locks take_credit for 8 ticks after 2 successful TC filings in 8 ticks).
-- **Coaching**: a coach claims a manager via `/intro.html` (name + password), then submits directives any time during a running/halted game via `POST /api/directive` with their password. The directive is injected into the LLM prompt for that agent until overwritten or DELETE'd. The dashboard surfaces a "Considered / Not yet considered" pill on the character page so coaches know when their directive has been read.
-- **Per-coach view**: opening the dashboard with `?coach=<agentId>` highlights events and the leaderboard row for that manager with a gold `🎙 YOURS` pill. Useful for shared-URL spectating.
+- **60 ticks at 8 min each → ~8-hour game.** One full workday. Each of the 10 managers acts roughly **30 times** across the game.
+- **5 managers act per tick**, picked from a stable randomized turn-order. Every 2 ticks (one roster pass, ~16 min), every manager has acted once. Cycle boundaries (every 5 ticks, ~40 min) trigger periodic mechanics (Synergy Dividend, random events, status decay, gossip refresh).
+- Each agent's turn: LLM (`gpt-5-mini` via Cloudflare AI Gateway) picks an action from a 27-action menu, the orchestrator executes it. Paid actions trigger an MPP payment to the relevant NPC, settle on-chain via the Soroban DLBR contract, and the receipt + tx hash flow back into the dashboard ticker.
+- **Fixed beats**:
+  - Tick 1 — **Q1 Kickoff** (CEO speech + 10 per-agent reactions)
+  - Tick 5 — **Cycle 1 closer** (guaranteed high-impact event)
+  - Every cycle boundary (ticks 5, 10, 15, …) — **Synergy Dividend** (+$10/manager on-chain, keeps the economy solvent across the full 8-hour run)
+  - Tick 15, 30, 45 — **Quarterly Bonuses** ($40/$25/$15 to top 3) + **progress emails** to claimed coaches
+  - Tick 30-34 — **📋 Board Strategy Review** (every prestige change is doubled for 5 ticks; deterministic mid-game pivot)
+  - Tick 60 — **Game End**, finale email to every coach, 60-min cleanup window, then auto-reset
+- **Random events** roll probabilistically at each cycle boundary (one-per-game cap): Surprise Demo Day, Surprise Board Visit, Viral LinkedIn, Bad Glassdoor Review, Surprise Promotion, Budget Cuts, Printer Achieves Sentience, Quiet Quitting Memo Leaked, Vending Machine Showdown. Plus Glass Cliff Promotion (auto-fires when the leader is 50+ ahead of #2).
+- **Status effects**: Hit the Wall (-3/cycle, cured by buy_coffee / shotgun_red_bull / cry_in_stairwell), Problematic, Documented (next take_credit against you auto-succeeds), Questionable Judgment, Mysterious Influence (+2/cycle passive), Meeting Blocked, Has Deliverable, HR Audit (locks take_credit for 8 ticks after 2 successful Take Credits in 8 ticks), Board Strategy Review (all-agents, ticks 30-34, prestige doublings).
+- **`take_credit` cap**: each agent can use Take Credit at most **4 times per game**. Prevents the sabotage→take_credit chain from dominating play.
+- **Lobby auto-start**: the first claim opens a 30-minute lobby. Subsequent claims piggyback. When the lobby alarm fires, the game auto-starts with whatever claims are in (uncoached managers play autonomously). The lobby-opener can skip the wait with their password via the inline form on `intro.html`.
+- **Coaching**: a coach claims a manager via `/intro.html` (name + email + password). After claim success, a 5-step onboarding modal walks them through the game flow, coaching mechanics, and the four pages they'll use. They submit directives any time during a running game via `POST /api/directive` with their password. The directive is injected into the LLM prompt for that agent until overwritten or `DELETE`'d. The dashboard surfaces a "Considered / Pending" pill on the character page so coaches know when their directive has been read.
+- **Coaching hints**: agent.html shows two-tier suggestions above the directive box — **⚡ Suggested Actions** (2 atomic plays, click-to-pre-fill chips) and **🎯 Strategic Directives** (3-4 multi-turn combo hints). Picked server-side by the `/api/coaching-hints` endpoint based on the manager's live state.
+- **Email cadence** (Cloudflare Email Sending, sender `hr@megacorp.lol`): claim confirmation, progress reports at ticks 15/30/45, finale at tick 60.
+- **Per-coach view**: opening the dashboard with `?coach=<agentId>` highlights events and the leaderboard row for that manager with a gold `🎙 YOURS` pill.
+- **Coach Alignment Leaderboard**: on `/directives.html`, ranks every claimed manager by how often they followed / tilted / defied their coach. Powered by `/api/coach-alignment`, computed from `action_logs.directive_alignment`.
 - **Post-game awards**: `POST /admin/judge-directives` hands every directive snapshot to an LLM judge that picks winners in four categories (Most Entertaining, Most Committed to Character, Best Single Directive, Most Chaotic). The host opens `/awards.html` to project the ceremony.
 
 The full mechanic catalog lives at `/handbook.html` on the deployed dashboard.
@@ -220,15 +231,23 @@ The full mechanic catalog lives at `/handbook.html` on the deployed dashboard.
 |---|---|
 | `STELLAR_NETWORK` | `testnet` |
 | `HORIZON_URL` | Stellar Horizon endpoint |
-| `RPC_URL` | Soroban RPC endpoint |
 | `ASSET_CODE` | `DLBR` |
 | `ASSET_ISSUER` | DLBR issuer pubkey |
 | `ASSET_SAC` | DLBR Stellar Asset Contract address |
-| `OPENAI_BASE_URL` | OpenAI-compatible base URL (project uses Cloudflare AI Gateway) |
+| `OPENAI_BASE_URL` | OpenAI-compatible base URL (project uses Cloudflare AI Gateway → `gpt-5-mini`) |
 | `NPC_BASE_URL` | Base URL template for NPC Workers, with `__npc__` placeholder |
-| `TICK_INTERVAL_MS` | `25000` (retreat) |
-| `MAX_TICKS` | `60` (retreat) |
+| `TICK_INTERVAL_MS` | `480000` (8-min ticks for the 8-hour public-playable format) |
+| `MAX_TICKS` | `60` |
+| `LOBBY_DURATION_MS` | `1800000` (30-min lobby window between first claim and game auto-start) |
 | `HR_DEPT_ADDRESS`, `MOTIVATIONAL_SPEAKER_ADDRESS` | NPC pubkeys for reward routing |
+
+### Orchestrator Worker bindings
+
+| Binding | Type | Purpose |
+|---|---|---|
+| `ORCHESTRATOR` | Durable Object | The single `GameOrchestrator` instance that owns the tick loop |
+| `DB` | D1 | `events`, `agents`, `action_logs`, `game_state`, `ticker`, `leaked_emails` |
+| `EMAIL` | `send_email` | Cloudflare Email Sending for claim confirmation + progress + finale emails. Sender domain must be onboarded via `wrangler email sending enable <domain>` |
 
 ### Orchestrator Worker secrets (via `wrangler secret put`)
 
@@ -263,7 +282,7 @@ All endpoints require `Authorization: Bearer $ADMIN_SECRET`.
 
 | Endpoint | Purpose |
 |---|---|
-| `POST /admin/start` | Start a game (status setup → running). Auto-replenishes HR balance to 5000 if below 1500. Pins game-start timestamp for fixed wall-clock alarm cadence. |
+| `POST /admin/start` | Start a game (status setup → running) — skips the 30-min lobby. Auto-replenishes HR balance to 5000 if below 1500. Pins game-start timestamp for fixed wall-clock alarm cadence. |
 | `POST /admin/halt` | Pause the game. Cancels the next alarm. |
 | `POST /admin/resume` | Un-pause. Realigns the cadence so post-pause ticks fire at the right wall-clock offset. |
 | `POST /admin/end` | End the running game (status running → ended). Triggers the post-game cleanup alarm. |
@@ -272,6 +291,7 @@ All endpoints require `Authorization: Bearer $ADMIN_SECRET`.
 | `POST /admin/normalize` | Run the two-pass balance normalization without resetting other state. Query: `target=200`. |
 | `POST /admin/cancel-cleanup` | Cancel the pending post-game cleanup alarm so a `/admin/snapshot` or `/admin/judge-directives` can still run after game-end. |
 | `POST /admin/judge-directives` | Hand all coached directives to an LLM judge and return 4 awards (Most Entertaining / Most Committed / Best Single / Most Chaotic). Use `/awards.html` to project. |
+| `POST /admin/test-email` | Debug-only: send a test email via the `EMAIL` binding to verify Cloudflare Email Sending end-to-end. Body: `{"to": "addr@example.com"}`. |
 | `GET /admin/snapshot` | Full game record dump (agents, actions, events, status). For post-game analysis. |
 | `GET /admin/status` | Quick game-state probe (status, tick, alarm). |
 
@@ -279,14 +299,17 @@ All endpoints require `Authorization: Bearer $ADMIN_SECRET`.
 
 | Endpoint | Purpose |
 |---|---|
-| `GET /api/state` | Current game state: status, tick, agents, recent events, ticker, next agents up, turn order. |
+| `GET /api/state` | Current game state: status, tick, agents, recent events, ticker, next agents up, turn order, lobby state (`lobbyOpenedAt`, `lobbyOpenedBy`, `lobbyDurationMs`). |
 | `GET /api/agents` | Per-agent profile with prestige, balance, status effects, allies, claim status. |
 | `GET /api/agent/:id` | Single-agent detail including recent actions and inbound events targeting them. |
 | `GET /api/events` | Recent events (last 50). |
 | `GET /api/relationships` | Current alliances + recent rivalries (agents who've attacked each other 2+ times in last 12 ticks). |
 | `GET /api/gossip` | Rolling LLM-narrated summary of big moments from the last cycle. |
+| `GET /api/coaching-hints?agentId=<id>` | Returns `{ suggestedActions: [...], strategicDirectives: [...] }` — server-picked coaching suggestions based on the manager's live state. Drives the hint chips on `agent.html`. |
+| `GET /api/coach-alignment` | Returns `{ board: [...] }` — per-coach followed/tilted/defied counts + percentage. Powers the Coach Alignment Leaderboard on `directives.html`. |
 | `GET /ws` | WebSocket for live game events + ticker updates. |
-| `POST /api/claim` | Claim a manager: atomic claim + activate. Body: `{agentId, name, password}`. Refused unless status='setup'. |
+| `POST /api/claim` | Claim a manager: atomic agent-update + password-write inside a D1 batch. Body: `{agentId, name, email, password}`. Refused unless status='setup'. First claim writes `lobby_opened_at` + `lobby_opened_by` and schedules the auto-start alarm. |
+| `POST /api/start-game` | Skip the 30-min lobby wait — only callable by the lobby opener with their claim password. Body: `{agentId, password}`. |
 | `POST /api/directive` | Submit a coaching directive. Body: `{agentId, password, directive}`. 280-char cap. |
 | `DELETE /api/directive` | Clear the active directive. Body: `{agentId, password}`. |
 | `POST /api/release` | Release a claimed manager so someone else can claim them. Body: `{agentId, password}`. Refused while game is running. |
@@ -298,9 +321,10 @@ All endpoints require `Authorization: Bearer $ADMIN_SECRET`.
 | Layer | Tech |
 |---|---|
 | Runtime | Cloudflare Workers (orchestrator, NPCs) + Cloudflare Pages (display) |
-| State | Cloudflare Durable Object (game loop) + D1 (events, agents, action_logs, game_state, ticker) |
-| Payments | `@stellar/mpp/charge/{client,server}` over the Stellar Soroban DLBR asset (testnet) |
-| LLM | OpenAI-compatible (`gpt-5.5`) via Cloudflare AI Gateway |
+| State | Cloudflare Durable Object (game loop) + D1 (events, agents, action_logs, game_state, ticker, leaked_emails) |
+| Payments | `@stellar/mpp/charge/{client,server}` over the Stellar Soroban DLBR asset (testnet). `sendAsset` retries on transient testnet failures with 1.5s + 3s backoff. |
+| LLM | OpenAI-compatible (`gpt-5-mini`) via Cloudflare AI Gateway. `reasoning_effort: "low"` on the action picker, `"minimal"` on the gossip narrator. |
+| Email | Cloudflare Email Sending via the `EMAIL` binding. Claim confirmation + progress (ticks 15/30/45) + finale (tick 60). |
 | Frontend | Vanilla HTML/CSS/JS (no build step) |
 | Language | TypeScript everywhere |
 
@@ -308,8 +332,9 @@ All endpoints require `Authorization: Bearer $ADMIN_SECRET`.
 
 ## Branches
 
-- **`main`** — retreat mode (this branch). 60×25s ticks, password coaching, in-room show.
-- **`long-form-vision`** — the original 4-hour passive game. Email-as-secret coaching, hourly milestone emails, 5-min ticks. Preserved for the post-retreat continuation.
+- **`main`** — public-playable. The 8-hour-workday format: 60 ticks × 8 min, 5 managers/tick, self-serve "first claim opens a 30-min lobby" auto-start, password-based coaching, 5 emails per coach via Cloudflare Email Sending, on-chain DLBR settlements throughout. This is the deployable branch.
+- **`retreat`** — preserved snapshot of the in-room live-show variant used at the SDF retreat (May 2026): 25-second ticks, 2 managers/tick, ~25 min runtime, no email, manual host start. Kept for historical reference.
+- **`long-form-vision`** — the original pre-pivot prototype: 4-hour passive game, 5-min ticks, email-as-secret coaching. Kept for archaeology, not deploy-ready.
 
 ---
 
