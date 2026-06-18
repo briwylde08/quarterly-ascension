@@ -678,35 +678,49 @@ export class GameOrchestrator {
         );
       }
 
-      // Atomic: only set claim fields if currently unclaimed. Then store the
-      // password hash. If the claim succeeded but hashing failed, roll back
-      // to keep the slot available.
-      const updateRes = await this.env.DB
-        .prepare(
-          "UPDATE agents SET claimed_by_name = ?, claimed_by = ? WHERE id = ? AND claimed_by_name IS NULL"
-        )
-        .bind(trimmedName, trimmedEmail, agentId)
-        .run();
-      const changes = updateRes.meta?.changes ?? 0;
+      // CPU-expensive PBKDF2 hashing FIRST — before touching D1. If the
+      // Worker dies during hashing (CPU budget, network, etc.) no agent row
+      // is left in a half-claimed state. Game-3 stuck-claim incident: the
+      // pre-fix flow UPDATEd agents before hashing, and a mid-handler death
+      // committed the claim without a password, blocking re-claim.
+      let hash: string;
+      try {
+        hash = await hashPassword(password);
+      } catch (err) {
+        console.error("[claim] password hashing failed:", err);
+        return Response.json({ error: "could not hash password; please try again" }, { status: 500 });
+      }
+
+      // Atomic batch: agent claim AND password write commit together (D1
+      // batch runs in an implicit transaction). If the Worker dies between
+      // the two writes, neither lands — no more stuck-claim states.
+      // The agent UPDATE's WHERE-IS-NULL clause still gives us atomic
+      // first-claim-wins semantics under concurrent claims.
+      const batchResults = await this.env.DB.batch([
+        this.env.DB
+          .prepare(
+            "UPDATE agents SET claimed_by_name = ?, claimed_by = ? WHERE id = ? AND claimed_by_name IS NULL"
+          )
+          .bind(trimmedName, trimmedEmail, agentId),
+        this.env.DB
+          .prepare("INSERT OR REPLACE INTO game_state (key, value) VALUES (?, ?)")
+          .bind(`password_${agentId}`, hash),
+      ]);
+      const changes = batchResults[0]?.meta?.changes ?? 0;
       if (changes === 0) {
+        // Agent was already claimed — the password_<id> row written in this
+        // batch is now orphaned. Clean it up so the actual claimer's password
+        // (if any) isn't clobbered by this attempt's hash.
+        await this.env.DB
+          .prepare("DELETE FROM game_state WHERE key = ? AND value = ?")
+          .bind(`password_${agentId}`, hash)
+          .run();
         const a = await db.getAgent(agentId);
         if (!a) return Response.json({ error: "agent not found" }, { status: 404 });
         return Response.json(
           { error: "agent already claimed", claimedByName: a.claimedByName },
           { status: 409 }
         );
-      }
-
-      try {
-        const hash = await hashPassword(password);
-        await db.setGameStateValue(`password_${agentId}`, hash);
-      } catch (err) {
-        console.error("[claim] password hashing failed; releasing claim:", err);
-        await this.env.DB
-          .prepare("UPDATE agents SET claimed_by_name = NULL, claimed_by = NULL WHERE id = ?")
-          .bind(agentId)
-          .run();
-        return Response.json({ error: "could not store password; please try again" }, { status: 500 });
       }
 
       // First claim opens the lobby: set lobby_opened_at + record the agent
