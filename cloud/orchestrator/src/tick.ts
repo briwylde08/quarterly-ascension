@@ -385,6 +385,35 @@ export async function processTick(deps: TickDeps, activeAgentIds?: string[]): Pr
     await applyMysteriousInfluenceMisattribution(deps, tick, d);
   }
 
+  // Phase 4c: Board Strategy Review doubling. If any agent has the
+  // board_review status active for this tick, every action's prestige
+  // change gets doubled. We apply the bonus delta NOW (after executeAction
+  // already ran the normal +N) and patch action_logs so the leaderboard
+  // and post-game analytics see the doubled value. Tick 30-34 only.
+  if (tick >= 30 && tick <= 34) {
+    const anyBoardReview = (await db.getAllAgents()).some((a) =>
+      a.statusEffects.some((s) => s.type === "board_review")
+    );
+    if (anyBoardReview) {
+      const rows = await db.getActionLogsAtTickWithPrestige(tick);
+      let totalAmplified = 0;
+      for (const r of rows) {
+        await db.updateAgentPrestige(r.agent_id, r.prestige_change);
+        await db.doubleActionLogPrestige(r.id);
+        totalAmplified += Math.abs(r.prestige_change);
+      }
+      if (totalAmplified > 0) {
+        await emit({
+          id: uuid(),
+          tick,
+          timestamp: new Date(),
+          type: "random_event",
+          description: `📋 Board Review amplification: ${totalAmplified} prestige doubled across this tick's actions. The board is taking notes.`,
+        });
+      }
+    }
+  }
+
   // Phase 5: passive ticks (Inspired bonus + Tired/Problematic decay)
   await applyPassiveStatusDecay(deps, tick);
 

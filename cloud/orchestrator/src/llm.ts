@@ -252,6 +252,7 @@ function buildContextPrompt(ctx: DecisionContext): string {
       case "mysterious_influence": return "Mysterious Influence (+2 prestige/cycle passive; people occasionally credit you for things you didn't do)";
       case "questionable_judgment": return `Questionable Judgment (public credibility tag; expires tick ${s.expiresAtTick})`;
       case "hr_audit": return `On HR Audit — pattern flag from too many take_credit filings. take_credit unavailable to you until tick ${s.expiresAtTick}.`;
+      case "board_review": return `🔥 BOARD STRATEGY REVIEW ACTIVE (expires tick ${s.expiresAtTick}) — EVERY prestige change you cause or take is DOUBLED while the board is watching. Bold plays double their reward; cheap plays double their disappointment. Do not coast through this window.`;
       // Carryover from long-form:
       case "under_investigation": return `Under Investigation (can't take hostile action against ${s.source}; expires tick ${s.expiresAtTick})`;
       case "problematic": return `Problematic (-3 prestige/tick decay; expires tick ${s.expiresAtTick})`;

@@ -171,6 +171,17 @@ export async function processRandomEvents(
     events.push(...(await quarterlyBonus(deps, tick, [40, 25, 15], "Q3 Wrap")));
   }
 
+  // Board Strategy Review: deterministic mid-game pivot. Opens at tick 30,
+  // closes at tick 35. While the review window is active, every prestige
+  // change is doubled in post-tick batch (see tick.ts board_review handler)
+  // and the LLM prompt surfaces the heightened stakes. Goal: break any
+  // pattern that's calcified in the first half of the game.
+  if (tick === 30) {
+    events.push(...(await boardStrategyReviewOpen(deps, tick)));
+  } else if (tick === 35) {
+    events.push(...(await boardStrategyReviewClose(deps, tick)));
+  }
+
   // Glass Cliff Promotion: auto-fires whenever the leader pulls 50+ prestige
   // ahead of rank-2, *and* hasn't already been cliffed this game.
   events.push(...(await glassCliffPromotion(deps, state, tick)));
@@ -394,6 +405,40 @@ async function glassCliffPromotion(
     agentId: leader.id,
     prestigeChange: delta,
   }];
+}
+
+// === Board Strategy Review (mid-game pivot, deterministic) =================
+
+async function boardStrategyReviewOpen(deps: EventDeps, tick: number): Promise<GameEvent[]> {
+  // Stamp every agent with the board_review status until tick 35 (5-tick
+  // window). tick.ts checks for this status post-tick to double prestige
+  // changes; llm.ts surfaces it in the prompt so agents factor amplified
+  // stakes into their decisions.
+  const agents = await deps.db.getAllAgents();
+  for (const a of agents) {
+    await deps.db.updateAgentStatusEffects(a.id, [
+      ...a.statusEffects.filter((e) => e.type !== "board_review"),
+      { type: "board_review", expiresAtTick: 35, source: "board" },
+    ]);
+  }
+  return [
+    {
+      id: uuid(), tick, timestamp: new Date(), type: "random_event",
+      description: `📋 BOARD STRATEGY REVIEW (Q2 mid-quarter): The full board is in the building for the next 5 ticks. Every prestige change is doubled while they're watching. Quiet plays go unnoticed; bold plays land at amplified impact. Make this count.`,
+    },
+  ];
+}
+
+async function boardStrategyReviewClose(deps: EventDeps, tick: number): Promise<GameEvent[]> {
+  // Status effects with expiresAtTick=35 will auto-clear in tick.ts's
+  // Phase-1 status-decay loop at tick 35. This event just announces the
+  // close for narrative continuity.
+  return [
+    {
+      id: uuid(), tick, timestamp: new Date(), type: "random_event",
+      description: `📋 The board left the building. Strategy Review window closed. Prestige changes back to normal — until they show up again.`,
+    },
+  ];
 }
 
 // === Surprise Board Visit ==================================================

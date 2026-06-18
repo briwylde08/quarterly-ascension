@@ -327,6 +327,24 @@ export class Db {
     return result.results ?? [];
   }
 
+  /** All action_logs rows from a given tick with non-zero prestige_change.
+   *  Used by the Board Strategy Review doubling pass. */
+  async getActionLogsAtTickWithPrestige(tick: number): Promise<Array<{ id: number; agent_id: string; prestige_change: number }>> {
+    const result = await this.db
+      .prepare(`SELECT id, agent_id, prestige_change FROM action_logs WHERE tick = ? AND prestige_change != 0`)
+      .bind(tick)
+      .all<{ id: number; agent_id: string; prestige_change: number }>();
+    return result.results ?? [];
+  }
+
+  /** Multiply an action_log row's prestige_change by 2. Board Review only. */
+  async doubleActionLogPrestige(id: number): Promise<void> {
+    await this.db
+      .prepare(`UPDATE action_logs SET prestige_change = prestige_change * 2 WHERE id = ?`)
+      .bind(id)
+      .run();
+  }
+
   async getAgentLastActionLog(agentId: string): Promise<any | null> {
     const row = await this.db
       .prepare(

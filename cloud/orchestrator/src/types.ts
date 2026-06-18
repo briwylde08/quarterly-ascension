@@ -48,7 +48,12 @@ export type StatusEffectType =
   /** Lands on an agent who just took 2 successful take_credits within 8 ticks.
    *  Locks them out of take_credit for 8 ticks. Public — peers can route
    *  around. Diegetic cover for an anti-spam mechanic. */
-  | "hr_audit";
+  | "hr_audit"
+  /** Mid-game Board Strategy Review (deterministic at tick 30, expires
+   *  tick 35). Applied to ALL agents. Stakes are amplified: every prestige
+   *  change during the window is doubled in post-tick batch. Visible to
+   *  everyone; the LLM prompt amplifies the perceived stakes. */
+  | "board_review";
 
 export interface ActionResult {
   success: boolean;
