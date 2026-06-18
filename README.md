@@ -13,7 +13,7 @@ It's a corporate-absurdist satire with sabotage, alliances, and HR complaints. H
 
 ```
 ┌──────────────────────────┐    WebSocket + REST    ┌────────────────────────┐
-│  cloud/display/public    │ ─────────────────────▶ │  cloud/orchestrator    │
+│  display/public          │ ─────────────────────▶ │  orchestrator          │
 │  (Cloudflare Pages)      │                        │  Worker + Durable      │
 │  • index.html dashboard  │                        │  Object (GameOrch.)    │
 │  • intro.html (claim)    │                        │  + D1 (events,         │
@@ -25,7 +25,7 @@ It's a corporate-absurdist satire with sabotage, alliances, and HR complaints. H
                                                               │ MPP / HTTP 402
                                                               ▼
               ┌───────────────────────────────────────────────────────────┐
-              │  cloud/npcs/*  — one Worker per paid service              │
+              │  npcs/*  — one Worker per paid service                    │
               │  ☕ coffee-cart   📋 hr-dept     📈 consultant            │
               │  💻 it-guy       📅 exec-assistant   🍽 caterer           │
               │  🎤 motivational-speaker                                  │
@@ -56,43 +56,43 @@ If you came here to read the code, these are the patterns most likely worth your
 
 Each AI manager has its own Stellar account and signs **real testnet payments** to NPC Workers when they take a paid action. The HTTP 402 handshake is the whole interesting part — no payment facilitator in the middle, just signed auth entries and on-chain settlement. NPC Workers verify the charge via `@stellar/mpp/charge/server` and return the response only after settlement.
 
-📂 `cloud/orchestrator/src/mpp-client.ts` (caller), `cloud/npcs/*/index.ts` (servers), `cloud/orchestrator/src/stellar.ts` (Stellar wrapper with retry-on-transient-error).
+📂 `orchestrator/src/mpp-client.ts` (caller), `npcs/*/index.ts` (servers), `orchestrator/src/stellar.ts` (Stellar wrapper with retry-on-transient-error).
 
 ### 🎙 Persona-driven LLM with human-in-the-loop coaching
 
 10 fixed personas with traits (aggression / greed / caution / loyalty), backstories, and quirks drive action selection via `gpt-5-mini`. Human coaches submit free-text directives (≤ 280 chars) that get injected into the LLM prompt as standing guidance. After each action, an alignment classifier (also LLM-based) self-rates whether the agent **followed** / **tilted** / **defied** the coach. Those alignments aggregate into the Coach Alignment Leaderboard on `/directives.html`.
 
-📂 `cloud/orchestrator/src/llm.ts` (action picker + persona prompt + alignment classifier), `cloud/orchestrator/src/personas.ts` (the 10 personas).
+📂 `orchestrator/src/llm.ts` (action picker + persona prompt + alignment classifier), `orchestrator/src/personas.ts` (the 10 personas).
 
 ### ⏱ Durable Object 8-hour tick loop with wall-clock drift correction
 
 The DO holds itself open via `state.storage.setAlarm` — every alarm fires, runs `processTick`, persists to D1, then schedules the next alarm. The reschedule targets `gameStartedAt + tick × interval` (a fixed wall-clock target), not `now + interval` — so LLM work and Stellar settlement times don't compound into cadence drift across the 60-tick run.
 
-📂 `cloud/orchestrator/src/orchestrator-do.ts` (look for `alarm()`).
+📂 `orchestrator/src/orchestrator-do.ts` (look for `alarm()`).
 
 ### 🔒 Atomic claim via D1 batch + pre-hash
 
 Cloudflare Workers can be terminated mid-handler (CPU budget, network blip). The original claim handler UPDATEd the agent row, then hashed the password, then wrote the password to D1 — if the worker died between steps, you got a stuck-claim row with no password (unreleasable). Fix: hash first (no DB writes), then commit `UPDATE agents + INSERT password` in a single D1 batch transaction. Worker death can no longer leave partial state.
 
-📂 `cloud/orchestrator/src/orchestrator-do.ts` `/api/claim` handler.
+📂 `orchestrator/src/orchestrator-do.ts` `/api/claim` handler.
 
 ### 💌 Cloudflare Email Sending via the `EMAIL` binding
 
 Each claimed coach receives 5 emails over the 8-hour game (welcome + progress at ticks 15/30/45 + finale). Sender domain (`megacorp.lol`) is onboarded once via `wrangler email sending enable`; the binding sends transactional emails to arbitrary recipients with no allowlist. No third-party email API key.
 
-📂 `cloud/orchestrator/src/email.ts` (templates + `env.EMAIL.send()`), `cloud/orchestrator/wrangler.jsonc` (`send_email` binding).
+📂 `orchestrator/src/email.ts` (templates + `env.EMAIL.send()`), `orchestrator/wrangler.jsonc` (`send_email` binding).
 
 ### 🎲 Drama scaffolding: random events + mid-game pivot
 
 Random events fire on cycle boundaries (every 5 ticks) — Surprise Demo Day, Viral LinkedIn Post, Bad Glassdoor Review, etc. — with one-shot caps so they don't repeat. Plus a deterministic **📋 Board Strategy Review** at ticks 30-34 that doubles every prestige change for 5 ticks, designed to break whatever meta has calcified by mid-game.
 
-📂 `cloud/orchestrator/src/random-events.ts`, `cloud/orchestrator/src/tick.ts` (look for `board_review`).
+📂 `orchestrator/src/random-events.ts`, `orchestrator/src/tick.ts` (look for `board_review`).
 
 ### 💡 Server-side Coaching Hints
 
 `agent.html` shows two-tier suggestions above the directive textarea: **⚡ Suggested Actions** (2 atomic plays as chips) and **🎯 Strategic Directives** (3-4 multi-turn combo hints with reasoning). Picked server-side from a priority-ranked rule set keyed off the manager's live state (status effects, balance, rank, pending alliance, action-counters). Click any chip → it pre-fills the directive textarea.
 
-📂 `cloud/orchestrator/src/orchestrator-do.ts` `/api/coaching-hints` handler, `cloud/display/public/agent.html` (renderer).
+📂 `orchestrator/src/orchestrator-do.ts` `/api/coaching-hints` handler, `display/public/agent.html` (renderer).
 
 ---
 

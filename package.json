@@ -3,23 +3,27 @@
   "version": "0.1.0",
   "description": "10 AI middle-managers compete for VP using real Stellar payments via MPP",
   "type": "module",
-  "workspaces": [
-    ".",
-    "cloud"
-  ],
   "scripts": {
-    "typecheck": "cd cloud && tsc --noEmit",
-    "deploy:display": "[ \"$(git branch --show-current)\" = \"main\" ] || { echo 'Refusing: deploy:display must run on main (the Pages project is Direct Upload, so this script uploads whatever is on disk).'; exit 1; } && npx wrangler pages deploy cloud/display/public --project-name=quarterly-ascension --branch=main",
+    "typecheck": "tsc --noEmit",
+    "deploy:display": "[ \"$(git branch --show-current)\" = \"main\" ] || { echo 'Refusing: deploy:display must run on main (the Pages project is Direct Upload, so this script uploads whatever is on disk).'; exit 1; } && npx wrangler pages deploy display/public --project-name=quarterly-ascension --branch=main",
     "smoke:llm": "tsx scripts/smoke-test-llm.ts"
   },
   "dependencies": {
-    "openai": "^6.34.0"
+    "@stellar/mpp": "^0.5.0",
+    "@stellar/stellar-sdk": "^16.0.1",
+    "mppx": "^0.5.0",
+    "openai": "^6.34.0",
+    "uuid": "^13.0.0",
+    "viem": "^2.47.5"
   },
   "devDependencies": {
+    "@cloudflare/workers-types": "^4.20251022.0",
     "@types/node": "^22.13.4",
+    "@types/uuid": "^10.0.0",
     "dotenv": "^16.4.7",
     "tsx": "^4.19.2",
-    "typescript": "^5.7.3"
+    "typescript": "^5.7.3",
+    "wrangler": "^4.86.0"
   },
   "overrides": {
     "axios": "^1.15.3",
