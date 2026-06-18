@@ -849,6 +849,31 @@ export class GameOrchestrator {
         .prepare("UPDATE agents SET claimed_by = NULL, claimed_by_name = NULL WHERE id = ?")
         .bind(agentId)
         .run();
+      // Stale password cleanup: /release used to leave the password_<id>
+      // row in game_state. Harmless but cruft.
+      await this.env.DB
+        .prepare("DELETE FROM game_state WHERE key = ?")
+        .bind(`password_${agentId}`)
+        .run();
+
+      // Lobby-opener release: if this agent opened the lobby AND no other
+      // agents are claimed, cancel the auto-start alarm + clear the lobby
+      // state. Without this, releasing as the only claimer leaves a ghost
+      // alarm that fires 30 min later and starts a 0-coach game (game-3
+      // post-mortem incident).
+      const lobbyOpenedBy = await db.getGameStateValue("lobby_opened_by");
+      if (lobbyOpenedBy === agentId) {
+        const remainingClaims = await this.env.DB
+          .prepare("SELECT COUNT(*) AS n FROM agents WHERE claimed_by_name IS NOT NULL")
+          .first<{ n: number }>();
+        if ((remainingClaims?.n ?? 0) === 0) {
+          await this.state.storage.deleteAlarm();
+          await this.env.DB
+            .prepare("DELETE FROM game_state WHERE key IN ('lobby_opened_at', 'lobby_opened_by')")
+            .run();
+          console.log(`[release] lobby-opener ${agentId} released as sole claimer; cancelled auto-start alarm + cleared lobby state.`);
+        }
+      }
 
       return Response.json({ ok: true, agentId, releasedFrom: releasedFromName });
     }
