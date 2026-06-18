@@ -240,6 +240,78 @@
       text-align: right;
       margin-top: 4px;
     }
+    /* Coaching hints — Suggested Actions + Strategic Directives. Rendered
+       inside the coach-box, above the directive textarea. Click any chip
+       or list item to populate the textarea. */
+    .coaching-hints { margin-bottom: 14px; }
+    .coaching-hints .hint-section { margin-bottom: 12px; }
+    .coaching-hints .hint-section:last-child { margin-bottom: 0; }
+    .coaching-hints .hint-label {
+      font-size: 11px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.8px;
+      color: var(--navy);
+      margin-bottom: 6px;
+    }
+    .coaching-hints .hint-sublabel {
+      font-weight: 400;
+      text-transform: none;
+      letter-spacing: 0.3px;
+      color: var(--text-muted);
+      font-size: 10px;
+      margin-left: 4px;
+    }
+    .coaching-hints .hint-chips {
+      display: flex;
+      gap: 6px;
+      flex-wrap: wrap;
+    }
+    .coaching-hints .hint-action {
+      background: #dce9f5;
+      color: var(--navy);
+      border: 1px solid #b8d0e8;
+      padding: 6px 12px;
+      border-radius: 999px;
+      font-size: 12px;
+      font-weight: 600;
+      font-family: inherit;
+      cursor: pointer;
+      transition: background 0.12s, border-color 0.12s;
+    }
+    .coaching-hints .hint-action:hover {
+      background: var(--navy-2);
+      color: #fff;
+      border-color: var(--navy-2);
+    }
+    .coaching-hints .hint-list {
+      list-style: none;
+      padding: 0;
+      margin: 0;
+    }
+    .coaching-hints .hint-directive {
+      background: #fffaf0;
+      border: 1px solid #f0e1c0;
+      border-left: 3px solid #d4a02f;
+      padding: 8px 12px;
+      margin-bottom: 6px;
+      font-size: 12px;
+      line-height: 1.4;
+      cursor: pointer;
+      transition: background 0.12s;
+      border-radius: 2px;
+    }
+    .coaching-hints .hint-directive:hover { background: #fef5e0; }
+    .coaching-hints .hint-directive:last-child { margin-bottom: 0; }
+    .coaching-hints .hint-text { color: var(--text); }
+    .coaching-hints .hint-reason {
+      color: var(--text-muted);
+      font-style: italic;
+      font-size: 10px;
+      margin-top: 3px;
+      letter-spacing: 0.2px;
+    }
+
     .coach-box .coach-buttons {
       display: flex;
       gap: 8px;
@@ -347,6 +419,7 @@
       renderClaim(a);
       renderCoach(a);
       syncDirectiveStatus(a);
+      await refreshCoachingHints();
       lastCoachWindowOpen = !!(a.coachingWindow && a.coachingWindow.open);
       lastGameStatus = a.gameStatus;
     }
@@ -379,8 +452,77 @@
           lastGameStatus = status;
         }
       } catch { /* network blip; try again next tick */ }
+      // Hints refresh on every poll so suggestions track the agent's state
+      // as it evolves (balance shifts, status effects, new Documented targets).
+      await refreshCoachingHints();
     }
     setInterval(pollAgentState, 5000);
+
+    // ============================================================
+    // Coaching hints — server picks Suggested Actions (2 atomic) +
+    // Strategic Directives (3-4 combo plays) based on the manager's
+    // live state. Clicking either populates the directive textarea.
+    // ============================================================
+    async function refreshCoachingHints() {
+      const slot = document.getElementById('coaching-hints-slot');
+      if (!slot) return; // coach panel might be closed/uninitialized
+      try {
+        const r = await fetch(`${ORCHESTRATOR_BASE}/api/coaching-hints?agentId=${encodeURIComponent(agentId)}`);
+        if (!r.ok) return;
+        const { suggestedActions = [], strategicDirectives = [] } = await r.json();
+        if (suggestedActions.length === 0 && strategicDirectives.length === 0) {
+          slot.innerHTML = '';
+          return;
+        }
+        const actionChips = suggestedActions.map((a) => `
+          <button type="button" class="hint-action" data-text="${escape(a.name)}" title="${escape(a.oneLiner)}">
+            ${escape(a.name)}
+          </button>
+        `).join('');
+        const directiveList = strategicDirectives.map((d) => `
+          <li class="hint-directive" data-text="${escape(d.text)}">
+            <div class="hint-text">${escape(d.text)}</div>
+            <div class="hint-reason">${escape(d.reason)}</div>
+          </li>
+        `).join('');
+        slot.innerHTML = `
+          <div class="coaching-hints">
+            ${suggestedActions.length > 0 ? `
+              <div class="hint-section">
+                <div class="hint-label">⚡ Suggested Actions <span class="hint-sublabel">(click to pre-fill)</span></div>
+                <div class="hint-chips">${actionChips}</div>
+              </div>
+            ` : ''}
+            ${strategicDirectives.length > 0 ? `
+              <div class="hint-section">
+                <div class="hint-label">🎯 Strategic Directives <span class="hint-sublabel">(click to pre-fill)</span></div>
+                <ul class="hint-list">${directiveList}</ul>
+              </div>
+            ` : ''}
+          </div>
+        `;
+        // Wire up click → populate textarea
+        const input = document.getElementById('coach-input');
+        if (input) {
+          slot.querySelectorAll('.hint-action').forEach((btn) => {
+            btn.addEventListener('click', () => {
+              const text = btn.getAttribute('data-text') || '';
+              input.value = text;
+              input.focus();
+              document.getElementById('coach-len').textContent = String(input.value.length);
+            });
+          });
+          slot.querySelectorAll('.hint-directive').forEach((li) => {
+            li.addEventListener('click', () => {
+              const text = li.getAttribute('data-text') || '';
+              input.value = text;
+              input.focus();
+              document.getElementById('coach-len').textContent = String(input.value.length);
+            });
+          });
+        }
+      } catch { /* hints are best-effort; don't break the coaching flow */ }
+    }
 
     function renderProfile(a) {
       const traits = a.traits || { aggression: 0, greed: 0, caution: 0, loyalty: 0 };
@@ -719,6 +861,7 @@
           ${statusHtml}
           ${dirText ? `<div class="current-directive">"${escape(dirText)}"</div>` : ''}
           ${w.open ? `
+            <div id="coaching-hints-slot"></div>
             <textarea id="coach-input" maxlength="280" placeholder="e.g. Go after Marcus. Hostile takeover his partnerships if you can."></textarea>
             <div class="coach-counter"><span id="coach-len">0</span>/280</div>
             <label style="display:block;font-size:12px;color:var(--text-muted);margin-top:10px;margin-bottom:4px;text-transform:uppercase;letter-spacing:0.6px;">Password</label>

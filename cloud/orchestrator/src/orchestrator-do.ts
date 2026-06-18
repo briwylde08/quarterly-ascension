@@ -968,6 +968,253 @@ export class GameOrchestrator {
 
     // Latest gossip narrative — refreshed every 4 ticks by the alarm handler.
     // Public read; used by the dashboard's "Gossip with your work bestie" panel.
+    // Coaching hints for the agent.html sidebar. Reads the manager's
+    // current state and returns prioritized "Suggested Actions" (2 atomic
+    // game-actions the coach can hand off) plus "Strategic Directives"
+    // (multi-turn combo guidance with reasoning). All server-side so the
+    // data is fresh + can't be tampered with from the browser.
+    if (path === "/coaching-hints" && request.method === "GET") {
+      const agentId = url.searchParams.get("agentId");
+      if (!agentId) return Response.json({ error: "agentId required" }, { status: 400 });
+      const agent = await db.getAgent(agentId);
+      if (!agent) return Response.json({ error: "agent not found" }, { status: 404 });
+      const allAgents = await db.getAllAgents();
+      const tick = await db.getCurrentTick();
+      const balance = await this.makeStellar().getAssetBalance(agent.publicKey).catch(() => 0);
+      const rank = allAgents.findIndex((a) => a.id === agentId) + 1 || allAgents.length;
+      const leader = allAgents[0];
+      const gapToLeader = leader ? leader.prestige - agent.prestige : 0;
+      const tcCount = parseInt((await db.getGameStateValue(`take_credit_count_${agentId}`)) ?? "0", 10);
+      const hailMaryUsed = (await db.getGameStateValue(`hail_mary_used_${agentId}`)) === "yes";
+      const boomerangUsed = (await db.getGameStateValue(`boomerang_used_${agentId}`)) === "yes";
+      const pulseSurveyUsed = (await db.getGameStateValue(`pulse_survey_used_${agentId}`)) === "yes";
+      const has = (t: string) => agent.statusEffects.some((e) => e.type === t);
+      const hasDeliverable = has("has_deliverable");
+      const isTired = has("tired");
+      const hasHrAudit = has("hr_audit");
+      const isProblematic = has("problematic");
+      const boardReviewActive = tick >= 30 && tick <= 34;
+      const documentedTargets = allAgents.filter(
+        (a) => a.id !== agentId && a.statusEffects.some((e) => e.type === "marked")
+      );
+      const qjTargets = allAgents.filter(
+        (a) => a.id !== agentId && a.statusEffects.some((e) => e.type === "questionable_judgment")
+      );
+      const pendingFrom = agent.pendingAlliance
+        ? allAgents.find((a) => a.id === agent.pendingAlliance)
+        : null;
+
+      // ----- Suggested Actions (2 atomic picks, priority-ranked) -----
+      type ActionPick = { name: string; oneLiner: string; priority: number };
+      const actionPicks: ActionPick[] = [];
+      if (hasDeliverable && balance >= 40) {
+        actionPicks.push({
+          name: "Book CEO Time",
+          oneLiner: "Cash in your Has Deliverable for +40 prestige before a rival cancels it.",
+          priority: 100,
+        });
+      }
+      if (documentedTargets.length > 0 && tcCount < 4 && !hasHrAudit) {
+        actionPicks.push({
+          name: "Take Credit",
+          oneLiner: `${documentedTargets[0].name} is Documented — guaranteed +30 prestige.`,
+          priority: 95,
+        });
+      }
+      if (pendingFrom) {
+        actionPicks.push({
+          name: "Accept Alliance",
+          oneLiner: `${pendingFrom.name} is offering a partnership; both of you +5 prestige.`,
+          priority: 90,
+        });
+      }
+      if (balance < 30) {
+        actionPicks.push({
+          name: "Expense Report",
+          oneLiner: `You're at $${balance.toFixed(0)} — file for +$40 from HR.`,
+          priority: 88,
+        });
+      }
+      if (isTired) {
+        actionPicks.push({
+          name: "Shotgun a Red Bull",
+          oneLiner: "Free; clears Hit the Wall (-3/cycle), 50% chance of +5 prestige bonus.",
+          priority: 85,
+        });
+      }
+      if (rank >= 4 && leader && leader.prestige - agent.prestige > 30 && !pulseSurveyUsed && balance >= 25) {
+        actionPicks.push({
+          name: "Anonymous Pulse Survey",
+          oneLiner: `One-shot underdog play vs ${leader.name}: drops them by 50 prestige.`,
+          priority: 92,
+        });
+      }
+      if (balance >= 30 && !hasDeliverable) {
+        actionPicks.push({
+          name: "Strategy Report",
+          oneLiner: "+35 prestige now + Has Deliverable status (sets up a +40 CEO meeting next turn).",
+          priority: 78,
+        });
+      }
+      if (rank > 5 && agent.prestige < 30 && tick > 10 && !boomerangUsed) {
+        actionPicks.push({
+          name: "Boomerang",
+          oneLiner: "Quit-and-return: resets your prestige to 75 and clears every status effect. One-shot.",
+          priority: 88,
+        });
+      }
+      if (rank > 5 && agent.prestige < 30 && !hailMaryUsed && balance < 5) {
+        actionPicks.push({
+          name: "Hail Mary Idea",
+          oneLiner: "Free lottery: 30% +50 prestige, 50% +5, 20% -5. One-shot — best EV when cornered.",
+          priority: 80,
+        });
+      }
+      if (boardReviewActive && balance >= 40 && !hasHrAudit) {
+        actionPicks.push({
+          name: "Sabotage Plan",
+          oneLiner: "Board Review is doubling stakes — set up a guaranteed Take Credit chain at 2× reward.",
+          priority: 87,
+        });
+      }
+      if (agent.allies.length < 3 && !pendingFrom) {
+        actionPicks.push({
+          name: "Schmooze",
+          oneLiner: "Free; propose a partnership. 3 allies = Well-Allied (halves incoming attacks).",
+          priority: 65,
+        });
+      }
+      // Fallback: always something to suggest
+      if (actionPicks.length < 2) {
+        actionPicks.push({
+          name: "Office Party",
+          oneLiner: "$25 → +15 to you, +5 to rivals. Net +10 advance vs the field.",
+          priority: 60,
+        });
+        actionPicks.push({
+          name: "Work",
+          oneLiner: "Free; +5 prestige and +$2 salary. Safe but boring.",
+          priority: 50,
+        });
+      }
+      actionPicks.sort((a, b) => b.priority - a.priority);
+      const suggestedActions = actionPicks.slice(0, 2).map(({ name, oneLiner }) => ({ name, oneLiner }));
+
+      // ----- Strategic Directives (3-4 longer combo hints) -----
+      type Directive = { text: string; reason: string; priority: number };
+      const directives: Directive[] = [];
+      if (hasDeliverable) {
+        directives.push({
+          text: "Book CEO Time this turn before a rival nukes your Deliverable with Schedule Conflict.",
+          reason: "Has Deliverable active — +40 prestige waiting to cash in",
+          priority: 100,
+        });
+      }
+      if (pendingFrom) {
+        directives.push({
+          text: `Decide on ${pendingFrom.name}'s alliance offer — accept (+5 both) or reject (they lose 10).`,
+          reason: `${pendingFrom.name} proposed a partnership`,
+          priority: 95,
+        });
+      }
+      if (documentedTargets.length > 0 && tcCount < 4 && !hasHrAudit) {
+        const target = documentedTargets[0];
+        directives.push({
+          text: `Take Credit against ${target.name} right now — they're Documented, your attempt auto-succeeds for +30.`,
+          reason: `${target.name} is Marked + you have ${4 - tcCount} Take Credit plays left`,
+          priority: 93,
+        });
+      }
+      if (boardReviewActive) {
+        directives.push({
+          text: "Board Strategy Review is ACTIVE — every prestige change is doubled. Run an aggressive combo or Strategy Report cash-in NOW.",
+          reason: "Doubled-stakes window (ticks 30-34)",
+          priority: 92,
+        });
+      }
+      if (hasHrAudit) {
+        directives.push({
+          text: "Take Credit is locked. Focus on prestige-positive plays: Strategy Report → Book CEO chain, or Office Party for broad-field gain.",
+          reason: "On HR Audit — Take Credit unavailable",
+          priority: 85,
+        });
+      }
+      if (balance < 30) {
+        directives.push({
+          text: `Refill cash first — Expense Report (+$40, safe) then chain into Strategy Report → Book CEO ($70 total → +75 prestige).`,
+          reason: `Only $${balance.toFixed(0)} on hand; combo paths need cash`,
+          priority: 82,
+        });
+      }
+      if (isTired) {
+        directives.push({
+          text: "Recover from Hit the Wall — Shotgun a Red Bull (free), or Cry in the Stairwell for a chance at +20 sympathy prestige.",
+          reason: "Tired status decays prestige -3/cycle until cleared",
+          priority: 80,
+        });
+      }
+      if (rank >= 4 && leader && leader.prestige - agent.prestige > 30 && !pulseSurveyUsed && balance >= 25) {
+        directives.push({
+          text: `You have an Anonymous Pulse Survey unused — costs $25, drops ${leader.name} by 50 prestige. One-shot, perfect for now.`,
+          reason: `Rank ${rank}, ${leader.prestige - agent.prestige} behind leader`,
+          priority: 88,
+        });
+      }
+      if (rank === 1) {
+        directives.push({
+          text: "Defend the lead — Strategy Report + alliance maintenance, no cute attacks. The mid-pack is hunting you.",
+          reason: "You're the leader",
+          priority: 70,
+        });
+      }
+      if (rank >= 2 && rank <= 5 && gapToLeader > 0 && balance >= 40 && !hasHrAudit) {
+        directives.push({
+          text: `Combo on ${leader.name}: Sabotage Plan this turn ($40), then Take Credit next turn for a guaranteed +30 to you + -10 to them. 40-point swing.`,
+          reason: `Rank ${rank} — striking distance of the leader (${gapToLeader} prestige gap)`,
+          priority: 75,
+        });
+      }
+      if (rank > 5 && agent.prestige < 30 && tick > 10) {
+        const opts: string[] = [];
+        if (!boomerangUsed) opts.push("Boomerang (free, prestige → 75)");
+        if (!hailMaryUsed) opts.push("Hail Mary Idea (free, 30% +50)");
+        opts.push("Cry in the Stairwell (free, 20% chance of +20)");
+        directives.push({
+          text: `Comeback paths: ${opts.join(" • ")}. Aggressive attacks from rank ${rank} usually backfire.`,
+          reason: `Bottom half + low prestige (${agent.prestige}); comeback tools beat attrition`,
+          priority: 68,
+        });
+      }
+      if (tcCount === 3 && documentedTargets.length === 0 && qjTargets.length === 0) {
+        directives.push({
+          text: "Save your last Take Credit for a chained kill — pair with Sabotage Plan or Spread Rumor for guaranteed prestige.",
+          reason: `Only ${4 - tcCount} Take Credit left this game; raw rolls are EV-negative`,
+          priority: 72,
+        });
+      }
+      if (agent.allies.length < 3 && tick < 30 && directives.length < 2) {
+        directives.push({
+          text: "Build a partnership base — 3 alliances = Well-Allied (halves incoming attack damage). Schmooze available rivals while early-game prices are stable.",
+          reason: `${agent.allies.length}/3 alliances; Well-Allied is the best passive defense`,
+          priority: 55,
+        });
+      }
+      if (tick <= 5 && directives.length === 0) {
+        directives.push({
+          text: "Open with a foundation play: Strategy Report (+35 prestige + Deliverable for a future CEO meeting) or propose an alliance to start building toward Well-Allied.",
+          reason: "Game just started; first impressions stick",
+          priority: 50,
+        });
+      }
+      directives.sort((a, b) => b.priority - a.priority);
+      const strategicDirectives = directives.slice(0, 4).map(({ text, reason }) => ({ text, reason }));
+
+      return Response.json({
+        suggestedActions,
+        strategicDirectives,
+      });
+    }
+
     // Coach alignment leaderboard. Aggregates each claimed agent's
     // followed/tilted/defied counts from action_logs so the directives page
     // can rank coaches by how well their manager actually followed them.
