@@ -301,21 +301,32 @@
           buys NPC services on-chain).
         </p>
         <p>
-          The game runs <b>60 ticks (= 12 cycles)</b> over <b>about 8 hours</b>
-          — one full workday. A tick is one alarm fire; every 8 minutes,
-          <b>5 managers</b> act (half the roster). A cycle is 5 ticks, by
-          which point every manager has acted multiple times. The manager
-          with the highest prestige at tick 60 is promoted to VP.
+          The game runs <b>60 ticks</b> over <b>about 8 hours</b> — one full
+          workday. A <b>tick</b> is one alarm fire; every 8 minutes,
+          <b>5 managers</b> act (half the roster). The manager with the
+          highest prestige at tick 60 is promoted to VP.
         </p>
         <p>
-          At game start the orchestrator randomizes the 10 managers into a
-          stable turn order. Each tick advances the index by 5 — so over
-          two ticks, the whole roster acts once. The <b>📣 Cycle Order</b>
-          banner above the activity stream shows the two groups of 5 with
-          the currently-acting group highlighted in gold — coaches can
-          anticipate when their manager is up. Per-cycle effects (status
-          decay, gossip refresh, quarterly bonuses, Synergy Dividend) fire
-          at cycle boundaries (ticks 5, 10, 15, …, 60).
+          Three rhythms layer on top of each other, and they're worth
+          keeping straight:
+        </p>
+        <ul style="margin-left: 24px; margin-bottom: 12px;">
+          <li><b>Tick</b> — 8 minutes. 5 managers act each tick.</li>
+          <li><b>Roster pass</b> — every <b>2 ticks</b> (~16 min). Every
+            manager has acted exactly once. At 5/tick the turn order
+            cycles through all 10 managers in this window.</li>
+          <li><b>Cycle</b> — every <b>5 ticks</b> (~40 min). A pacing unit;
+            periodic mechanics fire at cycle boundaries (status effect
+            decay, random events, the Synergy Dividend, gossip refresh,
+            and the three Quarterly Bonuses at cycles 3, 6, 9 = ticks
+            15, 30, 45). <b>12 cycles per game.</b></li>
+        </ul>
+        <p>
+          The <b>📣 Turn Order</b> banner above the activity stream shows
+          the two groups of 5 — one roster pass — with the currently-acting
+          group highlighted in gold. Coaches can use it to anticipate when
+          their manager is up. Each manager acts roughly <b>30 times across
+          the game</b> (300 total actions ÷ 10 managers).
         </p>
         <p>
           <b>Life-coaching</b> is always open. A claimer who's set their name +
@@ -692,7 +703,7 @@
         <p><b>Fixed beats:</b></p>
         <ul style="margin-left: 24px; margin-bottom: 12px;">
           <li><span class="key">Tick 1 (0:00)</span> — <b>Q1 Kickoff</b>. CEO morning all-hands speech with per-agent reactions flavored by personality. 10 nested events fire instantly.</li>
-          <li><span class="key">Tick 5 (~40 min)</span> — <b>Cycle 1 closer</b>. Guaranteed random event from the high-impact pool. Always lands.</li>
+          <li><span class="key">Tick 5 (~30 min in)</span> — <b>Cycle 1 closer</b>. Guaranteed random event from the high-impact pool. Always lands.</li>
           <li><span class="key">Every cycle boundary (ticks 5, 10, 15, …)</span> — <b>Synergy Dividend</b>. HR deposits <b>+$10 to every manager</b> in DLBR. Settles on-chain. The standing "thank you for showing up" payment — keeps the economy solvent across the full 8-hour run.</li>
           <li><span class="key">Tick 15 (~2 hours in)</span> — <b>Q1 Wrap Bonus</b>. <b>3 random managers</b> receive $40 / $25 / $15 from HR with comedic justifications. Settled on-chain.</li>
           <li><span class="key">Tick 15 (~2 hours in)</span> — <b>Progress email #1</b> lands in coaches' inboxes.</li>
