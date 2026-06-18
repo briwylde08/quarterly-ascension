@@ -23,6 +23,8 @@
   },
   "overrides": {
     "axios": "^1.15.3",
-    "mppx": "^0.5.0"
+    "mppx": "^0.5.0",
+    "@stellar/stellar-sdk": "^16.0.1",
+    "ws": "^8.21.0"
   }
 }
