@@ -868,6 +868,16 @@ async function executeAction(
             outcome = `Failed to take credit — ${target?.name ?? action.target} ${flavor}`;
           }
           await db.updateAgentPrestige(agent.id, prestigeChange);
+          // Per-game hard cap: count this attempt (success or failure) so the
+          // action filter can lock out take_credit after 4 plays per agent.
+          // Game-2 had take_credit at 24% of all actions — the documented-then-
+          // pounce loop crowded everything else out. Hard cap forces variety.
+          {
+            const tcCount = parseInt(
+              (await db.getGameStateValue(`take_credit_count_${agent.id}`)) ?? "0", 10
+            ) + 1;
+            await db.setGameStateValue(`take_credit_count_${agent.id}`, tcCount.toString());
+          }
           // HR Audit gate: 2 successful TCs within 8 ticks lands the actor
           // with hr_audit (expires tick+8), which the availableActions
           // filter uses to remove take_credit from their menu. Game-11

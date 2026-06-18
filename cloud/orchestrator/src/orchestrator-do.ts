@@ -1099,7 +1099,11 @@ export class GameOrchestrator {
         console.log("[alarm] post-game cleanup window elapsed; resetting for next game.");
         try {
           await this.performReset({
-            normalizeBalances: false,
+            // Normalize on-chain DLBR back to $200/agent before the next game.
+            // Without this, post-game-1 balances ($10-$80 after a full game)
+            // carry into game 2 and break the economy from tick 1.
+            normalizeBalances: true,
+            target: 200,
             broadcastNotice: "🔄 New game lobby open — first claim starts the next round.",
           });
         } catch (err) {
@@ -1145,6 +1149,7 @@ export class GameOrchestrator {
             key LIKE 'boomerang_used_%' OR
             key LIKE 'pulse_survey_used_%' OR
             key LIKE 'join_meeting_count_%' OR
+            key LIKE 'take_credit_count_%' OR
             key LIKE 'password_%' OR
             key IN ('turn_order', 'turn_index')
         `).run();

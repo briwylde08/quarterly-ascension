@@ -137,6 +137,10 @@ interface DecisionContext {
   /** Number of times the agent has used join_meeting_silently this game.
    *  Capped at 3 — the 3rd use grants Mysterious Influence. */
   joinMeetingCount: number;
+  /** Number of times the agent has used take_credit this game. Capped at 4
+   *  to break the take_credit dominance observed in game-2 (73 plays /
+   *  300 = 24% of all actions). */
+  takeCreditCount: number;
   /** Recent inbound attacks targeting this agent. Used to surface a
    *  "you just got hit by X" pull in the prompt so retaliation is a
    *  visible, named option rather than a generic rival list. */
@@ -165,7 +169,7 @@ const TARGETED_HOSTILE_ACTIONS = new Set([
 const TARGET_COOLDOWN_TICKS = 10; // ≈ 2 cycles in 1-agent/tick mode
 
 function buildContextPrompt(ctx: DecisionContext): string {
-  const { agent, balance, currentTick, allAgents, recentActions, leakedEmails, directive, hailMaryUsed, boomerangUsed, pulseSurveyUsed, joinMeetingCount, mysteriousInfluenceClaimed } = ctx;
+  const { agent, balance, currentTick, allAgents, recentActions, leakedEmails, directive, hailMaryUsed, boomerangUsed, pulseSurveyUsed, joinMeetingCount, takeCreditCount, mysteriousInfluenceClaimed } = ctx;
   // Rank used by the anonymous_pulse_survey gate (only available when underdog).
   const currentRank = allAgents.findIndex((a) => a.id === agent.id) + 1;
 
@@ -233,6 +237,9 @@ function buildContextPrompt(ctx: DecisionContext): string {
     // to find another play. Surfaced as a public status so peers see the
     // pattern and route around. (Goal: bring TC pick-rate down from 19%.)
     if (action.type === "take_credit" && agent.statusEffects.some((s) => s.type === "hr_audit")) return false;
+    // Per-game hard cap: 4 take_credit plays per agent. Caps the runaway
+    // sabotage→take_credit chain that dominated game-2 (24% of all actions).
+    if (action.type === "take_credit" && takeCreditCount >= 4) return false;
     return true;
   });
 
@@ -363,7 +370,17 @@ this play out.
     positionalNudge = `\nSTRATEGIC POSITION:\nYou're in the bottom half (Rank ${rank} of ${allAgents.length}, ${gapToLeader} behind the leader). Picking direct fights at the top usually backfires — you'll burn budget for marginal damage and the leader will still be ahead. The comeback path is yours to invent: high-variance bets, unexpected angles, character-driven choices. The audience came for upsets, not steady climbs.\n`;
   }
 
-  return `${directiveSection}${positionalNudge}${retaliationNote}${cooldownNote}${lockInNote}
+  // Mid-late game variety nudge. Game-2 data: the meta collapsed onto
+  // take_credit (24% of actions). Several dramatic moves never got picked
+  // (hostile_takeover, hail_mary_idea, break_alliance). Past tick 30, gently
+  // remind the LLM that swing-for-the-fences plays exist and the audience
+  // wants narrative escalation, not pattern continuation.
+  let varietyNudge = "";
+  if (currentTick >= 30) {
+    varietyNudge = `\nNARRATIVE ESCALATION:\nYou're past halftime. The audience has watched the early meta develop — alliance trades, take_credit chains, file_complaint exchanges. Late-game stories need bigger swings: hostile_takeover (steal a rival's whole alliance net), hail_mary_idea (one-shot lottery, +50 prestige if it lands), break_alliance (calculated nuke), office_party (+10 net across the whole field). If you've been running the same pattern for 5+ ticks, the audience is bored. Change the story.\n`;
+  }
+
+  return `${directiveSection}${positionalNudge}${varietyNudge}${retaliationNote}${cooldownNote}${lockInNote}
 CURRENT SITUATION (Tick ${currentTick}):
 
 YOUR STATUS:
@@ -602,6 +619,7 @@ export async function getAgentDecision(
   const boomerangUsed = (await deps.db.getGameStateValue(`boomerang_used_${agent.id}`)) === "yes";
   const pulseSurveyUsed = (await deps.db.getGameStateValue(`pulse_survey_used_${agent.id}`)) === "yes";
   const joinMeetingCount = parseInt((await deps.db.getGameStateValue(`join_meeting_count_${agent.id}`)) ?? "0", 10);
+  const takeCreditCount = parseInt((await deps.db.getGameStateValue(`take_credit_count_${agent.id}`)) ?? "0", 10);
 
   // Recent inbound attacks against this agent (used for the retaliation pull
   // in the prompt). Look back ~6 ticks ≈ 1 cycle.
@@ -620,7 +638,7 @@ export async function getAgentDecision(
     a.statusEffects.some((s) => s.type === "mysterious_influence")
   );
 
-  const context: DecisionContext = { agent, balance, currentTick, allAgents, recentActions, leakedEmails, directive, hailMaryUsed, boomerangUsed, pulseSurveyUsed, joinMeetingCount, recentAttackers, mysteriousInfluenceClaimed };
+  const context: DecisionContext = { agent, balance, currentTick, allAgents, recentActions, leakedEmails, directive, hailMaryUsed, boomerangUsed, pulseSurveyUsed, joinMeetingCount, takeCreditCount, recentAttackers, mysteriousInfluenceClaimed };
 
   const openai = new OpenAI({
     apiKey: deps.openaiApiKey,
