@@ -210,6 +210,28 @@
     <div class="loading">Loading directives…</div>
   </div>
 
+  <section id="coach-board" style="max-width:1200px;margin:36px auto 60px;padding:0 24px;" hidden>
+    <h2 style="font-size:14px;text-transform:uppercase;letter-spacing:1.2px;color:#1c3a64;margin-bottom:10px;padding-bottom:6px;border-bottom:1px solid #c8d6e5;">
+      🎙 Coach Alignment Leaderboard
+      <span style="font-size:11px;font-weight:400;color:#7a8b99;text-transform:none;letter-spacing:0.4px;margin-left:8px;">
+        — how often each manager actually followed their coach's directive
+      </span>
+    </h2>
+    <table id="coach-board-table" style="width:100%;border-collapse:collapse;background:#fff;border:1px solid #c8d6e5;box-shadow:0 1px 4px rgba(28,58,100,0.08);font-size:13px;">
+      <thead>
+        <tr style="background:#dce9f5;color:#1c3a64;text-align:left;">
+          <th style="padding:8px 12px;font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:0.8px;">Coach</th>
+          <th style="padding:8px 12px;font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:0.8px;">Manager</th>
+          <th style="padding:8px 12px;font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:0.8px;text-align:right;">Followed</th>
+          <th style="padding:8px 12px;font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:0.8px;text-align:right;">Tilted</th>
+          <th style="padding:8px 12px;font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:0.8px;text-align:right;">Defied</th>
+          <th style="padding:8px 12px;font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:0.8px;text-align:right;">% Followed</th>
+        </tr>
+      </thead>
+      <tbody id="coach-board-body"></tbody>
+    </table>
+  </section>
+
   <script>
     const ORCHESTRATOR_BASE = window.ORCHESTRATOR_BASE
       || 'https://orchestrator.briana-761.workers.dev';
@@ -241,6 +263,40 @@
       } catch (err) {
         console.error('[directives] refresh failed:', err);
       }
+      // Coach alignment board — independent fetch so it can fail silently
+      // without breaking the directives grid above.
+      try {
+        const r = await fetch(ORCHESTRATOR_BASE + '/api/coach-alignment');
+        if (!r.ok) return;
+        const data = await r.json();
+        renderCoachBoard(data.board || []);
+      } catch (err) {
+        console.error('[coach-board] refresh failed:', err);
+      }
+    }
+
+    function renderCoachBoard(board) {
+      const section = document.getElementById('coach-board');
+      const tbody = document.getElementById('coach-board-body');
+      // Only show rows where the coach actually issued at least one directive
+      // (otherwise everyone shows up with zero counts and the board is noise).
+      const withDirectives = board.filter((r) => r.totalCoachedActions > 0);
+      if (withDirectives.length === 0) { section.hidden = true; return; }
+      section.hidden = false;
+      tbody.innerHTML = withDirectives.map((r, idx) => {
+        const pct = r.followedPct;
+        const pctStr = pct == null ? '—' : `${pct}%`;
+        const pctColor = pct == null ? '#7a8b99' : pct >= 70 ? '#186a3b' : pct >= 40 ? '#936300' : '#922b21';
+        const rowBg = idx % 2 === 0 ? '#ffffff' : '#f8fafc';
+        return `<tr style="background:${rowBg};border-top:1px solid #ecf0f1;">
+          <td style="padding:8px 12px;font-weight:600;color:#1c3a64;">${escape(r.coachName || '—')}</td>
+          <td style="padding:8px 12px;">${escape(r.agentName)}</td>
+          <td style="padding:8px 12px;text-align:right;font-variant-numeric:tabular-nums;">${r.followed}</td>
+          <td style="padding:8px 12px;text-align:right;font-variant-numeric:tabular-nums;color:#936300;">${r.tilted}</td>
+          <td style="padding:8px 12px;text-align:right;font-variant-numeric:tabular-nums;color:#922b21;">${r.defied}</td>
+          <td style="padding:8px 12px;text-align:right;font-weight:700;color:${pctColor};font-variant-numeric:tabular-nums;">${pctStr}</td>
+        </tr>`;
+      }).join('');
     }
 
     function render(agents) {

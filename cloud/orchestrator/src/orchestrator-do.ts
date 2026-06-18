@@ -954,6 +954,43 @@ export class GameOrchestrator {
 
     // Latest gossip narrative — refreshed every 4 ticks by the alarm handler.
     // Public read; used by the dashboard's "Gossip with your work bestie" panel.
+    // Coach alignment leaderboard. Aggregates each claimed agent's
+    // followed/tilted/defied counts from action_logs so the directives page
+    // can rank coaches by how well their manager actually followed them.
+    if (path === "/coach-alignment" && request.method === "GET") {
+      const rows = await this.env.DB.prepare(
+        `SELECT
+           al.agent_id,
+           a.name AS agent_name,
+           a.claimed_by_name AS coach_name,
+           SUM(CASE WHEN al.directive_alignment = 'followed' THEN 1 ELSE 0 END) AS followed,
+           SUM(CASE WHEN al.directive_alignment = 'tilted'   THEN 1 ELSE 0 END) AS tilted,
+           SUM(CASE WHEN al.directive_alignment = 'defied'   THEN 1 ELSE 0 END) AS defied,
+           COUNT(*) FILTER (WHERE al.directive_at_action IS NOT NULL) AS coached_actions
+         FROM action_logs al
+         JOIN agents a ON a.id = al.agent_id
+         WHERE a.claimed_by_name IS NOT NULL
+         GROUP BY al.agent_id`
+      ).all<{
+        agent_id: string; agent_name: string; coach_name: string;
+        followed: number; tilted: number; defied: number; coached_actions: number;
+      }>();
+      const board = (rows.results ?? []).map((r) => {
+        const total = (r.followed ?? 0) + (r.tilted ?? 0) + (r.defied ?? 0);
+        return {
+          agentId: r.agent_id,
+          agentName: r.agent_name,
+          coachName: r.coach_name,
+          followed: r.followed ?? 0,
+          tilted: r.tilted ?? 0,
+          defied: r.defied ?? 0,
+          totalCoachedActions: total,
+          followedPct: total > 0 ? Math.round((r.followed / total) * 100) : null,
+        };
+      }).sort((a, b) => (b.followedPct ?? -1) - (a.followedPct ?? -1));
+      return Response.json({ board });
+    }
+
     if (path === "/gossip" && request.method === "GET") {
       const [text, tickStr, generatedAt] = await Promise.all([
         db.getGameStateValue("latest_gossip"),
