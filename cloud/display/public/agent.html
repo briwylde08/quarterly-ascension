@@ -334,6 +334,159 @@
     .coach-box .coach-clear:hover { background: #d5dbdb; }
     .coach-box button:disabled { opacity: 0.5; cursor: not-allowed; }
     .coach-msg { margin-top: 10px; font-size: 12px; line-height: 1.4; }
+    /* Onboarding modal — first-time-claim welcome flow. */
+    .onboarding-backdrop {
+      position: fixed; inset: 0;
+      background: rgba(28,58,100,0.55);
+      display: flex; align-items: center; justify-content: center;
+      z-index: 1000;
+      padding: 24px;
+    }
+    .onboarding-backdrop[hidden] { display: none; }
+    .onboarding-card {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-top: 4px solid #f1c40f;
+      box-shadow: 0 8px 32px rgba(28,58,100,0.25);
+      max-width: 560px;
+      width: 100%;
+      max-height: 90vh;
+      overflow-y: auto;
+      position: relative;
+      padding: 32px 36px 28px;
+    }
+    .onboarding-skip {
+      position: absolute;
+      top: 12px; right: 16px;
+      background: transparent;
+      border: 0;
+      color: var(--text-muted);
+      font-size: 11px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      cursor: pointer;
+      font-family: inherit;
+    }
+    .onboarding-skip:hover { color: var(--navy); }
+    .onboarding-progress {
+      display: flex;
+      gap: 6px;
+      margin-bottom: 18px;
+    }
+    .onboarding-progress .dot {
+      flex: 1;
+      height: 4px;
+      background: #ecf0f1;
+      border-radius: 2px;
+    }
+    .onboarding-progress .dot.active { background: #f1c40f; }
+    .onboarding-progress .dot.done { background: var(--navy-2); }
+    .onboarding-content h2 {
+      color: var(--navy);
+      font-size: 22px;
+      margin-bottom: 12px;
+      line-height: 1.2;
+    }
+    .onboarding-content p {
+      font-size: 14px;
+      line-height: 1.55;
+      color: var(--text);
+      margin-bottom: 12px;
+    }
+    .onboarding-content p:last-child { margin-bottom: 0; }
+    .onboarding-content .persona-card {
+      background: #f4f6fa;
+      border: 1px solid var(--border);
+      padding: 14px 16px;
+      margin: 14px 0;
+      font-size: 13px;
+    }
+    .onboarding-content .persona-card .pc-name {
+      font-weight: 700;
+      color: var(--navy);
+      font-size: 15px;
+      margin-bottom: 4px;
+    }
+    .onboarding-content .persona-card .pc-title {
+      color: var(--text-muted);
+      font-size: 12px;
+      margin-bottom: 8px;
+    }
+    .onboarding-content .persona-card .pc-quirk {
+      font-style: italic;
+      color: var(--text);
+      font-size: 12px;
+      border-top: 1px dashed var(--border);
+      padding-top: 8px;
+      margin-top: 8px;
+    }
+    .onboarding-content ul {
+      margin: 8px 0 12px 22px;
+      font-size: 14px;
+      line-height: 1.7;
+    }
+    .onboarding-content ul li { margin-bottom: 4px; }
+    .onboarding-content code {
+      background: #f4f6fa;
+      padding: 1px 5px;
+      font-family: monospace;
+      font-size: 12px;
+      border-radius: 2px;
+    }
+    .onboarding-content .alignment-row {
+      display: flex; gap: 8px; align-items: flex-start; margin-bottom: 6px; font-size: 13px;
+    }
+    .onboarding-content .alignment-row b { min-width: 64px; }
+    .onboarding-content .followed { color: #186a3b; }
+    .onboarding-content .tilted   { color: #936300; }
+    .onboarding-content .defied   { color: #922b21; }
+    .onboarding-content .page-link {
+      display: block;
+      background: #f4f6fa;
+      border: 1px solid var(--border);
+      padding: 10px 14px;
+      margin-bottom: 8px;
+      text-decoration: none;
+      color: var(--text);
+      font-size: 13px;
+    }
+    .onboarding-content .page-link:hover { background: #ecf0f1; }
+    .onboarding-content .page-link b { color: var(--navy); }
+    .onboarding-content .page-link .pl-desc { color: var(--text-muted); font-size: 12px; margin-top: 2px; }
+    .onboarding-nav {
+      display: flex;
+      gap: 10px;
+      justify-content: space-between;
+      margin-top: 24px;
+      padding-top: 18px;
+      border-top: 1px solid var(--border);
+    }
+    .onboarding-btn {
+      padding: 10px 22px;
+      border: 0;
+      font-family: inherit;
+      font-size: 13px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.6px;
+      cursor: pointer;
+    }
+    .onboarding-btn.next {
+      background: var(--navy);
+      color: #fff;
+    }
+    .onboarding-btn.next:hover { background: var(--navy-2); }
+    .onboarding-btn.back {
+      background: #ecf0f1;
+      color: var(--text);
+      border: 1px solid var(--border-2);
+    }
+    .onboarding-btn.back:hover { background: #d5dbdb; }
+    .onboarding-btn:disabled {
+      opacity: 0.4;
+      cursor: not-allowed;
+    }
   </style>
 </head>
 <body>
@@ -346,6 +499,21 @@
       <a href="/directives.html">🎙 Life Coaching</a>
     </div>
   </header>
+
+  <!-- Onboarding modal — fires after a successful claim. localStorage flag
+       (qa.onboarded.<agentId>) ensures it only shows once per coach per
+       browser. Five steps, Next/Back nav, Skip on every step. -->
+  <div id="onboarding-modal" class="onboarding-backdrop" hidden>
+    <div class="onboarding-card">
+      <button class="onboarding-skip" type="button" id="onboarding-skip" title="Close onboarding">Skip</button>
+      <div class="onboarding-progress" id="onboarding-progress"></div>
+      <div class="onboarding-content" id="onboarding-content"></div>
+      <div class="onboarding-nav">
+        <button type="button" class="onboarding-btn back" id="onboarding-back" disabled>← Back</button>
+        <button type="button" class="onboarding-btn next" id="onboarding-next">Next →</button>
+      </div>
+    </div>
+  </div>
 
   <main class="layout">
     <aside class="panel">
@@ -775,17 +943,12 @@
             // require re-typing. Per-tab scope, cleared when tab closes.
             try { sessionStorage.setItem(`qa.password.${agentId}`, password); } catch {}
             msg.className = 'claim-msg success';
-            msg.innerHTML = `
-              <div style="margin-bottom: 12px;">Claim confirmed! Directives go live as soon as you submit them.</div>
-              <a href="/?coach=${encodeURIComponent(agentId)}" target="_blank" rel="noopener"
-                 style="display:inline-block; padding:10px 18px; background: var(--navy); color: #fff;
-                        text-decoration: none; border-radius: 4px; font-weight: 700; font-size: 14px;
-                        letter-spacing: 0.4px;">
-                Go to Dashboard →
-              </a>
-            `;
+            msg.innerHTML = `<div>Claim confirmed!</div>`;
             btn.textContent = 'Claimed';
-            setTimeout(() => location.reload(), 2500);
+            // Fire the onboarding modal for first-time coaches. The modal
+            // walks through the game flow + coaching mechanics, then on
+            // close reloads the page into the (now-claimed) coaching view.
+            showOnboarding(a);
           } else {
             msg.className = 'claim-msg error';
             msg.textContent = data.error || `Claim failed (${r.status})`;
@@ -946,6 +1109,146 @@
         msg.textContent = 'Network error: ' + err.message;
       }
     }
+    // ============================================================
+    // Onboarding modal — fires after a successful first-time claim.
+    // 5 steps walking through: welcome → game flow → coaching mechanics →
+    // pages → pro tips. localStorage flag prevents re-showing for the
+    // same agent. Closes → reloads the page into the coaching view.
+    // ============================================================
+    let onboardingStep = 1;
+    const ONBOARDING_TOTAL = 5;
+    let onboardingAgent = null;
+
+    function showOnboarding(agent) {
+      onboardingAgent = agent;
+      onboardingStep = 1;
+      const modal = document.getElementById('onboarding-modal');
+      if (!modal) { finishOnboarding(); return; }
+      modal.hidden = false;
+      renderOnboardingStep();
+    }
+
+    function renderOnboardingStep() {
+      const a = onboardingAgent;
+      const progress = document.getElementById('onboarding-progress');
+      const content = document.getElementById('onboarding-content');
+      const backBtn = document.getElementById('onboarding-back');
+      const nextBtn = document.getElementById('onboarding-next');
+      if (!progress || !content || !backBtn || !nextBtn) return;
+
+      // Progress dots
+      let dots = '';
+      for (let i = 1; i <= ONBOARDING_TOTAL; i++) {
+        const cls = i < onboardingStep ? 'dot done' : i === onboardingStep ? 'dot active' : 'dot';
+        dots += `<div class="${cls}"></div>`;
+      }
+      progress.innerHTML = dots;
+      backBtn.disabled = (onboardingStep === 1);
+      nextBtn.textContent = (onboardingStep === ONBOARDING_TOTAL) ? 'Got it, start coaching →' : 'Next →';
+
+      // Step bodies
+      const first = a.name.split(' ')[0];
+      const traits = a.traits || {};
+      const traitsLine = (typeof traits.aggression === 'number')
+        ? `Aggression ${traits.aggression} · Greed ${traits.greed} · Caution ${traits.caution} · Loyalty ${traits.loyalty}`
+        : '';
+      if (onboardingStep === 1) {
+        content.innerHTML = `
+          <h2>🎉 You claimed ${escape(a.name)}.</h2>
+          <p>You're now ${escape(first)}'s <b>life coach</b> for the next 8 hours.</p>
+          <div class="persona-card">
+            <div class="pc-name">${escape(a.name)}</div>
+            <div class="pc-title">${escape(a.title || 'Mid-level Manager')}</div>
+            ${traitsLine ? `<div>${escape(traitsLine)}</div>` : ''}
+            ${a.backstory ? `<div style="margin-top:8px;">${escape(a.backstory)}</div>` : ''}
+            ${a.quirk ? `<div class="pc-quirk">"${escape(a.quirk)}"</div>` : ''}
+          </div>
+          <p>${escape(first)} is an autonomous AI agent. You'll give them coaching directives; they'll decide how (or whether) to follow them.</p>
+        `;
+      } else if (onboardingStep === 2) {
+        content.innerHTML = `
+          <h2>How the game works</h2>
+          <p>Quarterly Ascension runs for <b>60 ticks × 8 minutes ≈ 8 hours</b> — one full workday.</p>
+          <ul>
+            <li><b>5 managers act per tick</b>, in a fixed rotation. Your manager acts about 30 times across the game.</li>
+            <li>Each action moves <b>prestige</b> (the leaderboard score) and <b>budget</b> ($DLBR on Stellar testnet, settled on-chain).</li>
+            <li>The game auto-starts <b>30 minutes</b> after the first claim opens the lobby — invite friends to coach the other 9 managers.</li>
+            <li><b>Highest prestige at tick 60 wins</b> and gets promoted to VP.</li>
+          </ul>
+          <p>Watch for fixed beats: Quarterly Bonuses (ticks 15, 30, 45), Synergy Dividend every cycle, and the <b>Board Strategy Review</b> at tick 30 — every prestige change is <b>doubled</b> for 5 ticks.</p>
+        `;
+      } else if (onboardingStep === 3) {
+        content.innerHTML = `
+          <h2>Coaching mechanics</h2>
+          <p>Submit short directives (up to 280 characters) any time during the game. ${escape(first)} reads each one and weighs it against their persona before acting.</p>
+          <p><b>Three things can happen:</b></p>
+          <div class="alignment-row"><b class="followed">✓ Followed</b><span>${escape(first)} did exactly what you said.</span></div>
+          <div class="alignment-row"><b class="tilted">〰 Tilted</b><span>They took your direction but flavored it with their persona.</span></div>
+          <div class="alignment-row"><b class="defied">✘ Defied</b><span>They ignored you and did their own thing.</span></div>
+          <p style="margin-top:14px;">This is the whole point: you're an influence, not a remote control. The game's drama lives in the gap between your intent and the AI's interpretation.</p>
+        `;
+      } else if (onboardingStep === 4) {
+        content.innerHTML = `
+          <h2>Pages you'll use</h2>
+          <a class="page-link" href="/?coach=${encodeURIComponent(a.id)}" target="_blank" rel="noopener">
+            <b>📊 Dashboard</b>
+            <div class="pl-desc">Live leaderboard, activity feed, on-chain settlements as they happen. Your manager's row stays highlighted.</div>
+          </a>
+          <a class="page-link" href="/agent.html?id=${encodeURIComponent(a.id)}" target="_blank" rel="noopener">
+            <b>🎙 This page (Coach ${escape(first)})</b>
+            <div class="pl-desc">Submit directives, see ${escape(first)}'s recent actions + suggested plays. You'll spend most of your coaching time here.</div>
+          </a>
+          <a class="page-link" href="/handbook.html" target="_blank" rel="noopener">
+            <b>📖 Handbook</b>
+            <div class="pl-desc">Full action catalog, combo plays, status effects, public tags, game calendar.</div>
+          </a>
+          <a class="page-link" href="/directives.html" target="_blank" rel="noopener">
+            <b>📣 Life Coaching</b>
+            <div class="pl-desc">Every coach's current directive + the alignment leaderboard (who's actually following whom).</div>
+          </a>
+        `;
+      } else if (onboardingStep === 5) {
+        content.innerHTML = `
+          <h2>Pro tips</h2>
+          <ul>
+            <li><b>Suggested Actions</b> + <b>Strategic Directives</b> appear on this page above the directive box — click any of them to pre-fill the textarea with a smart play.</li>
+            <li>You'll get <b>email updates</b> at ticks 15, 30, 45, and end-of-game. Check your inbox throughout the day.</li>
+            <li>The <b>Board Strategy Review</b> at tick 30-34 is the highest-leverage window — submit aggressive directives then; everything doubles.</li>
+            <li>Re-coaching is fine. Submit as many directives as you want; the latest one wins.</li>
+            <li>If your manager is stuck (low budget, bottom of pack), try a comeback play: <code>Hail Mary Idea</code> or <code>Boomerang</code>.</li>
+          </ul>
+          <p>That's it. Good luck. The audience came for the drama.</p>
+        `;
+      }
+    }
+
+    function finishOnboarding() {
+      // Persist the "seen" flag so we don't pop the modal next visit.
+      try { localStorage.setItem(`qa.onboarded.${agentId}`, '1'); } catch {}
+      const modal = document.getElementById('onboarding-modal');
+      if (modal) modal.hidden = true;
+      // Reload the page into the coaching view (the claim succeeded; the
+      // page needs to re-fetch agent state to render the coach panel).
+      location.reload();
+    }
+
+    document.getElementById('onboarding-next')?.addEventListener('click', () => {
+      if (onboardingStep < ONBOARDING_TOTAL) {
+        onboardingStep += 1;
+        renderOnboardingStep();
+      } else {
+        finishOnboarding();
+      }
+    });
+    document.getElementById('onboarding-back')?.addEventListener('click', () => {
+      if (onboardingStep > 1) {
+        onboardingStep -= 1;
+        renderOnboardingStep();
+      }
+    });
+    document.getElementById('onboarding-skip')?.addEventListener('click', () => {
+      finishOnboarding();
+    });
   </script>
 </body>
 </html>
