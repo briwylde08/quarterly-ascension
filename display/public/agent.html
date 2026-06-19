@@ -1019,7 +1019,13 @@
 
       area.innerHTML = `
         <div class="coach-box">
-          <h3>⏱ Life-coach ${escape(a.name.split(' ')[0])}</h3>
+          <h3 style="display:flex;justify-content:space-between;align-items:center;gap:8px;">
+            <span>⏱ Life-coach ${escape(a.name.split(' ')[0])}</span>
+            <button type="button" id="replay-onboarding"
+              style="background:transparent;border:0;color:var(--navy-2);font-size:11px;text-transform:uppercase;letter-spacing:0.6px;cursor:pointer;font-family:inherit;text-decoration:underline;">
+              👋 Show onboarding tour
+            </button>
+          </h3>
           <div class="coach-state ${stateClass}">${escape(stateText)}</div>
           ${statusHtml}
           ${dirText ? `<div class="current-directive">"${escape(dirText)}"</div>` : ''}
@@ -1039,6 +1045,10 @@
             ${!dirText ? '<div class="coach-state">No directive set.</div>' : ''}
           `}
         </div>`;
+
+      document.getElementById('replay-onboarding')?.addEventListener('click', () => {
+        showOnboarding(a);
+      });
 
       if (w.open) {
         const input = document.getElementById('coach-input');
