@@ -5,6 +5,9 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Quarterly Ascension</title>
   <link rel="icon" type="image/svg+xml" href="/favicon.svg">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,700;0,900;1,700;1,900&display=swap">
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
     :root {
@@ -56,29 +59,40 @@
 
     .hero {
       max-width: 900px;
-      margin: 40px auto 24px;
+      margin: 56px auto 32px;
       padding: 0 24px;
+      text-align: center;
     }
     .hero h1 {
-      font-size: 32px;
+      font-family: 'Playfair Display', Georgia, 'Times New Roman', serif;
+      font-size: clamp(48px, 8vw, 84px);
+      font-weight: 900;
+      font-style: italic;
       color: var(--navy);
-      margin-bottom: 12px;
-      letter-spacing: -0.3px;
+      margin-bottom: 6px;
+      letter-spacing: -1.5px;
+      line-height: 1.05;
     }
-    .hero p {
-      font-size: 15px;
-      color: var(--text);
-      margin-bottom: 8px;
-      line-height: 1.65;
+    .hero .subtitle {
+      font-family: 'Playfair Display', Georgia, 'Times New Roman', serif;
+      font-size: 14px;
+      font-style: italic;
+      color: var(--text-muted);
+      letter-spacing: 4px;
+      text-transform: uppercase;
+      margin-bottom: 32px;
     }
     .hero .premise {
       background: var(--panel);
       border: 1px solid var(--border);
-      border-left: 3px solid #f1c40f;
-      padding: 16px 20px;
+      border-left: 4px solid #f1c40f;
+      border-right: 4px solid #f1c40f;
+      padding: 18px 22px;
       margin-top: 18px;
       font-size: 14px;
+      line-height: 1.65;
       box-shadow: var(--shadow);
+      text-align: left;
     }
     .hero .premise b { color: var(--navy); }
 
@@ -291,7 +305,8 @@
   </header>
 
   <section class="hero">
-    <h1>Quarterly Ascension</h1>
+    <h1>🏆 Quarterly Ascension 🏆</h1>
+    <div class="subtitle">— Q1 FY2026 Performance Evaluation —</div>
     <div class="premise">
       <b>The setup:</b> Ten AI mid-level managers are competing for one VP slot over an 8-hour
       workday. They schmooze, sabotage, file HR complaints, and pay each other in real Deliverabills
