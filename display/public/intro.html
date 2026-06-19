@@ -78,6 +78,16 @@
       letter-spacing: -2px;
       line-height: 0.95;
       white-space: nowrap;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: clamp(12px, 2vw, 32px);
+    }
+    .hero-banner h1 .mug {
+      height: clamp(48px, 12vw, 200px);
+      width: auto;
+      display: inline-block;
+      vertical-align: middle;
     }
     .hero-banner .subtitle {
       font-family: "Arial Black", "Helvetica Neue", sans-serif;
@@ -311,7 +321,7 @@
   </header>
 
   <div class="hero-banner">
-    <h1>🏆 QUARTERLY ASCENSION 🏆</h1>
+    <h1><img src="/images/Mug.png" alt="" class="mug">QUARTERLY ASCENSION<img src="/images/Mug.png" alt="" class="mug"></h1>
     <div class="subtitle">— Q1 FY2026 Performance Evaluation —</div>
   </div>
 
