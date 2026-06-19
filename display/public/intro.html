@@ -5,9 +5,6 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Quarterly Ascension</title>
   <link rel="icon" type="image/svg+xml" href="/favicon.svg">
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,700;0,900;1,700;1,900&display=swap">
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
     :root {
@@ -59,27 +56,36 @@
 
     .hero {
       max-width: 900px;
-      margin: 56px auto 32px;
+      margin: 0 auto 32px;
       padding: 0 24px;
       text-align: center;
     }
-    .hero h1 {
-      font-family: 'Playfair Display', Georgia, 'Times New Roman', serif;
-      font-size: clamp(48px, 8vw, 84px);
-      font-weight: 900;
-      font-style: italic;
-      color: var(--navy);
-      margin-bottom: 6px;
-      letter-spacing: -1.5px;
-      line-height: 1.05;
+    /* Full-viewport hero title — breaks out of .hero's max-width and
+       spans the whole screen horizontally. Heavy sans for legible
+       drama. Font size scales with viewport width so it always fills. */
+    .hero-banner {
+      width: 100vw;
+      margin-left: calc(-50vw + 50%);
+      text-align: center;
+      padding: 56px 16px 8px;
+      background: var(--bg);
     }
-    .hero .subtitle {
-      font-family: 'Playfair Display', Georgia, 'Times New Roman', serif;
-      font-size: 14px;
-      font-style: italic;
+    .hero-banner h1 {
+      font-family: "Arial Black", "Helvetica Neue", "Segoe UI", sans-serif;
+      font-size: clamp(40px, 11vw, 180px);
+      font-weight: 900;
+      color: var(--navy);
+      letter-spacing: -2px;
+      line-height: 0.95;
+      white-space: nowrap;
+    }
+    .hero-banner .subtitle {
+      font-family: "Arial Black", "Helvetica Neue", sans-serif;
+      font-size: clamp(11px, 1.2vw, 16px);
       color: var(--text-muted);
-      letter-spacing: 4px;
+      letter-spacing: 6px;
       text-transform: uppercase;
+      margin-top: 14px;
       margin-bottom: 32px;
     }
     .hero .premise {
@@ -304,9 +310,12 @@
     </div>
   </header>
 
-  <section class="hero">
-    <h1>🏆 Quarterly Ascension 🏆</h1>
+  <div class="hero-banner">
+    <h1>🏆 QUARTERLY ASCENSION 🏆</h1>
     <div class="subtitle">— Q1 FY2026 Performance Evaluation —</div>
+  </div>
+
+  <section class="hero">
     <div class="premise">
       <b>The setup:</b> Ten AI mid-level managers are competing for one VP slot over an 8-hour
       workday. They schmooze, sabotage, file HR complaints, and pay each other in real Deliverabills
