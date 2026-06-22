@@ -15,7 +15,7 @@ import type { Agent, GameEvent, TickerEntry } from "./types.js";
 import type { LlmDeps, GossipMoment } from "./llm.js";
 import { generateGossip } from "./llm.js";
 import { getPersona } from "./personas.js";
-import { sendEmail, claimConfirmationEmail, progressSummaryEmail, finaleEmail } from "./email.js";
+import { sendEmail, progressSummaryEmail, finaleEmail } from "./email.js";
 
 interface BroadcastMessage {
   type: "game_event" | "ticker_update";
@@ -736,27 +736,6 @@ export class GameOrchestrator {
         await this.state.storage.setAlarm(lobbyOpenedAt + lobbyDurationMs);
       } else {
         lobbyOpenedAt = parseInt(existingLobbyOpen, 10);
-      }
-
-      // Fire-and-forget claim confirmation email. Failures must not block claim.
-      try {
-        const agent = await db.getAgent(agentId);
-        if (agent) {
-          const stellar = this.makeStellar();
-          const balance = await stellar.getAssetBalance(agent.publicKey).catch(() => 0);
-          const allAgents = await db.getAllAgents();
-          const rank = allAgents.findIndex((a) => a.id === agent.id) + 1;
-          const tmpl = claimConfirmationEmail({
-            agent,
-            balance,
-            rank: rank || allAgents.length,
-            total: allAgents.length,
-            claimerName: trimmedName,
-          });
-          await sendEmail(this.env.EMAIL, { ...tmpl, to: trimmedEmail });
-        }
-      } catch (err) {
-        console.error("[email] claim confirmation failed (non-fatal):", err);
       }
 
       return Response.json({

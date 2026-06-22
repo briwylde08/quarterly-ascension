@@ -43,6 +43,7 @@ export class Stellar {
       const r = await fetch(url, {
         cf: { cacheTtl: 0, cacheEverything: false },
         headers: { "Cache-Control": "no-cache, no-store" },
+        signal: AbortSignal.timeout(5000),
       });
       if (!r.ok) {
         console.error(`[stellar] balance read non-OK for ${publicKey.slice(0, 8)}…: HTTP ${r.status}`);
