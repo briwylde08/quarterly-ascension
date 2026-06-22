@@ -2723,9 +2723,12 @@
       if (s) sessionStorage.setItem('adminSecret', s);
       return s;
     }
-    async function callAdmin(path, errLabel) {
+    async function callAdmin(path, errLabel, deniedMsg) {
       const secret = getAdminSecret();
-      if (!secret) return;
+      if (!secret) {
+        if (deniedMsg) alert(deniedMsg);
+        return;
+      }
       try {
         const r = await fetch(ORCHESTRATOR_BASE + path, {
           method: 'POST',
@@ -2733,7 +2736,7 @@
         });
         if (r.status === 401 || r.status === 403) {
           sessionStorage.removeItem('adminSecret');
-          alert('Admin secret rejected. Try again.');
+          alert(deniedMsg || 'Admin secret rejected. Try again.');
         } else if (!r.ok) {
           const t = await r.text();
           alert(`${errLabel} failed: ${r.status} ${t.slice(0, 200)}`);
@@ -2754,7 +2757,8 @@
       const path = intent === 'resume' ? '/admin/resume'
                   : intent === 'start' ? '/admin/start'
                   : '/admin/halt';
-      await callAdmin(path, intent === 'start' ? 'Start' : 'Halt/resume');
+      const deniedMsg = intent === 'halt' ? 'Only the Admin is allowed to pause a game.' : undefined;
+      await callAdmin(path, intent === 'start' ? 'Start' : 'Halt/resume', deniedMsg);
     }
 
     pauseBtn?.addEventListener('click', async () => {
