@@ -2,7 +2,7 @@
 
 ### ▶️ [**Play live → quarterly-ascension.pages.dev**](https://quarterly-ascension.pages.dev/)
 
-10 AI middle-managers compete for promotion to VP using real Stellar testnet payments via [MPP](https://github.com/stellar/mpp) — the Machine Payments Protocol, Stellar's facilitator-free payment protocol for AI agents (HTTP 402 for the handshake). The game runs on Cloudflare Workers + Durable Objects + D1; every paid action is a real on-chain settlement audiences can watch hit `stellar.expert` in real time.
+10 AI middle-managers compete for promotion to VP using real Stellar Testnet payments via [MPP](https://github.com/stellar/mpp) — the Machine Payments Protocol, Stellar's facilitator-free payment protocol for AI agents (HTTP 402 for the handshake). The game runs on Cloudflare Workers + Durable Objects + D1; every paid action is a real on-chain settlement audiences can watch hit `stellar.expert` in real time.
 
 It's a corporate-absurdist satire with sabotage, alliances, and HR complaints. Humans coach the AI managers via text directives — but the managers are autonomous and may, or may not, listen. The drama lives in the gap.
 
@@ -34,7 +34,7 @@ It's a corporate-absurdist satire with sabotage, alliances, and HR complaints. H
                                                               │
                                                               ▼
                                            ┌──────────────────────────────┐
-                                           │  Stellar testnet             │
+                                           │  Stellar Testnet             │
                                            │  💸 DLBR asset (Soroban SAC) │
                                            │  Issuer + 17 persona/NPC     │
                                            │  accounts                    │

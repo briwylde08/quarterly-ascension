@@ -103,7 +103,7 @@ export class Stellar {
    *   - Bounty payouts: HR / Motivational Speaker → agent
    *
    * Returns the tx hash on success. Wraps the whole submit cycle in a
-   * retry-on-transient-error loop because Stellar testnet's public Horizon
+   * retry-on-transient-error loop because Stellar Testnet's public Horizon
    * endpoints occasionally route requests to a lagging node, producing
    * spurious "Account not found" errors that resolve within 5-10 seconds
    * once the node ingests the latest ledger (or the LB rotates to a
