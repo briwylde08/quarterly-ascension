@@ -190,12 +190,21 @@
       background: #fef5e7;
       padding: 10px 12px;
       border-left: 3px solid #f1c40f;
-      font-style: italic;
       color: #1c3a64;
       margin-bottom: 14px;
-      font-size: 13px;
+      font-size: 15px;
       line-height: 1.5;
     }
+    .coach-box .current-directive .label {
+      display: block;
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: 0.6px;
+      text-transform: uppercase;
+      color: var(--navy-2);
+      margin-bottom: 4px;
+    }
+    .coach-box .current-directive .text { font-style: italic; }
     /* Directive consideration pill — sits between the "Life-coaching is open"
        state line and the current-directive quote. Tells the coach whether
        their current directive has already been read by the manager (safe to
@@ -1028,7 +1037,7 @@
           </h3>
           <div class="coach-state ${stateClass}">${escape(stateText)}</div>
           ${statusHtml}
-          ${dirText ? `<div class="current-directive">"${escape(dirText)}"</div>` : ''}
+          ${dirText ? `<div class="current-directive"><div class="label">Current Directive</div><div class="text">"${escape(dirText)}"</div></div>` : ''}
           ${w.open ? `
             <div id="coaching-hints-slot"></div>
             <textarea id="coach-input" maxlength="280" placeholder="e.g. Go after Marcus. Hostile takeover his partnerships if you can."></textarea>
