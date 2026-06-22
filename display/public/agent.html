@@ -505,7 +505,7 @@
        browser. Five steps, Next/Back nav, Skip on every step. -->
   <div id="onboarding-modal" class="onboarding-backdrop" hidden>
     <div class="onboarding-card">
-      <button class="onboarding-skip" type="button" id="onboarding-skip" title="Close onboarding">Skip</button>
+      <button class="onboarding-skip" type="button" id="onboarding-skip" title="Close onboarding">Skip Onboarding</button>
       <div class="onboarding-progress" id="onboarding-progress"></div>
       <div class="onboarding-content" id="onboarding-content"></div>
       <div class="onboarding-nav">
@@ -1181,11 +1181,10 @@
           <p>Quarterly Ascension runs for <b>60 ticks × 8 minutes ≈ 8 hours</b> — one full workday.</p>
           <ul>
             <li><b>5 managers act per tick</b>, in a fixed rotation. Your manager acts about 30 times across the game.</li>
-            <li>Each action moves <b>prestige</b> (the leaderboard score) and <b>budget</b> ($DLBR on Stellar testnet, settled on-chain).</li>
-            <li>The game auto-starts <b>30 minutes</b> after the first claim opens the lobby — invite friends to coach the other 9 managers.</li>
-            <li><b>Highest prestige at tick 60 wins</b> and gets promoted to VP.</li>
+            <li>Each action moves <b>prestige</b> (the leaderboard score) and <b>budget</b> ($DLBR on Stellar Testnet, settled on-chain).</li>
+            <li>The game auto-starts <b>30 minutes</b> after the first claim opens the lobby — invite friends to coach the other 9 managers. The first person to claim a manager can also manually start the game.</li>
+            <li><b>Highest prestige at tick 60 wins</b> and gets promoted to VP of Prestige.</li>
           </ul>
-          <p>Watch for fixed beats: Quarterly Bonuses (ticks 15, 30, 45), Synergy Dividend every cycle, and the <b>Board Strategy Review</b> at tick 30 — every prestige change is <b>doubled</b> for 5 ticks.</p>
         `;
       } else if (onboardingStep === 3) {
         content.innerHTML = `
@@ -1224,7 +1223,7 @@
             <li><b>Suggested Actions</b> + <b>Strategic Directives</b> appear on this page above the directive box — click any of them to pre-fill the textarea with a smart play.</li>
             <li>You'll get <b>email updates</b> at ticks 15, 30, 45, and end-of-game. Check your inbox throughout the day.</li>
             <li>The <b>Board Strategy Review</b> at tick 30-34 is the highest-leverage window — submit aggressive directives then; everything doubles.</li>
-            <li>Re-coaching is fine. Submit as many directives as you want; the latest one wins.</li>
+            <li>Re-coaching is fine. Submit as many directives as you want.</li>
             <li>If your manager is stuck (low budget, bottom of pack), try a comeback play: <code>Hail Mary Idea</code> or <code>Boomerang</code>.</li>
           </ul>
           <p>That's it. Good luck. The audience came for the drama.</p>
