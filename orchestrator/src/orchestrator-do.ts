@@ -421,7 +421,7 @@ export class GameOrchestrator {
 
       try {
         const llmResp = await openai.chat.completions.create({
-          model: "openai/gpt-5-mini",
+          model: "openai/gpt-5.5",
           max_completion_tokens: 3000,
           response_format: { type: "json_object" },
           messages: [

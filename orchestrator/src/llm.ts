@@ -44,13 +44,8 @@ export async function generateGossip(
     .join("\n");
   const userPrompt = `Current cycle: ${currentTick}. Recent activity:\n\n${lines}\n\nGive me the dish.`;
   const response = await openai.chat.completions.create({
-    model: "openai/gpt-5-mini",
+    model: "openai/gpt-5.5",
     max_completion_tokens: 400,
-    // gpt-5-mini is a reasoning model. Without minimal effort it eats the
-    // entire completion budget on internal reasoning tokens and returns
-    // empty visible content. Gossip is pure creative text — no reasoning
-    // needed.
-    reasoning_effort: "minimal",
     messages: [
       { role: "system", content: GOSSIP_SYSTEM_PROMPT },
       { role: "user", content: userPrompt },
@@ -654,15 +649,9 @@ export async function getAgentDecision(
 
   try {
     const response = await openai.chat.completions.create({
-      model: "openai/gpt-5-mini",
+      model: "openai/gpt-5.5",
       max_completion_tokens: 2000,
       response_format: { type: "json_object" },
-      // gpt-5-mini is a reasoning model. With default reasoning_effort,
-      // game-3 saw occasional "Empty response" fallbacks because reasoning
-      // tokens ate the entire 2000-token budget, leaving none for the JSON
-      // output. "low" preserves enough reasoning for the LLM to weigh
-      // persona+state+cooldowns while reserving room for output.
-      reasoning_effort: "low",
       messages: [
         { role: "system", content: systemPrompt },
         { role: "user", content: userPrompt },
@@ -671,9 +660,9 @@ export async function getAgentDecision(
 
     const content = response.choices[0]?.message?.content;
     if (!content) {
-      // Belt-and-suspenders flavor bank: even with reasoning_effort: low,
-      // if the LLM still returns empty (rate-limit, gateway hiccup, etc.),
-      // surface a small in-character reason instead of the bare debug string.
+      // Belt-and-suspenders flavor bank: if the LLM returns empty
+      // (rate-limit, gateway hiccup, etc.), surface a small in-character
+      // reason instead of the bare debug string.
       const distractedFlavors = [
         "Got distracted by an email thread that turned into a 9-reply argument about whether to use bullet points.",
         "Stared at the project tracker for a full minute before remembering they were the one who'd been assigned this.",
