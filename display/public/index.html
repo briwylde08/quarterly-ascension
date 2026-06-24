@@ -2677,16 +2677,21 @@
     //   running  → ⏸ Pause        (calls /admin/halt)
     //   halted   → ▶ Resume       (calls /admin/resume)
     //   ended    → hidden (post-game cleanup runs automatically in ~5 min)
-    function syncPauseLabel(status) {
+    function syncPauseLabel(status, lobbyOpenedBy) {
       if (!pauseBtn) return;
-      pauseBtn.classList.remove('resume', 'start', 'reset');
+      pauseBtn.classList.remove('resume', 'start', 'reset', 'waiting-for-opener');
       // Reset companion button shown in 'halted' state alongside Resume.
       let resetCompanion = document.getElementById('reset-companion-btn');
+      // Inline password form shown in 'setup' state to the lobby-opener so
+      // they can start the game with their claim password (no admin secret).
+      let lobbyStartForm = document.getElementById('lobby-start-companion');
       const removeCompanion = () => { if (resetCompanion) { resetCompanion.remove(); resetCompanion = null; } };
+      const removeLobbyStart = () => { if (lobbyStartForm) { lobbyStartForm.remove(); lobbyStartForm = null; } };
       if (status === 'halted') {
         pauseBtn.textContent = '▶ Resume';
         pauseBtn.classList.add('resume');
         pauseBtn.style.display = '';
+        removeLobbyStart();
         if (!resetCompanion) {
           resetCompanion = document.createElement('button');
           resetCompanion.id = 'reset-companion-btn';
@@ -2701,19 +2706,78 @@
           pauseBtn.parentElement.insertBefore(resetCompanion, pauseBtn.nextSibling);
         }
       } else if (status === 'setup') {
-        pauseBtn.textContent = '▶ Start Game';
-        pauseBtn.classList.add('start');
-        pauseBtn.style.display = '';
-        removeCompanion();
+        const isLobbyOpener = !!(myCoachedAgent && lobbyOpenedBy && myCoachedAgent === lobbyOpenedBy);
+        if (isLobbyOpener) {
+          // Lobby-opener path: hide the admin-secret button and render an
+          // inline password form that hits /api/start-game.
+          pauseBtn.style.display = 'none';
+          removeCompanion();
+          if (!lobbyStartForm) {
+            lobbyStartForm = document.createElement('form');
+            lobbyStartForm.id = 'lobby-start-companion';
+            lobbyStartForm.style.cssText = 'display:inline-flex;gap:6px;align-items:center;margin:0;';
+            lobbyStartForm.innerHTML = '<input id="lobby-start-companion-pw" type="password" required minlength="4" maxlength="128" placeholder="your password" autocomplete="current-password" style="padding:6px 8px;border:1px solid rgba(255,255,255,0.30);border-radius:3px;font-size:12px;width:140px;background:rgba(0,0,0,0.20);color:#fff;">' +
+              '<button type="submit" class="pause-btn start" style="margin:0;">▶ Start Now</button>';
+            lobbyStartForm.addEventListener('submit', async (e) => {
+              e.preventDefault();
+              const pwEl = document.getElementById('lobby-start-companion-pw');
+              const btn = lobbyStartForm.querySelector('button');
+              const pw = pwEl ? pwEl.value : '';
+              if (!pw) return;
+              btn.disabled = true;
+              const orig = btn.textContent;
+              btn.textContent = 'Starting…';
+              try {
+                const r = await fetch(ORCHESTRATOR_BASE + '/api/start-game', {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({ agentId: myCoachedAgent, password: pw }),
+                });
+                if (r.ok) {
+                  refreshFromApi();
+                } else {
+                  const out = await r.json().catch(() => ({}));
+                  alert(out.error || ('Start failed (' + r.status + ')'));
+                  btn.disabled = false;
+                  btn.textContent = orig;
+                }
+              } catch (err) {
+                alert('Network error: ' + err.message);
+                btn.disabled = false;
+                btn.textContent = orig;
+              }
+            });
+            pauseBtn.parentElement.insertBefore(lobbyStartForm, pauseBtn.nextSibling);
+          }
+        } else if (lobbyOpenedBy) {
+          // Lobby is open but viewer is not the opener — clicking should
+          // tell them they're waiting on the lobby-opener, not prompt for
+          // admin secret.
+          pauseBtn.textContent = '▶ Start Game';
+          pauseBtn.classList.add('start', 'waiting-for-opener');
+          pauseBtn.style.display = '';
+          removeCompanion();
+          removeLobbyStart();
+        } else {
+          // No lobby open yet — admin path so admin can kick off a game
+          // before anyone has claimed.
+          pauseBtn.textContent = '▶ Start Game';
+          pauseBtn.classList.add('start');
+          pauseBtn.style.display = '';
+          removeCompanion();
+          removeLobbyStart();
+        }
       } else if (status === 'ended') {
         pauseBtn.textContent = '🔄 Reset Game';
         pauseBtn.classList.add('reset');
         pauseBtn.style.display = '';
         removeCompanion();
+        removeLobbyStart();
       } else {
         pauseBtn.textContent = '⏸ Pause';
         pauseBtn.style.display = '';
         removeCompanion();
+        removeLobbyStart();
       }
     }
     function getAdminSecret() {
@@ -2762,6 +2826,10 @@
     }
 
     pauseBtn?.addEventListener('click', async () => {
+      if (pauseBtn.classList.contains('waiting-for-opener')) {
+        alert('Waiting on first player to start the game.');
+        return;
+      }
       const intent = pauseBtn.classList.contains('start') ? 'start'
                    : pauseBtn.classList.contains('resume') ? 'resume'
                    : pauseBtn.classList.contains('reset') ? 'reset'
@@ -2782,7 +2850,7 @@
     const _origUpdateFullState = updateFullState;
     updateFullState = function (data) {
       _origUpdateFullState(data);
-      syncPauseLabel(data.status);
+      syncPauseLabel(data.status, data.lobbyOpenedBy);
     };
     const _origRefresh = refreshFromApi;
     refreshFromApi = async function () {
@@ -2790,7 +2858,7 @@
       try {
         const r = await fetch(ORCHESTRATOR_BASE + '/api/state');
         const d = await r.json();
-        syncPauseLabel(d.status);
+        syncPauseLabel(d.status, d.lobbyOpenedBy);
       } catch {}
     };
 
