@@ -387,7 +387,7 @@ async function glassCliffPromotion(
   const leader = agents[0];
   const second = agents[1];
   const gap = leader.prestige - second.prestige;
-  if (gap <= 50) return [];
+  if (gap < 50) return [];
   if (state.glassCliffVictims.has(leader.id)) return [];
 
   // Drag the leader down to rank-2's prestige (no longer ahead).
