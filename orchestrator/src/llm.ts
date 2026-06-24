@@ -104,6 +104,11 @@ const ALL_ACTIONS = [
   { type: "book_ceo_time", description: "Meet with CEO (+40 prestige with Has Deliverable, -20 without; -10 if Meeting-Blocked)", cost: 40 },
 ];
 
+/** Per-tick global cap on how many agents can pick take_credit in a single
+ *  tick. Stops the documented-then-everyone-pile-on pattern that dominates
+ *  when a Marked target is on the board. */
+export const MAX_TAKE_CREDIT_PER_TICK = 2;
+
 export interface TickCtx {
   /** All agents, freshly read at the start of the tick. */
   allAgents: Agent[];
@@ -111,6 +116,10 @@ export interface TickCtx {
   leakedEmails: Array<{ fromAgent: string; toAgent: string; subject: string; body: string }>;
   /** Pre-fetched DLBR balances by agent id, computed in parallel at tick start. */
   balances: Map<string, number>;
+  /** Mutated by tick.ts as agents decide: number of take_credit picks made
+   *  so far this tick. Subsequent agents see take_credit filtered out once
+   *  this hits MAX_TAKE_CREDIT_PER_TICK. */
+  tickTakeCreditCount: number;
 }
 
 interface DecisionContext {
@@ -136,6 +145,10 @@ interface DecisionContext {
    *  to break the take_credit dominance observed in game-2 (73 plays /
    *  300 = 24% of all actions). */
   takeCreditCount: number;
+  /** Global tick-scoped count of take_credit picks already made by other
+   *  agents this tick. Capped at MAX_TAKE_CREDIT_PER_TICK so the menu
+   *  forces variety once the limit is reached. */
+  tickTakeCreditCount: number;
   /** Recent inbound attacks targeting this agent. Used to surface a
    *  "you just got hit by X" pull in the prompt so retaliation is a
    *  visible, named option rather than a generic rival list. */
@@ -164,7 +177,7 @@ const TARGETED_HOSTILE_ACTIONS = new Set([
 const TARGET_COOLDOWN_TICKS = 10; // ≈ 2 cycles in 1-agent/tick mode
 
 function buildContextPrompt(ctx: DecisionContext): string {
-  const { agent, balance, currentTick, allAgents, recentActions, leakedEmails, directive, hailMaryUsed, boomerangUsed, pulseSurveyUsed, joinMeetingCount, takeCreditCount, mysteriousInfluenceClaimed } = ctx;
+  const { agent, balance, currentTick, allAgents, recentActions, leakedEmails, directive, hailMaryUsed, boomerangUsed, pulseSurveyUsed, joinMeetingCount, takeCreditCount, tickTakeCreditCount, mysteriousInfluenceClaimed } = ctx;
   // Rank used by the anonymous_pulse_survey gate (only available when underdog).
   const currentRank = allAgents.findIndex((a) => a.id === agent.id) + 1;
 
@@ -235,6 +248,10 @@ function buildContextPrompt(ctx: DecisionContext): string {
     // Per-game hard cap: 4 take_credit plays per agent. Caps the runaway
     // sabotage→take_credit chain that dominated game-2 (24% of all actions).
     if (action.type === "take_credit" && takeCreditCount >= 4) return false;
+    // Per-tick global cap: only MAX_TAKE_CREDIT_PER_TICK agents can pick
+    // take_credit in any single tick. Stops the documented-target pile-on
+    // where multiple agents converge on the same easy +30.
+    if (action.type === "take_credit" && tickTakeCreditCount >= MAX_TAKE_CREDIT_PER_TICK) return false;
     return true;
   });
 
@@ -634,7 +651,7 @@ export async function getAgentDecision(
     a.statusEffects.some((s) => s.type === "mysterious_influence")
   );
 
-  const context: DecisionContext = { agent, balance, currentTick, allAgents, recentActions, leakedEmails, directive, hailMaryUsed, boomerangUsed, pulseSurveyUsed, joinMeetingCount, takeCreditCount, recentAttackers, mysteriousInfluenceClaimed };
+  const context: DecisionContext = { agent, balance, currentTick, allAgents, recentActions, leakedEmails, directive, hailMaryUsed, boomerangUsed, pulseSurveyUsed, joinMeetingCount, takeCreditCount, tickTakeCreditCount: tickCtx.tickTakeCreditCount, recentAttackers, mysteriousInfluenceClaimed };
 
   const openai = new OpenAI({
     apiKey: deps.openaiApiKey,

@@ -307,7 +307,7 @@ export async function processTick(deps: TickDeps, activeAgentIds?: string[]): Pr
     refreshedAgents.map(async (a) => [a.id, await stellar.getAssetBalance(a.publicKey)] as [string, number])
   );
   const balances = new Map(balanceEntries);
-  const tickCtx: TickCtx = { allAgents: refreshedAgents, leakedEmails, balances };
+  const tickCtx: TickCtx = { allAgents: refreshedAgents, leakedEmails, balances, tickTakeCreditCount: 0 };
 
   // Phase 2: random events fire at cycle boundaries + tick 1 (kickoff).
   if (fireRandomEvents) {
@@ -367,6 +367,9 @@ export async function processTick(deps: TickDeps, activeAgentIds?: string[]): Pr
   for (const agent of actingAgents) {
     const { action, reasoning, directiveAlignment, directiveAtAction } = await getAgentDecision(llm, agent, tick, tickCtx);
     decisions.push({ agent, action, reasoning, directiveAlignment, directiveAtAction });
+    // Increment the tick-scoped take_credit counter so later agents in this
+    // same tick see it filtered out once the cap is hit.
+    if (action.type === "take_credit") tickCtx.tickTakeCreditCount += 1;
     console.log(`${agent.name}: ${action.type}${("target" in action) ? ` → ${action.target}` : ""}${directiveAlignment ? ` [${directiveAlignment}]` : ""}`);
   }
 
