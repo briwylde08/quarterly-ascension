@@ -973,10 +973,9 @@ export class GameOrchestrator {
     // Latest gossip narrative — refreshed every 4 ticks by the alarm handler.
     // Public read; used by the dashboard's "Gossip with your work bestie" panel.
     // Coaching hints for the agent.html sidebar. Reads the manager's
-    // current state and returns prioritized "Suggested Actions" (2 atomic
-    // game-actions the coach can hand off) plus "Strategic Directives"
-    // (multi-turn combo guidance with reasoning). All server-side so the
-    // data is fresh + can't be tampered with from the browser.
+    // current state and returns 3-4 "Strategic Directives" (multi-turn
+    // combo guidance with reasoning). Server-side so the data is fresh +
+    // can't be tampered with from the browser.
     if (path === "/coaching-hints" && request.method === "GET") {
       const agentId = url.searchParams.get("agentId");
       if (!agentId) return Response.json({ error: "agentId required" }, { status: 400 });
@@ -996,7 +995,6 @@ export class GameOrchestrator {
       const hasDeliverable = has("has_deliverable");
       const isTired = has("tired");
       const hasHrAudit = has("hr_audit");
-      const isProblematic = has("problematic");
       const boardReviewActive = tick >= 30 && tick <= 34;
       const documentedTargets = allAgents.filter(
         (a) => a.id !== agentId && a.statusEffects.some((e) => e.type === "marked")
@@ -1007,102 +1005,6 @@ export class GameOrchestrator {
       const pendingFrom = agent.pendingAlliance
         ? allAgents.find((a) => a.id === agent.pendingAlliance)
         : null;
-
-      // ----- Suggested Actions (2 atomic picks, priority-ranked) -----
-      type ActionPick = { name: string; oneLiner: string; priority: number };
-      const actionPicks: ActionPick[] = [];
-      if (hasDeliverable && balance >= 40) {
-        actionPicks.push({
-          name: "Book CEO Time",
-          oneLiner: "Cash in your Has Deliverable for +40 prestige before a rival cancels it.",
-          priority: 100,
-        });
-      }
-      if (documentedTargets.length > 0 && tcCount < 4 && !hasHrAudit) {
-        actionPicks.push({
-          name: "Take Credit",
-          oneLiner: `${documentedTargets[0].name} is Documented — guaranteed +30 prestige.`,
-          priority: 95,
-        });
-      }
-      if (pendingFrom) {
-        actionPicks.push({
-          name: "Accept Alliance",
-          oneLiner: `${pendingFrom.name} is offering a partnership; both of you +5 prestige.`,
-          priority: 90,
-        });
-      }
-      if (balance < 30) {
-        actionPicks.push({
-          name: "Expense Report",
-          oneLiner: `You're at $${balance.toFixed(0)} — file for +$40 from HR.`,
-          priority: 88,
-        });
-      }
-      if (isTired) {
-        actionPicks.push({
-          name: "Shotgun a Red Bull",
-          oneLiner: "Free; clears Hit the Wall (-3/cycle), 50% chance of +5 prestige bonus.",
-          priority: 85,
-        });
-      }
-      if (rank >= 4 && leader && leader.prestige - agent.prestige > 30 && !pulseSurveyUsed && balance >= 25) {
-        actionPicks.push({
-          name: "Anonymous Pulse Survey",
-          oneLiner: `One-shot underdog play vs ${leader.name}: drops them by 50 prestige.`,
-          priority: 92,
-        });
-      }
-      if (balance >= 30 && !hasDeliverable) {
-        actionPicks.push({
-          name: "Strategy Report",
-          oneLiner: "+35 prestige now + Has Deliverable status (sets up a +40 CEO meeting next turn).",
-          priority: 78,
-        });
-      }
-      if (rank > 5 && agent.prestige < 30 && tick > 10 && !boomerangUsed) {
-        actionPicks.push({
-          name: "Boomerang",
-          oneLiner: "Quit-and-return: resets your prestige to 75 and clears every status effect. One-shot.",
-          priority: 88,
-        });
-      }
-      if (rank > 5 && agent.prestige < 30 && !hailMaryUsed && balance < 5) {
-        actionPicks.push({
-          name: "Hail Mary Idea",
-          oneLiner: "Free lottery: 30% +50 prestige, 50% +5, 20% -5. One-shot — best EV when cornered.",
-          priority: 80,
-        });
-      }
-      if (boardReviewActive && balance >= 40 && !hasHrAudit) {
-        actionPicks.push({
-          name: "Sabotage Plan",
-          oneLiner: "Board Review is doubling stakes — set up a guaranteed Take Credit chain at 2× reward.",
-          priority: 87,
-        });
-      }
-      if (agent.allies.length < 3 && !pendingFrom) {
-        actionPicks.push({
-          name: "Schmooze",
-          oneLiner: "Free; propose a partnership. 3 allies = Well-Allied (halves incoming attacks).",
-          priority: 65,
-        });
-      }
-      // Fallback: always something to suggest
-      if (actionPicks.length < 2) {
-        actionPicks.push({
-          name: "Office Party",
-          oneLiner: "$25 → +15 to you, +5 to rivals. Net +10 advance vs the field.",
-          priority: 60,
-        });
-        actionPicks.push({
-          name: "Work",
-          oneLiner: "Free; +5 prestige and +$2 salary. Safe but boring.",
-          priority: 50,
-        });
-      }
-      actionPicks.sort((a, b) => b.priority - a.priority);
-      const suggestedActions = actionPicks.slice(0, 2).map(({ name, oneLiner }) => ({ name, oneLiner }));
 
       // ----- Strategic Directives (3-4 longer combo hints) -----
       type Directive = { text: string; reason: string; priority: number };
@@ -1214,7 +1116,6 @@ export class GameOrchestrator {
       const strategicDirectives = directives.slice(0, 4).map(({ text, reason }) => ({ text, reason }));
 
       return Response.json({
-        suggestedActions,
         strategicDirectives,
       });
     }
