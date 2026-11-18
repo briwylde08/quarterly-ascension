@@ -15,7 +15,7 @@ import type { Agent, GameEvent, TickerEntry } from "./types.js";
 import type { LlmDeps, GossipMoment } from "./llm.js";
 import { generateGossip } from "./llm.js";
 import { getPersona } from "./personas.js";
-import { sendEmail, progressSummaryEmail, finaleEmail } from "./email.js";
+import { sendEmail, claimConfirmationEmail, progressSummaryEmail, finaleEmail } from "./email.js";
 
 interface BroadcastMessage {
   type: "game_event" | "ticker_update";
@@ -33,6 +33,13 @@ const DIRECTIVE_MAX_LENGTH = 280;
 const PASSWORD_MIN_LENGTH = 4;
 const PASSWORD_MAX_LENGTH = 128;
 const PBKDF2_ITERATIONS = 100_000;
+// Coach names, emails and directive history are deleted this long after a
+// game ends (privacy notice: "about an hour").
+const POST_GAME_CLEANUP_MS = 60 * 60 * 1000;
+// Backstop for games that never reach a normal end: a halted game nobody
+// resumes, or a host who postpones the post-game cleanup. Coach data is
+// deleted after this long regardless.
+const ABANDONED_GAME_CLEANUP_MS = 24 * 60 * 60 * 1000;
 const PBKDF2_SALT_BYTES = 16;
 const PBKDF2_HASH_BYTES = 32;
 
@@ -266,8 +273,12 @@ export class GameOrchestrator {
         return Response.json({ error: `Cannot halt game in ${current} state` }, { status: 400 });
       }
       await db.setGameStatus("halted");
-      await this.state.storage.deleteAlarm();
-      return Response.json({ status: "halted", tick: await db.getCurrentTick() });
+      // Backstop: if nobody resumes or resets, the alarm wipes coach data
+      // after ABANDONED_GAME_CLEANUP_MS instead of keeping it indefinitely.
+      const abandonAt = Date.now() + ABANDONED_GAME_CLEANUP_MS;
+      await db.setGameStateValue("abandon_cleanup_at", String(abandonAt));
+      await this.state.storage.setAlarm(abandonAt);
+      return Response.json({ status: "halted", tick: await db.getCurrentTick(), autoResetAt: abandonAt });
     }
 
     if (path === "/resume" && request.method === "POST") {
@@ -276,6 +287,7 @@ export class GameOrchestrator {
         return Response.json({ error: `Cannot resume game in ${current} state` }, { status: 400 });
       }
       await db.setGameStatus("running");
+      await this.env.DB.prepare("DELETE FROM game_state WHERE key = 'abandon_cleanup_at'").run();
       // Realign game-start time so cadence resumes from where we left off
       // (rather than racing forward to "catch up" the pause duration).
       const interval = parseInt(this.env.TICK_INTERVAL_MS, 10);
@@ -287,8 +299,11 @@ export class GameOrchestrator {
 
     if (path === "/end" && request.method === "POST") {
       await db.setGameStatus("ended");
-      await this.state.storage.deleteAlarm();
-      return Response.json({ status: "ended", tick: await db.getCurrentTick() });
+      // Same data handling as a natural end: drop passwords + live
+      // directives now, schedule the full wipe for an hour out.
+      await this.clearPerGameState();
+      const cleanupAt = await this.schedulePostGameCleanup(db, POST_GAME_CLEANUP_MS);
+      return Response.json({ status: "ended", tick: await db.getCurrentTick(), cleanupAt });
     }
 
     if (path === "/tick" && request.method === "POST") {
@@ -409,7 +424,13 @@ export class GameOrchestrator {
         return Response.json({ error: "No coached directives found in this game." }, { status: 400 });
       }
 
-      const judgePrompt = buildJudgePrompt(coaches);
+      // Coach names never go to the model. The prompt uses stand-in labels
+      // ("Coach-01"); real names are swapped back into the response below.
+      const labelFor = new Map<string, string>();
+      coaches.forEach((c, i) => labelFor.set(c.coachName, `Coach-${String(i + 1).padStart(2, "0")}`));
+      const judgePrompt = buildJudgePrompt(
+        coaches.map((c) => ({ ...c, coachName: labelFor.get(c.coachName)! }))
+      );
       const { OpenAI } = await import("openai");
       const openai = new OpenAI({
         apiKey: this.env.OPENAI_API_KEY,
@@ -436,24 +457,71 @@ export class GameOrchestrator {
         } catch {
           return Response.json({ error: "Judge returned malformed JSON", raw: content.slice(0, 500) }, { status: 502 });
         }
-        return Response.json({ ok: true, coaches, awards: parsed });
+        const relabel = (v: unknown): unknown => {
+          if (typeof v === "string") {
+            let out = v;
+            for (const [name, label] of labelFor) out = out.split(label).join(name);
+            return out;
+          }
+          if (Array.isArray(v)) return v.map(relabel);
+          if (v && typeof v === "object") {
+            return Object.fromEntries(Object.entries(v as Record<string, unknown>).map(([k, x]) => [k, relabel(x)]));
+          }
+          return v;
+        };
+        return Response.json({ ok: true, coaches, awards: relabel(parsed) });
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err);
         return Response.json({ error: `Judge call failed: ${msg}` }, { status: 502 });
       }
     }
 
-    // Cancel the post-game cleanup alarm. Use during testing when you want
-    // the game record to stick around past the 5-minute auto-wipe window.
-    // Once cancelled, the cleanup must be triggered manually via /admin/reset.
+    // Postpone the post-game cleanup. Use when the host needs the game record
+    // (awards ceremony, analysis) past the one-hour window. This no longer
+    // cancels the wipe outright: coach names, emails and directives are still
+    // deleted ABANDONED_GAME_CLEANUP_MS from now, or sooner via /admin/reset.
     if (path === "/cancel-cleanup" && request.method === "POST") {
       const pending = await this.state.storage.getAlarm();
-      await this.state.storage.deleteAlarm();
+      const cleanupAt = await this.schedulePostGameCleanup(db, ABANDONED_GAME_CLEANUP_MS);
       return Response.json({
         ok: true,
-        cancelledAlarmAt: pending,
-        note: "Post-game cleanup will not fire automatically. Call /admin/reset when done.",
+        previousAlarmAt: pending,
+        cleanupAt,
+        note: "Post-game cleanup postponed, not cancelled. It will run at cleanupAt; call /admin/reset to wipe sooner.",
       });
+    }
+
+    // Moderation: remove a coach's directive. Clears the live directive and
+    // blanks it in the action history so it no longer shows on the public
+    // directives page or reaches the awards judge.
+    if (path === "/clear-directive" && request.method === "POST") {
+      let body: { agentId?: string };
+      try { body = await request.json(); } catch { return Response.json({ error: "invalid JSON body" }, { status: 400 }); }
+      if (!body.agentId) return Response.json({ error: "agentId required" }, { status: 400 });
+      const agent = await db.getAgent(body.agentId);
+      if (!agent) return Response.json({ error: "agent not found" }, { status: 404 });
+      await this.env.DB.batch([
+        this.env.DB.prepare("DELETE FROM game_state WHERE key = ?").bind(`directive_${body.agentId}`),
+        this.env.DB.prepare("UPDATE action_logs SET directive_at_action = NULL, directive_alignment = NULL WHERE agent_id = ?").bind(body.agentId),
+      ]);
+      return Response.json({ ok: true, agentId: body.agentId, cleared: true });
+    }
+
+    // Moderation: remove a coach from a manager. Deletes their name, email,
+    // password hash and directives; the manager plays on autonomously. Works
+    // in any game state (the public /api/release refuses mid-game).
+    if (path === "/release-claim" && request.method === "POST") {
+      let body: { agentId?: string };
+      try { body = await request.json(); } catch { return Response.json({ error: "invalid JSON body" }, { status: 400 }); }
+      if (!body.agentId) return Response.json({ error: "agentId required" }, { status: 400 });
+      const agent = await db.getAgent(body.agentId);
+      if (!agent) return Response.json({ error: "agent not found" }, { status: 404 });
+      await this.env.DB.batch([
+        this.env.DB.prepare("UPDATE agents SET claimed_by = NULL, claimed_by_name = NULL WHERE id = ?").bind(body.agentId),
+        this.env.DB.prepare("DELETE FROM game_state WHERE key IN (?, ?)").bind(`password_${body.agentId}`, `directive_${body.agentId}`),
+        this.env.DB.prepare("UPDATE action_logs SET directive_at_action = NULL, directive_alignment = NULL WHERE agent_id = ?").bind(body.agentId),
+      ]);
+      return Response.json({ ok: true, agentId: body.agentId, released: true });
     }
 
     // Bring every agent's DLBR balance to a target. Burns from agents who
@@ -737,6 +805,29 @@ export class GameOrchestrator {
       } else {
         lobbyOpenedAt = parseInt(existingLobbyOpen, 10);
       }
+
+      // Claim confirmation — the first of five emails. Sent in the background
+      // so a slow or failed send never blocks or fails the claim.
+      this.state.waitUntil(
+        (async () => {
+          try {
+            const all = await db.getAllAgents();
+            const claimedAgent = all.find((a) => a.id === agentId);
+            if (!claimedAgent) return;
+            const balance = await this.makeStellar().getAssetBalance(claimedAgent.publicKey);
+            const tmpl = claimConfirmationEmail({
+              agent: claimedAgent,
+              balance,
+              rank: all.findIndex((a) => a.id === agentId) + 1,
+              total: all.length,
+              claimerName: trimmedName,
+            });
+            await sendEmail(this.env.EMAIL, { ...tmpl, to: trimmedEmail });
+          } catch (err) {
+            console.error(`[email] claim confirmation for ${agentId} failed:`, err);
+          }
+        })()
+      );
 
       return Response.json({
         ok: true,
@@ -1331,8 +1422,28 @@ export class GameOrchestrator {
       return;
     }
 
+    // Abandoned-game backstop. /admin/halt schedules this alarm; if the game
+    // is still halted when it fires, wipe coach data and reopen the lobby.
+    if (status === "halted") {
+      const abandonRaw = await db.getGameStateValue("abandon_cleanup_at");
+      const abandonAt = abandonRaw ? parseInt(abandonRaw, 10) : null;
+      if (abandonAt && Date.now() >= abandonAt) {
+        console.log("[alarm] halted game abandoned; resetting.");
+        try {
+          await this.performReset({
+            normalizeBalances: true,
+            target: 200,
+            broadcastNotice: "🔄 New game lobby open — first claim starts the next round.",
+          });
+        } catch (err) {
+          console.error("[alarm] abandoned-game reset failed:", err);
+        }
+      }
+      return;
+    }
+
     if (status !== "running") {
-      // Game halted between alarm scheduling and firing — drop.
+      // Unknown state between alarm scheduling and firing — drop.
       return;
     }
 
@@ -1344,21 +1455,7 @@ export class GameOrchestrator {
       // Clear all per-game ephemeral state including password hashes. Each
       // new game starts fresh — claims and passwords get released together
       // (issue #2). Persona traits + on-chain balances are the only carryover.
-      try {
-        await this.env.DB.prepare(`
-          DELETE FROM game_state WHERE
-            key LIKE 'directive_%' OR
-            key LIKE 'hail_mary_used_%' OR
-            key LIKE 'boomerang_used_%' OR
-            key LIKE 'pulse_survey_used_%' OR
-            key LIKE 'join_meeting_count_%' OR
-            key LIKE 'take_credit_count_%' OR
-            key LIKE 'password_%' OR
-            key IN ('turn_order', 'turn_index')
-        `).run();
-      } catch (err) {
-        console.error("[alarm] failed to clear per-game state on end-of-game:", err);
-      }
+      await this.clearPerGameState();
 
       // Adoption claims (claimed_by_name) are PRESERVED at end-of-game so
       // /admin/judge-directives can still attribute directives → coaches for
@@ -1399,9 +1496,7 @@ export class GameOrchestrator {
       // Schedule the post-game cleanup alarm. After 60 min the next alarm
       // will run performReset() and reopen the lobby for the next round.
       // Leaderboard + finale emails get their visibility window in between.
-      const cleanupAt = Date.now() + 60 * 60 * 1000;
-      await db.setGameStateValue("cleanup_after_at", String(cleanupAt));
-      await this.state.storage.setAlarm(cleanupAt);
+      const cleanupAt = await this.schedulePostGameCleanup(db, POST_GAME_CLEANUP_MS);
       console.log(`[alarm] game ended at tick ${tick}; cleanup scheduled at ${new Date(cleanupAt).toISOString()}`);
       return;
     }
@@ -1695,7 +1790,6 @@ export class GameOrchestrator {
           rank,
           total: all.length,
           claimerName: agent.claimedByName ?? "MegaCorp Stakeholder",
-          claimerEmail: agent.claimedBy ?? "",
           cycle: tick,
           cycleLabel,
           actions: actions.map((a) => ({
@@ -1757,6 +1851,37 @@ export class GameOrchestrator {
         console.error(`[email] finale for ${agent.name} failed:`, err);
       }
     }
+  }
+
+  /**
+   * Drop per-game secrets and live directives the moment a game ends:
+   * password hashes, current directives, one-shot flags, turn order.
+   * Names, emails and directive history go in the later full wipe.
+   */
+  private async clearPerGameState(): Promise<void> {
+    try {
+      await this.env.DB.prepare(`
+        DELETE FROM game_state WHERE
+          key LIKE 'directive_%' OR
+          key LIKE 'hail_mary_used_%' OR
+          key LIKE 'boomerang_used_%' OR
+          key LIKE 'pulse_survey_used_%' OR
+          key LIKE 'join_meeting_count_%' OR
+          key LIKE 'take_credit_count_%' OR
+          key LIKE 'password_%' OR
+          key IN ('turn_order', 'turn_index', 'abandon_cleanup_at')
+      `).run();
+    } catch (err) {
+      console.error("[end] failed to clear per-game state:", err);
+    }
+  }
+
+  /** Schedule the full post-game wipe (performReset) `delayMs` from now. */
+  private async schedulePostGameCleanup(db: Db, delayMs: number): Promise<number> {
+    const cleanupAt = Date.now() + delayMs;
+    await db.setGameStateValue("cleanup_after_at", String(cleanupAt));
+    await this.state.storage.setAlarm(cleanupAt);
+    return cleanupAt;
   }
 
   /**

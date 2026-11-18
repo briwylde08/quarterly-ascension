@@ -294,7 +294,6 @@ export interface ProgressSummaryInput {
   rank: number;
   total: number;
   claimerName: string;
-  claimerEmail: string;           // used to build the coaching deep-link
   cycle: number;
   cycleLabel: string;             // e.g. "Q1 Cycle 24 (mid-quarter)"
   actions: Array<{ tick: number; action_type: string; outcome: string; reasoning: string | null; prestige_change: number | null }>;
@@ -305,7 +304,7 @@ export interface ProgressSummaryInput {
 }
 
 export function progressSummaryEmail(opts: ProgressSummaryInput): SendEmailInput {
-  const { agent, balance, rank, total, claimerName, claimerEmail, cycle, cycleLabel, actions, inboundEvents, prestigeStart, budgetStart, notableQuotes } = opts;
+  const { agent, balance, rank, total, claimerName, cycle, cycleLabel, actions, inboundEvents, prestigeStart, budgetStart, notableQuotes } = opts;
 
   const prestigeDelta = agent.prestige - prestigeStart;
   const budgetDelta = balance - budgetStart;
@@ -351,7 +350,7 @@ export function progressSummaryEmail(opts: ProgressSummaryInput): SendEmailInput
 
   const outlook = generateOutlook(agent, prestigeDelta, budgetDelta, balance, rank, total);
 
-  const coachUrl = `https://quarterly-ascension.pages.dev/agent.html?id=${agent.id}&email=${encodeURIComponent(claimerEmail)}#coach`;
+  const coachUrl = `https://quarterly-ascension.pages.dev/agent.html?id=${agent.id}#coach`;
   const text = [
     `${cycleLabel} Performance Summary — ${agent.name}`,
     `${"━".repeat(60)}`,
@@ -410,7 +409,7 @@ export function progressSummaryEmail(opts: ProgressSummaryInput): SendEmailInput
     <b style="color:#1c3a64;">⏱ Want to course-correct?</b>
     Submit a directive any time — it stays in effect until you overwrite it. ${escapeHtml(agent.name.split(" ")[0])} reads it the next time they act.
     <br><br>
-    <a href="https://quarterly-ascension.pages.dev/agent.html?id=${agent.id}&email=${encodeURIComponent(claimerEmail)}#coach" style="background:#1c3a64;color:#ffffff;padding:10px 18px;text-decoration:none;font-size:13px;letter-spacing:0.5px;">Coach ${escapeHtml(agent.name.split(" ")[0])} →</a>
+    <a href="https://quarterly-ascension.pages.dev/agent.html?id=${agent.id}#coach" style="background:#1c3a64;color:#ffffff;padding:10px 18px;text-decoration:none;font-size:13px;letter-spacing:0.5px;">Coach ${escapeHtml(agent.name.split(" ")[0])} →</a>
   </div>
 
   <p style="margin-top:22px;">
