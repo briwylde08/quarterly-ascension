@@ -252,6 +252,13 @@ function buildContextPrompt(ctx: DecisionContext): string {
     // take_credit in any single tick. Stops the documented-target pile-on
     // where multiple agents converge on the same easy +30.
     if (action.type === "take_credit" && tickTakeCreditCount >= MAX_TAKE_CREDIT_PER_TICK) return false;
+    // Early-game lockout: no take_credit before tick 10. In the opening
+    // there are no Documented targets yet, so every take_credit is a raw
+    // ~40% coin-flip — repetitive to watch exactly when a fresh audience is
+    // tuning in. Locking it through the warm-up forces variety. Removing it
+    // from availableActions means it never appears in the menu, so the LLM
+    // cannot choose it. (Boomerang uses the same currentTick gate above.)
+    if (action.type === "take_credit" && currentTick < 10) return false;
     return true;
   });
 
@@ -393,7 +400,16 @@ this play out.
     varietyNudge = `\nNARRATIVE ESCALATION:\nYou're past halftime. The audience has watched the early meta develop — alliance trades, take_credit chains, file_complaint exchanges. Late-game stories need bigger swings: hostile_takeover (steal a rival's whole alliance net), hail_mary_idea (one-shot lottery, +50 prestige if it lands), break_alliance (calculated nuke), office_party (+10 net across the whole field). If you've been running the same pattern for 5+ ticks, the audience is bored. Change the story.\n`;
   }
 
-  return `${directiveSection}${positionalNudge}${varietyNudge}${retaliationNote}${cooldownNote}${lockInNote}
+  // Warm-up lockout notice. take_credit is filtered out of the menu before
+  // tick 10 (see availableActions), so it literally can't be chosen — this
+  // note just tells the LLM why, so it doesn't spend its reasoning angling
+  // for a move that isn't on the table.
+  let takeCreditLockNote = "";
+  if (currentTick < 10) {
+    takeCreditLockNote = `\nWARM-UP RULE (Q1 opening): take_credit is LOCKED until tick 10. It is not in your action menu and you cannot choose it this turn. Build position instead — form alliances, coffee-chat, file expense reports, plant rumors, set up a sabotage dossier, or make a bold swing. The credit-grab window opens at tick 10.\n`;
+  }
+
+  return `${directiveSection}${positionalNudge}${varietyNudge}${takeCreditLockNote}${retaliationNote}${cooldownNote}${lockInNote}
 CURRENT SITUATION (Tick ${currentTick}):
 
 YOUR STATUS:
@@ -409,6 +425,10 @@ ${(() => {
   // this callout the LLM tends to miss the chain even when both pieces
   // (target tag + take_credit description) are in the prompt — game-7 had
   // 6 Documented windows and 0 chained Take Credits.
+  // While take_credit is locked (pre-tick-10), don't advertise the exploit
+  // chain — the LLM couldn't act on it anyway, and dangling it just wastes
+  // reasoning and reads as a contradiction against the warm-up rule.
+  if (currentTick < 10) return "";
   const documented = otherAgents.filter(a => a.publicTags.includes("MARKED"));
   const qj = otherAgents.filter(a => a.publicTags.includes("QUESTIONABLE JUDGMENT"));
   if (documented.length === 0 && qj.length === 0) return "";
