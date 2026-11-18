@@ -253,6 +253,9 @@ export class GameOrchestrator {
       }
       const to = body.to;
       if (!to) return Response.json({ error: "to is required" }, { status: 400 });
+      if (!this.env.EMAIL) {
+        return Response.json({ error: "email is switched off (no EMAIL binding)" }, { status: 503 });
+      }
       try {
         await this.env.EMAIL.send({
           to,
@@ -708,8 +711,11 @@ export class GameOrchestrator {
 
     // Claim flow — atomic.
     if (path === "/claim" && request.method === "POST") {
-      // Public-mode claim: atomic claim+activate with name + email + password.
-      // Email is required (game sends 5 status updates over 8 hours).
+      // Public-mode claim: atomic claim+activate with name + password.
+      // Email is switched off while the EMAIL binding is absent: the form
+      // doesn't ask for an address, and any address sent anyway is discarded
+      // rather than stored. With the binding present, an address is optional
+      // and gets the five status updates.
       let body: { agentId?: string; name?: string; email?: string; password?: string };
       try {
         body = await request.json();
@@ -717,8 +723,8 @@ export class GameOrchestrator {
         return Response.json({ error: "invalid JSON body" }, { status: 400 });
       }
       const { agentId, name, email, password } = body;
-      if (!agentId || !name || !email || !password) {
-        return Response.json({ error: "agentId, name, email, and password are all required" }, { status: 400 });
+      if (!agentId || !name || !password) {
+        return Response.json({ error: "agentId, name, and password are all required" }, { status: 400 });
       }
       if (password.length < PASSWORD_MIN_LENGTH || password.length > PASSWORD_MAX_LENGTH) {
         return Response.json(
@@ -730,9 +736,12 @@ export class GameOrchestrator {
       if (trimmedName.length === 0) {
         return Response.json({ error: "name is required" }, { status: 400 });
       }
-      const trimmedEmail = email.trim().slice(0, 200);
-      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(trimmedEmail)) {
-        return Response.json({ error: "email looks invalid" }, { status: 400 });
+      let trimmedEmail: string | null = null;
+      if (this.env.EMAIL && typeof email === "string" && email.trim().length > 0) {
+        trimmedEmail = email.trim().slice(0, 200);
+        if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(trimmedEmail)) {
+          return Response.json({ error: "email looks invalid" }, { status: 400 });
+        }
       }
 
       const claimStatus = await db.getGameStatus();
@@ -807,8 +816,11 @@ export class GameOrchestrator {
       }
 
       // Claim confirmation — the first of five emails. Sent in the background
-      // so a slow or failed send never blocks or fails the claim.
-      this.state.waitUntil(
+      // so a slow or failed send never blocks or fails the claim. Skipped
+      // while email is switched off.
+      const emailBinding = this.env.EMAIL;
+      const confirmTo = trimmedEmail;
+      if (emailBinding && confirmTo) this.state.waitUntil(
         (async () => {
           try {
             const all = await db.getAllAgents();
@@ -822,7 +834,7 @@ export class GameOrchestrator {
               total: all.length,
               claimerName: trimmedName,
             });
-            await sendEmail(this.env.EMAIL, { ...tmpl, to: trimmedEmail });
+            await sendEmail(emailBinding, { ...tmpl, to: confirmTo });
           } catch (err) {
             console.error(`[email] claim confirmation for ${agentId} failed:`, err);
           }
@@ -1749,6 +1761,8 @@ export class GameOrchestrator {
    * logged per-coach; never break the tick loop.
    */
   private async sendProgressEmails(tick: number): Promise<void> {
+    const emailBinding = this.env.EMAIL;
+    if (!emailBinding) return; // email switched off
     const db = new Db(this.env.DB);
     const stellar = this.makeStellar();
     const all = await db.getAllAgents();
@@ -1804,7 +1818,7 @@ export class GameOrchestrator {
           budgetStart,
           notableQuotes,
         });
-        await sendEmail(this.env.EMAIL, { ...tmpl, to: agent.claimedBy! });
+        await sendEmail(emailBinding, { ...tmpl, to: agent.claimedBy! });
       } catch (err) {
         console.error(`[email] progress summary for ${agent.name} failed:`, err);
       }
@@ -1816,6 +1830,8 @@ export class GameOrchestrator {
    * balance, total paid actions, and a "you won / you didn't" framing.
    */
   private async sendFinaleEmails(): Promise<void> {
+    const emailBinding = this.env.EMAIL;
+    if (!emailBinding) return; // email switched off
     const db = new Db(this.env.DB);
     const stellar = this.makeStellar();
     const all = await db.getAllAgents();
@@ -1846,7 +1862,7 @@ export class GameOrchestrator {
           notableQuotes,
           totalPaidActions,
         });
-        await sendEmail(this.env.EMAIL, { ...tmpl, to: agent.claimedBy! });
+        await sendEmail(emailBinding, { ...tmpl, to: agent.claimedBy! });
       } catch (err) {
         console.error(`[email] finale for ${agent.name} failed:`, err);
       }

@@ -13,7 +13,7 @@ export interface Agent {
   statusEffects: StatusEffect[];
   allies: string[];       // Agent IDs
   pendingAlliance: string | null;  // Agent ID who proposed
-  claimedBy: string | null;        // Player email (set at /api/claim; used by email sender)
+  claimedBy: string | null;        // Player email. Null while email is switched off (no EMAIL binding).
   claimedByName: string | null;    // Player name (set at /api/claim)
 }
 

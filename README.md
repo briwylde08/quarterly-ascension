@@ -77,9 +77,11 @@ Cloudflare Workers can be terminated mid-handler (CPU budget, network blip). The
 
 📂 `orchestrator/src/orchestrator-do.ts` `/api/claim` handler.
 
-### 💌 Cloudflare Email Sending via the `EMAIL` binding
+### 💌 Cloudflare Email Sending via the `EMAIL` binding (currently switched off)
 
-Each claimed coach receives 5 emails over the 8-hour game (welcome + progress at ticks 15/30/45 + finale). Sender domain (`megacorp.lol`) is onboarded once via `wrangler email sending enable`; the binding sends transactional emails to arbitrary recipients with no allowlist. No third-party email API key.
+**Email is switched off for now.** The `send_email` binding is commented out in `orchestrator/wrangler.jsonc`; without it the claim form asks for no email address, none is stored, and nothing is sent. To switch it back on, restore the binding and the email field on the claim form.
+
+When on: each claimed coach receives 5 emails over the 8-hour game (welcome + progress at ticks 15/30/45 + finale). Sender domain (`megacorp.lol`) is onboarded once via `wrangler email sending enable`; the binding sends transactional emails to arbitrary recipients with no allowlist. No third-party email API key.
 
 📂 `orchestrator/src/email.ts` (templates + `env.EMAIL.send()`), `orchestrator/wrangler.jsonc` (`send_email` binding).
 
@@ -104,15 +106,15 @@ Random events fire on cycle boundaries (every 5 ticks) — Surprise Demo Day, Vi
 - **Fixed beats**:
   - 🎤 **Tick 1** — Q1 Kickoff (CEO speech + 10 per-agent reactions)
   - 💰 **Every cycle boundary** (ticks 5, 10, 15, …) — Synergy Dividend (+10 DLBR/manager on-chain)
-  - 🏆 **Ticks 15 / 30 / 45** — Quarterly Bonuses (40 / 25 / 15 DLBR to top 3) + progress emails to coaches
+  - 🏆 **Ticks 15 / 30 / 45** — Quarterly Bonuses (40 / 25 / 15 DLBR to top 3)
   - 📋 **Ticks 30-34** — Board Strategy Review (every prestige change doubled for 5 ticks)
-  - 🏁 **Tick 60** — Game End, finale email, 60-min cleanup window, then auto-reset
+  - 🏁 **Tick 60** — Game End, 60-min cleanup window, then auto-reset
 - **Random events** roll probabilistically at each cycle boundary (one-per-game cap): Surprise Demo Day, Surprise Board Visit, Viral LinkedIn, Bad Glassdoor Review, Surprise Promotion, Budget Cuts, Printer Achieves Sentience, Quiet Quitting Memo Leaked, Vending Machine Showdown. Plus Glass Cliff Promotion (auto-fires when the leader pulls 50+ ahead).
 - **Status effects**: 😩 Hit the Wall, 🚨 Problematic, 📁 Documented, 🤔 Questionable Judgment, 🦅 Mysterious Influence, 🚫 Meeting Blocked, ✅ Has Deliverable, ⚖️ HR Audit, 📋 Board Strategy Review.
 - **`take_credit` cap**: each manager can use Take Credit at most **4 times per game**. Keeps the sabotage→take-credit chain from dominating play.
 - **Lobby auto-start**: the first claim opens a 30-minute lobby. The lobby-opener can skip the wait with their password via the inline form on `intro.html`. When the lobby alarm fires, the game auto-starts with whatever claims are in (uncoached managers play autonomously).
-- **Coaching**: claim a manager on `/intro.html` (name + email + password). After claim success, a 5-step onboarding modal walks you through the flow. Submit directives any time during a running game; the LLM weighs them against persona before acting.
-- **Email cadence**: claim confirmation + 3 progress reports + finale.
+- **Coaching**: claim a manager on `/intro.html` (name + password). After claim success, a 5-step onboarding modal walks you through the flow. Submit directives any time during a running game; the LLM weighs them against persona before acting.
+- **Email**: switched off for now (when on: claim confirmation + 3 progress reports + finale).
 
 The full mechanic catalog lives at [`/handbook.html`](https://quarterly-ascension.pages.dev/handbook) on the deployed dashboard.
 
@@ -126,7 +128,7 @@ The full mechanic catalog lives at [`/handbook.html`](https://quarterly-ascensio
 | State | Cloudflare Durable Object (game loop) + D1 (events, agents, action_logs, game_state, ticker, leaked_emails) |
 | Payments | `@stellar/mpp/charge/{client,server}` over the Stellar Soroban DLBR asset (testnet). `sendAsset` retries on transient testnet failures with 1.5s + 3s backoff. |
 | LLM | OpenAI (`gpt-5.5`) via Cloudflare AI Gateway. `reasoning_effort: "low"` on the action picker, `"minimal"` on the gossip narrator. |
-| Email | Cloudflare Email Sending via the `EMAIL` binding. Sender: `hr@megacorp.lol`. |
+| Email | Switched off for now. When on: Cloudflare Email Sending via the `EMAIL` binding, sender `hr@megacorp.lol`. |
 | Frontend | Vanilla HTML/CSS/JS (no build step). |
 | Language | TypeScript everywhere. |
 
@@ -134,7 +136,7 @@ The full mechanic catalog lives at [`/handbook.html`](https://quarterly-ascensio
 
 ## 🌿 Branches
 
-`main` is the only branch: the public-playable game. The 8-hour-workday format: 60 ticks × 8 min, 5 managers/tick, self-serve "first claim opens a 30-min lobby" auto-start, password-based coaching, 5 emails per coach.
+`main` is the only branch: the public-playable game. The 8-hour-workday format: 60 ticks × 8 min, 5 managers/tick, self-serve "first claim opens a 30-min lobby" auto-start, password-based coaching.
 
 Earlier variants (a 25-minute in-room live show run at the SDF retreat in May 2026, and the original 4-hour prototype) are no longer published.
 

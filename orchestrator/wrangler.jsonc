@@ -46,9 +46,13 @@
     ]
   },
 
-  "send_email": [
-    { "name": "EMAIL" }
-  ],
+  // Email is switched off for now: no binding means the game neither
+  // collects nor sends email. To switch it back on, restore this block
+  // (sender domain must be onboarded on the same account) and the email
+  // field on the claim form in display/public/agent.html.
+  // "send_email": [
+  //   { "name": "EMAIL" }
+  // ],
 
   "migrations": [
     {
