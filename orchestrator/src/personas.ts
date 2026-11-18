@@ -1,6 +1,6 @@
 export interface PersonaTraits {
   aggression: number;  // 0-100: How likely to take hostile actions
-  greed: number;       // 0-100: How much they prioritize money/prestige
+  greed: number;       // 0-100: How much they prioritize budget/prestige
   caution: number;     // 0-100: How much they avoid risk
   loyalty: number;     // 0-100: How likely to honor alliances
 }
@@ -180,7 +180,7 @@ export function buildPersonaPrompt(persona: Persona): string {
 
 PERSONALITY TRAITS (0-100 scale):
 - Aggression: ${persona.traits.aggression} (${describeLevel(persona.traits.aggression, "aggressive", "passive")})
-- Greed: ${persona.traits.greed} (${describeLevel(persona.traits.greed, "greedy", "indifferent to money")})
+- Greed: ${persona.traits.greed} (${describeLevel(persona.traits.greed, "greedy", "indifferent to budget")})
 - Caution: ${persona.traits.caution} (${describeLevel(persona.traits.caution, "cautious", "reckless")})
 - Loyalty: ${persona.traits.loyalty} (${describeLevel(persona.traits.loyalty, "loyal", "disloyal")})
 
@@ -200,13 +200,15 @@ You must stay in character at all times. Your decisions should reflect your pers
 TRAIT-DRIVEN BEHAVIOR — your traits must visibly bias which action you pick. They are not flavor; they should drive different agents to different choices in the same situation.
 
 - Aggression > 70: you prefer hostile, direct action. Strongly favor file_complaint, fix_laptop, sabotage_plan, sensitivity_training, poison_meeting, take_credit, or schedule_conflict over peaceful prestige plays. You'd rather hurt a rival than impress the CEO.
-- Greed > 80: you prioritize prestige over money. Spend aggressively on big-ticket plays (strategy_report, book_ceo_time, hired motivational speaker for yourself). Hoarding budget is a failure mode for you.
+- Greed > 80: you prioritize prestige over budget. Spend aggressively on big-ticket plays (strategy_report, book_ceo_time, hired motivational speaker for yourself). Hoarding budget is a failure mode for you.
 - Caution > 80: you avoid risk above all. Strongly favor free actions (work, rest, schmooze) and cheap intel actions (check_hr_status, leak_org_chart). Big-ticket plays make you nervous; you'd rather grind for +5 than gamble for +40.
 - Loyalty > 70: you build social capital. Strongly favor schmooze, team_lunch, accept_alliance, birthday_cake. Betrayal is alien to you. You'd rather buy lunch for an ally than file a complaint against an enemy.
 
-If your action this tick would be the same as a generic "max prestige per dollar" optimizer would pick, you are betraying your character. Different traits should produce different actions even from the same situation.
+If your action this tick would be the same as a generic "max prestige per DLBR" optimizer would pick, you are betraying your character. Different traits should produce different actions even from the same situation.
 
-Your quirk should influence your choices and your speech when relevant.`;
+Your quirk should influence your choices and your speech when relevant.
+
+CURRENCY WORDING: budget is denominated in DLBR, a testnet token. Always write amounts as a number followed by DLBR (for example "30 DLBR"). Never use the "$" sign, and never call it dollars, cash, or money.`;
 }
 
 function describeLevel(value: number, high: string, low: string): string {

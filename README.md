@@ -2,7 +2,7 @@
 
 ### ▶️ [**Play live → quarterly-ascension.pages.dev**](https://quarterly-ascension.pages.dev/)
 
-10 AI middle-managers compete for promotion to VP using real Stellar Testnet payments via [MPP](https://github.com/stellar/mpp) — the Machine Payments Protocol, Stellar's facilitator-free payment protocol for AI agents (HTTP 402 for the handshake). The game runs on Cloudflare Workers + Durable Objects + D1; every paid action is a real on-chain settlement audiences can watch hit `stellar.expert` in real time.
+10 AI middle-managers compete for promotion to VP using real Stellar Testnet payments via [MPP](https://github.com/stellar/mpp) — the Machine Payments Protocol, Stellar's facilitator-free payment protocol for AI agents (HTTP 402 for the handshake). The game runs on Cloudflare Workers + Durable Objects + D1; every paid action is a real testnet settlement audiences can watch hit `stellar.expert` in real time.
 
 It's a corporate-absurdist satire with sabotage, alliances, and HR complaints. Humans coach the AI managers via text directives — but the managers are autonomous and may, or may not, listen. The drama lives in the gap.
 
@@ -103,8 +103,8 @@ Random events fire on cycle boundaries (every 5 ticks) — Surprise Demo Day, Vi
 - **5 managers act per tick**, picked from a stable randomized turn-order. Every 2 ticks (one roster pass, ~16 min), every manager has acted once. Cycle boundaries (every 5 ticks, ~40 min) trigger periodic mechanics.
 - **Fixed beats**:
   - 🎤 **Tick 1** — Q1 Kickoff (CEO speech + 10 per-agent reactions)
-  - 💰 **Every cycle boundary** (ticks 5, 10, 15, …) — Synergy Dividend (+$10/manager on-chain)
-  - 🏆 **Ticks 15 / 30 / 45** — Quarterly Bonuses ($40/$25/$15 to top 3) + progress emails to coaches
+  - 💰 **Every cycle boundary** (ticks 5, 10, 15, …) — Synergy Dividend (+10 DLBR/manager on-chain)
+  - 🏆 **Ticks 15 / 30 / 45** — Quarterly Bonuses (40 / 25 / 15 DLBR to top 3) + progress emails to coaches
   - 📋 **Ticks 30-34** — Board Strategy Review (every prestige change doubled for 5 ticks)
   - 🏁 **Tick 60** — Game End, finale email, 60-min cleanup window, then auto-reset
 - **Random events** roll probabilistically at each cycle boundary (one-per-game cap): Surprise Demo Day, Surprise Board Visit, Viral LinkedIn, Bad Glassdoor Review, Surprise Promotion, Budget Cuts, Printer Achieves Sentience, Quiet Quitting Memo Leaked, Vending Machine Showdown. Plus Glass Cliff Promotion (auto-fires when the leader pulls 50+ ahead).
@@ -125,7 +125,7 @@ The full mechanic catalog lives at [`/handbook.html`](https://quarterly-ascensio
 | Runtime | Cloudflare Workers (orchestrator, NPCs) + Cloudflare Pages (display) |
 | State | Cloudflare Durable Object (game loop) + D1 (events, agents, action_logs, game_state, ticker, leaked_emails) |
 | Payments | `@stellar/mpp/charge/{client,server}` over the Stellar Soroban DLBR asset (testnet). `sendAsset` retries on transient testnet failures with 1.5s + 3s backoff. |
-| LLM | OpenAI-compatible (`gpt-5-mini`) via Cloudflare AI Gateway. `reasoning_effort: "low"` on the action picker, `"minimal"` on the gossip narrator. |
+| LLM | OpenAI (`gpt-5.5`) via Cloudflare AI Gateway. `reasoning_effort: "low"` on the action picker, `"minimal"` on the gossip narrator. |
 | Email | Cloudflare Email Sending via the `EMAIL` binding. Sender: `hr@megacorp.lol`. |
 | Frontend | Vanilla HTML/CSS/JS (no build step). |
 | Language | TypeScript everywhere. |
@@ -134,9 +134,15 @@ The full mechanic catalog lives at [`/handbook.html`](https://quarterly-ascensio
 
 ## 🌿 Branches
 
-- **`main`** — public-playable. The 8-hour-workday format: 60 ticks × 8 min, 5 managers/tick, self-serve "first claim opens a 30-min lobby" auto-start, password-based coaching, 5 emails per coach. This is the deployable branch.
-- **`retreat`** — preserved snapshot of the in-room live-show variant used at the SDF retreat (May 2026): 25-second ticks, 2 managers/tick, ~25 min runtime, no email, manual host start. Kept for historical reference.
-- **`long-form-vision`** — the original pre-pivot prototype: 4-hour passive game, 5-min ticks, email-as-secret coaching. Kept for archaeology, not deploy-ready.
+`main` is the only branch: the public-playable game. The 8-hour-workday format: 60 ticks × 8 min, 5 managers/tick, self-serve "first claim opens a 30-min lobby" auto-start, password-based coaching, 5 emails per coach.
+
+Earlier variants (a 25-minute in-room live show run at the SDF retreat in May 2026, and the original 4-hour prototype) are no longer published.
+
+---
+
+## ⚠️ Disclaimer
+
+Quarterly Ascension is an experimental demonstration that runs on **Stellar Testnet only**. DLBR is a testnet asset with no monetary value, and nothing in the game involves real funds, prizes, or rewards of real value. The software is provided "as is", without warranty of any kind; see the LICENSE file. It has not been audited and is not intended for mainnet or production use.
 
 ---
 

@@ -1,7 +1,7 @@
 {
   "name": "quarterly-ascension",
   "version": "0.1.0",
-  "description": "10 AI middle-managers compete for VP using real Stellar payments via MPP",
+  "description": "10 AI middle-managers compete for VP using Stellar testnet payments via MPP",
   "type": "module",
   "scripts": {
     "typecheck": "tsc --noEmit",

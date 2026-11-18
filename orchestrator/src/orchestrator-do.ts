@@ -307,7 +307,7 @@ export class GameOrchestrator {
     // pending alarm, and resets the DO's in-memory random-events state.
     //
     // Preserves: agents.claimed_by/claimed_by_name (so humans stay attached
-    // across runs), agents on-chain DLBR balances (those are real testnet
+    // across runs), agents on-chain DLBR balances (those are testnet
     // assets — left alone unless ?wipe_balances=true is added later).
     //
     // Refuses to run while status === "running"; halt first.
@@ -1047,8 +1047,8 @@ export class GameOrchestrator {
       }
       if (balance < 30) {
         directives.push({
-          text: `Refill cash first — Expense Report (+$40, safe) then chain into Strategy Report → Book CEO ($70 total → +75 prestige).`,
-          reason: `Only $${balance.toFixed(0)} on hand; combo paths need cash`,
+          text: `Refill budget first — Expense Report (+40 DLBR, safe) then chain into Strategy Report → Book CEO (70 DLBR total → +75 prestige).`,
+          reason: `Only ${balance.toFixed(0)} DLBR on hand; combo paths need budget`,
           priority: 82,
         });
       }
@@ -1061,7 +1061,7 @@ export class GameOrchestrator {
       }
       if (rank >= 4 && leader && leader.prestige - agent.prestige > 30 && !pulseSurveyUsed && balance >= 25) {
         directives.push({
-          text: `You have an Anonymous Pulse Survey unused — costs $25, drops ${leader.name} by 50 prestige. One-shot, perfect for now.`,
+          text: `You have an Anonymous Pulse Survey unused — costs 25 DLBR, drops ${leader.name} by 50 prestige. One-shot, perfect for now.`,
           reason: `Rank ${rank}, ${leader.prestige - agent.prestige} behind leader`,
           priority: 88,
         });
@@ -1075,7 +1075,7 @@ export class GameOrchestrator {
       }
       if (rank >= 2 && rank <= 5 && gapToLeader > 0 && balance >= 40 && !hasHrAudit) {
         directives.push({
-          text: `Combo on ${leader.name}: Sabotage Plan this turn ($40), then Take Credit next turn for a guaranteed +30 to you + -10 to them. 40-point swing.`,
+          text: `Combo on ${leader.name}: Sabotage Plan this turn (40 DLBR), then Take Credit next turn for a guaranteed +30 to you + -10 to them. 40-point swing.`,
           reason: `Rank ${rank} — striking distance of the leader (${gapToLeader} prestige gap)`,
           priority: 75,
         });
@@ -1302,8 +1302,8 @@ export class GameOrchestrator {
         console.log("[alarm] post-game cleanup window elapsed; resetting for next game.");
         try {
           await this.performReset({
-            // Normalize on-chain DLBR back to $200/agent before the next game.
-            // Without this, post-game-1 balances ($10-$80 after a full game)
+            // Normalize on-chain DLBR back to 200 DLBR/agent before the next game.
+            // Without this, post-game-1 balances (10-80 DLBR after a full game)
             // carry into game 2 and break the economy from tick 1.
             normalizeBalances: true,
             target: 200,

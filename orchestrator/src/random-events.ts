@@ -5,8 +5,8 @@
 //   - Glass Cliff Promotion (auto-fires when leader is 50+ ahead of #2;
 //     once per victim per game)
 // Fixed-cycle:
-//   - Quarterly Bonus (cycle 4 = tick 40: $50/$30/$20 to top 3;
-//                     cycle 8 = tick 80: $100/$60/$40 to top 3)
+//   - Quarterly Bonus (cycle 4 = tick 40: 50/30/20 DLBR to top 3;
+//                     cycle 8 = tick 80: 100/60/40 DLBR to top 3)
 // Per-cycle probabilistic (skipped if same event fired last cycle):
 //   - Surprise Board Visit (10%)        — top 3 reshuffle, 3 nested children
 //   - Bad Glassdoor Review (12%)        — every Problematic agent takes -10
@@ -160,7 +160,7 @@ export async function processRandomEvents(
   //   Q1 wrap   (tick 15, ~5 min in)
   //   Halftime  (tick 30, ~12 min in — peak audience attention)
   //   Q3 wrap   (tick 45, late game; winners can still flex it)
-  // Smaller per-bonus amounts ($40/$25/$15 vs the old $100/$60/$40 finale)
+  // Smaller per-bonus amounts (40 / 25 / 15 DLBR vs the old 100/60/40 DLBR finale)
   // so the cumulative payout stays comparable but the cadence gives the
   // audience three "winners are paid" beats instead of one ceremonial close.
   if (tick === 15) {
@@ -307,7 +307,7 @@ const BONUS_FLAVORS = [
   "sent the most calendar invites with no agenda — 'leadership presence'",
   "voted 'most likely to schedule a pre-meeting' by anonymous peers",
   "still has not used their standing desk",
-  "expense-reported a $4 coffee as 'team-building research'",
+  "expense-reported a 4 DLBR coffee as 'team-building research'",
   "longest LinkedIn 'About' section in the org",
   "highest rate of follow-up-to-the-follow-up emails",
   "achieved zero deliverables but maximum visibility",
@@ -347,7 +347,7 @@ async function quarterlyBonus(
         timestamp: new Date(),
         type: "payment",
         agentId: a.id,
-        description: `${a.name} received $${amount} ${label.toLowerCase()} bonus — for "${flavor}"`,
+        description: `${a.name} received ${amount} DLBR ${label.toLowerCase()} bonus — for "${flavor}"`,
         txHash,
         parentEventId: parentId,
       });
@@ -359,7 +359,7 @@ async function quarterlyBonus(
         timestamp: new Date(),
         type: "random_event",
         agentId: a.id,
-        description: `${a.name}: $${amount} bonus pending — HR is "processing" (failed payout)`,
+        description: `${a.name}: ${amount} DLBR bonus pending — HR is "processing" (failed payout)`,
         parentEventId: parentId,
       });
     }
@@ -629,7 +629,7 @@ async function budgetCuts(deps: EventDeps, tick: number): Promise<GameEvent[]> {
         timestamp: new Date(),
         type: "payment",
         agentId: victim.id,
-        description: `${victim.name}: -$${burn} sent back to Finance (10% of $${balance.toFixed(0)})`,
+        description: `${victim.name}: -${burn} DLBR sent back to Finance (10% of ${balance.toFixed(0)} DLBR)`,
         txHash,
         parentEventId: parentId,
       });

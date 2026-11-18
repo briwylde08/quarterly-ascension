@@ -62,9 +62,9 @@ export async function generateGossip(
 // hostile_takeover, boomerang, cry_in_stairwell, join_meeting_silently.
 const ALL_ACTIONS = [
   // === FREE (12) ===
-  { type: "work", description: "Do actual work (+5 prestige, +$2 base salary, free). Boring. The audience does not enjoy watching this.", cost: 0 },
-  { type: "expense_report", description: "File an expense report (+$40 reimbursed; 10% chance Finance flags it for -5 prestige). Safe income path — when budgets get tight, this is the cleanest refill.", cost: 0 },
-  { type: "find_budget", description: "Snoop for unused budget in another department (free). 60% chance: HR transfers $30 to you. 40% chance: get caught — lose 10 prestige + Meeting Blocked for 1 cycle. Risky cash grab; bigger upside than expense_report but real downside.", cost: 0 },
+  { type: "work", description: "Do actual work (+5 prestige, +2 DLBR base salary, free). Boring. The audience does not enjoy watching this.", cost: 0 },
+  { type: "expense_report", description: "File an expense report (+40 DLBR reimbursed; 10% chance Finance flags it for -5 prestige). Safe income path — when budgets get tight, this is the cleanest refill.", cost: 0 },
+  { type: "find_budget", description: "Snoop for unused budget in another department (free). 60% chance: HR transfers 30 DLBR to you. 40% chance: get caught — lose 10 prestige + Meeting Blocked for 1 cycle. Risky budget grab; bigger upside than expense_report but real downside.", cost: 0 },
   { type: "shotgun_red_bull", description: "Shotgun a Red Bull in the breakroom (free). Removes Hit the Wall instantly. Mildly unprofessional but effective. The kitchen smells like sugar for an hour. The free way to recover.", cost: 0 },
   { type: "take_credit", description: "Attempt to claim credit for someone's work (40% base success: +30 prestige, 60% fail: -20 prestige — slightly EV-negative without setup). Auto-succeeds against a Documented target (Sabotage Plan setup). Bumped to 65% against Questionable Judgment (Spread Rumor setup). Pair with a setup action; raw is a bad bet.", cost: 0, requiresTarget: true },
 
@@ -81,25 +81,25 @@ const ALL_ACTIONS = [
   // Passive accumulation — capped at 3 uses per game; 3rd use grants Mysterious Influence.
   { type: "join_meeting_silently", description: "Join a meeting and say nothing (free, +4 prestige). Do this 3 times in one game and you'll get a MYSTERIOUS INFLUENCE public tag — people start crediting you with things you didn't do.", cost: 0 },
 
-  // === CHEAP PAID ($5 – $10) ===
-  { type: "coffee_chat", description: "Casual coffee with target ($5; non-self). Both gain +3 prestige. No alliance proposed. Low-stakes networking.", cost: 5, requiresTarget: true },
+  // === CHEAP PAID (5–10 DLBR) ===
+  { type: "coffee_chat", description: "Casual coffee with target (5 DLBR; non-self). Both gain +3 prestige. No alliance proposed. Low-stakes networking.", cost: 5, requiresTarget: true },
   { type: "buy_coffee", description: "Buy coffee (removes Hit the Wall).", cost: 5 },
-  { type: "spread_rumor", description: "Spread a rumor about target ($10). Target loses 5 prestige and gets QUESTIONABLE JUDGMENT public tag for 2 cycles. Cheap social warfare with real teeth.", cost: 10, requiresTarget: true },
-  { type: "move_meeting_early", description: "Move target's meeting to 7:30am ($10). Target -5 prestige + Hit the Wall (-3/cycle for 3 cycles = -9 total damage, plus they'll need to spend a turn on Shotgun a Red Bull or $5 on Buy Coffee — that's stolen value on top of the prestige hit). Underrated cheap attack.", cost: 10, requiresTarget: true },
+  { type: "spread_rumor", description: "Spread a rumor about target (10 DLBR). Target loses 5 prestige and gets QUESTIONABLE JUDGMENT public tag for 2 cycles. Cheap social warfare with real teeth.", cost: 10, requiresTarget: true },
+  { type: "move_meeting_early", description: "Move target's meeting to 7:30am (10 DLBR). Target -5 prestige + Hit the Wall (-3/cycle for 3 cycles = -9 total damage, plus they'll need to spend a turn on Shotgun a Red Bull or 5 DLBR on Buy Coffee — that's stolen value on top of the prestige hit). Underrated cheap attack.", cost: 10, requiresTarget: true },
 
-  // === MID PAID ($20 – $25) ===
-  { type: "invoke_handbook", description: "Cite the Employee Handbook against target ($30). Mechanically identical to sensitivity_training — you +5 'managerial accountability' prestige; target -20 + Problematic 4 cycles (-10 if well-allied). The difference is FLAVOR: handbook cites are precise, paper-trail, surgical. Sensitivity training is a public corrective. Pick whichever fits your character. Shares cooldown with sensitivity_training on the same target.", cost: 30, requiresTarget: true },
-  { type: "schedule_pre_meeting", description: "Schedule a pre-meeting for the meeting ($20). Target loses 15 prestige (highest single-shot damage at this cost) + gains MEETING BLOCKED for 2 cycles, blocking their Book CEO Time play. Loyal managers (loyalty > 70) think pre-meetings are normal and are immune — but most managers aren't loyal.", cost: 20, requiresTarget: true },
-  { type: "file_complaint", description: "File HR complaint against target ($22). You gain +5 prestige — the ONLY hostile action that pays you instead of costing you. Target gets UNDER INVESTIGATION 1 cycle, locked from retaliating against you specifically. Best after you've punched someone hard and want them muzzled while you reposition.", cost: 22, requiresTarget: true },
+  // === MID PAID (20–25 DLBR) ===
+  { type: "invoke_handbook", description: "Cite the Employee Handbook against target (30 DLBR). Mechanically identical to sensitivity_training — you +5 'managerial accountability' prestige; target -20 + Problematic 4 cycles (-10 if well-allied). The difference is FLAVOR: handbook cites are precise, paper-trail, surgical. Sensitivity training is a public corrective. Pick whichever fits your character. Shares cooldown with sensitivity_training on the same target.", cost: 30, requiresTarget: true },
+  { type: "schedule_pre_meeting", description: "Schedule a pre-meeting for the meeting (20 DLBR). Target loses 15 prestige (highest single-shot damage at this cost) + gains MEETING BLOCKED for 2 cycles, blocking their Book CEO Time play. Loyal managers (loyalty > 70) think pre-meetings are normal and are immune — but most managers aren't loyal.", cost: 20, requiresTarget: true },
+  { type: "file_complaint", description: "File HR complaint against target (22 DLBR). You gain +5 prestige — the ONLY hostile action that pays you instead of costing you. Target gets UNDER INVESTIGATION 1 cycle, locked from retaliating against you specifically. Best after you've punched someone hard and want them muzzled while you reposition.", cost: 22, requiresTarget: true },
   { type: "strategy_report", description: "Get consultant report (+35 prestige, gives Has Deliverable for a future +40 CEO meeting)", cost: 30 },
-  { type: "slack_bomb", description: "Drop a passive-aggressive bomb in #general aimed at one named target ($15). Picked target loses 8 prestige + gains Questionable Judgment for 2 cycles. A bystander (random other manager) catches splash for -4 prestige (no tag) — sometimes that's a rival, sometimes that's an ally. You gain 8 prestige (eyeballs are eyeballs). 15% chance HR flags it → you also lose 5 prestige and gain Problematic 1 cycle. Cheaper than Spread Rumor's per-damage cost.", cost: 15, requiresTarget: true },
-  { type: "office_party", description: "Throw an office party ($25). +15 prestige to you, +5 to every rival. NET: +10 relative-prestige over the whole field — competitive with sensitivity_training (-20 on one target for $30) when you want to widen your lead over EVERYONE instead of just one rival. Audience-friendly play that becomes the talk of the dashboard.", cost: 25 },
-  { type: "anonymous_pulse_survey", description: "Launch an 'anonymous' morale survey somehow entirely about the leader ($25). Target loses 50 prestige. Available only when YOU are rank ≥ 4 AND target is rank #1. One shot per game.", cost: 25, requiresTarget: true },
+  { type: "slack_bomb", description: "Drop a passive-aggressive bomb in #general aimed at one named target (15 DLBR). Picked target loses 8 prestige + gains Questionable Judgment for 2 cycles. A bystander (random other manager) catches splash for -4 prestige (no tag) — sometimes that's a rival, sometimes that's an ally. You gain 8 prestige (eyeballs are eyeballs). 15% chance HR flags it → you also lose 5 prestige and gain Problematic 1 cycle. Cheaper than Spread Rumor's per-damage cost.", cost: 15, requiresTarget: true },
+  { type: "office_party", description: "Throw an office party (25 DLBR). +15 prestige to you, +5 to every rival. NET: +10 relative-prestige over the whole field — competitive with sensitivity_training (-20 on one target for 30 DLBR) when you want to widen your lead over EVERYONE instead of just one rival. Audience-friendly play that becomes the talk of the dashboard.", cost: 25 },
+  { type: "anonymous_pulse_survey", description: "Launch an 'anonymous' morale survey somehow entirely about the leader (25 DLBR). Target loses 50 prestige. Available only when YOU are rank ≥ 4 AND target is rank #1. One shot per game.", cost: 25, requiresTarget: true },
 
-  // === EXPENSIVE ($30 – $50) ===
+  // === EXPENSIVE (30–50 DLBR) ===
   { type: "sensitivity_training", description: "Send rival to sensitivity training (you +5 'managerial accountability' prestige; target -20 + Problematic for 4 ticks at -3/tick. Setup play — Bad Glassdoor Review hits Problematic targets for an extra -10.)", cost: 30, requiresTarget: true },
-  { type: "schedule_conflict", description: "Cancel target's pending CEO meeting ($30). Devastates anyone holding HAS DELIVERABLE — they lose the +40 payout AND get Meeting-Blocked 2 cycles. Best counter to a leader sitting on a Strategy Report. Use it BEFORE they cash in.", cost: 30, requiresTarget: true },
-  { type: "hostile_takeover", description: "Hostile takeover of target's cross-functional partnerships ($35). All their partners transfer to you; their list goes to zero. If target was WELL-ALLIED (3+ allies), they lose that protection AND you instantly gain it (hostile attacks against you dealt half damage). Best mid-to-late game on a leader with multiple alliances.", cost: 35, requiresTarget: true },
+  { type: "schedule_conflict", description: "Cancel target's pending CEO meeting (30 DLBR). Devastates anyone holding HAS DELIVERABLE — they lose the +40 payout AND get Meeting-Blocked 2 cycles. Best counter to a leader sitting on a Strategy Report. Use it BEFORE they cash in.", cost: 30, requiresTarget: true },
+  { type: "hostile_takeover", description: "Hostile takeover of target's cross-functional partnerships (35 DLBR). All their partners transfer to you; their list goes to zero. If target was WELL-ALLIED (3+ allies), they lose that protection AND you instantly gain it (hostile attacks against you dealt half damage). Best mid-to-late game on a leader with multiple alliances.", cost: 35, requiresTarget: true },
   { type: "sabotage_plan", description: "Commission a dossier on target (-10 prestige + Documented for 2 cycles, meaning the next Take Credit against them is a guaranteed +30 prestige to the attacker). If you chain it yourself: 40-prestige swing. If someone ELSE cashes in the chain: you still earn a +5 finder's fee for setting it up — so the dossier always pays off. The biggest setup play in the game.", cost: 40, requiresTarget: true },
   { type: "book_ceo_time", description: "Meet with CEO (+40 prestige with Has Deliverable, -20 without; -10 if Meeting-Blocked)", cost: 40 },
 ];
@@ -221,7 +221,7 @@ function buildContextPrompt(ctx: DecisionContext): string {
     if (action.type === "reject_alliance" && !agent.pendingAlliance) return false;
     if (action.type === "break_alliance" && agent.allies.length === 0) return false;
     // Hail Mary only surfaces when the agent is truly cornered: low prestige
-    // AND low cash AND hasn't already burned the one-shot this game.
+    // AND low budget AND hasn't already burned the one-shot this game.
     if (action.type === "hail_mary_idea" && (agent.prestige > 10 || balance >= 5 || hailMaryUsed)) return false;
     // Retreat-mode comeback gates.
     // Boomerang: prestige < 30, one-shot, AND tick > 10 (= cycle 3+). The
@@ -414,7 +414,7 @@ CURRENT SITUATION (Tick ${currentTick}):
 
 YOUR STATUS:
 - Prestige: ${agent.prestige} (Rank #${rank} of ${allAgents.length})
-- Budget: $${balance.toFixed(2)} DLBR
+- Budget: ${balance.toFixed(2)} DLBR
 - Status Effects: ${statusDescriptions.length > 0 ? statusDescriptions.join(", ") : "None"}
 - Allies: ${agent.allies.length > 0 ? agent.allies.map((id) => allAgents.find((a) => a.id === id)?.name).join(", ") : "None"}
 ${agent.pendingAlliance ? `- PENDING ALLIANCE: ${allAgents.find((a) => a.id === agent.pendingAlliance)?.name} wants to ally with you` : ""}
@@ -453,7 +453,7 @@ YOUR RECENT ACTIONS:
 ${recentActions.slice(-5).map((a) => `- Tick ${a.tick}: ${a.action_type} → ${a.outcome}`).join("\n") || "None yet"}
 ${lockInNote}${leakSection}
 AVAILABLE ACTIONS:
-${availableActions.map((a) => `- ${a.type}${a.cost > 0 ? ` ($${a.cost})` : " (free)"}${a.requiresTarget ? " [requires target]" : ""}: ${a.description}`).join("\n")}
+${availableActions.map((a) => `- ${a.type}${a.cost > 0 ? ` (${a.cost} DLBR)` : " (free)"}${a.requiresTarget ? " [requires target]" : ""}: ${a.description}`).join("\n")}
 
 INSTRUCTIONS:
 Choose ONE action based on your personality. Consider:
