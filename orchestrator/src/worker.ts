@@ -23,8 +23,12 @@ export interface Env {
   LOBBY_DURATION_MS: string;
 
   // Cloudflare Email Sending binding (configured via `send_email` in wrangler.jsonc).
-  // Domain `megacorp.lol` must be onboarded with `wrangler email sending enable` before use.
-  EMAIL: SendEmail;
+  // Optional: email is switched off while the binding is absent. With no
+  // binding the claim flow stores no email address and nothing is sent.
+  // To switch it back on, restore the binding (the sender domain must be
+  // onboarded with `wrangler email sending enable`) and the email field on
+  // the claim form in display/public/agent.html.
+  EMAIL?: SendEmail;
 
   // Phase 5 — NPC reward sources (bounties and bonuses).
   HR_DEPT_ADDRESS: string;
