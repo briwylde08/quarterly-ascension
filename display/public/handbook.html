@@ -297,8 +297,8 @@
           Each manager picks one action per turn, driven by their personality
           (aggression, greed, caution, loyalty), their current state, and any
           standing life-coach directive. Outcomes change <b>prestige</b> (the
-          leaderboard score) and <b>DLBR balance</b> (testnet currency that
-          buys NPC services on-chain).
+          leaderboard score) and <b>DLBR balance</b> (a Stellar Testnet asset with no monetary
+          value; it buys NPC services on-chain).
         </p>
         <p>
           The game runs <b>60 ticks</b> over <b>about 8 hours</b> — one full
@@ -349,10 +349,10 @@
         <div style="background: var(--info-bg, #f3e8d8); border-left: 3px solid #d4a02f; padding: 14px 18px; margin-bottom: 18px; border-radius: 4px;">
           <div style="font-size: 11px; text-transform: uppercase; letter-spacing: 1.5px; color: #8a6d2c; font-weight: 700; margin-bottom: 8px;">🎯 The Big Combos</div>
           <div style="font-size: 13px; line-height: 1.55;">
-            <b>Sabotage Dossier → Take Credit</b> (within 2 cycles): $40 + free → +30 to you, −10 to them. <b>40-point leaderboard swing</b> — the biggest single combo in the game. (If someone else cashes in the chain first, you still get a <b>+5 finder's fee</b> for setting it up.)<br>
-            <b>Spread a Rumor → Take Credit</b>: $10 + free → 65% chance of +30 (vs the usual 50%). Cheaper alternative when you don't have $40.<br>
+            <b>Sabotage Dossier → Take Credit</b> (within 2 cycles): 40 DLBR + free → +30 to you, −10 to them. <b>40-point leaderboard swing</b> — the biggest single combo in the game. (If someone else cashes in the chain first, you still get a <b>+5 finder's fee</b> for setting it up.)<br>
+            <b>Spread a Rumor → Take Credit</b>: 10 DLBR + free → 65% chance of +30 (vs the usual 50%). Cheaper alternative when you don't have 40 DLBR.<br>
             <b>Invoke Handbook or Sensitivity Training → wait for Bad Glassdoor Review</b>: every Problematic manager takes an extra −10. Set up the chain, hope the random event fires.<br>
-            <b>Move Meeting Early → enemy spends a turn recovering</b>: $10 to steal a turn AND deal damage. Underrated.
+            <b>Move Meeting Early → enemy spends a turn recovering</b>: 10 DLBR to steal a turn AND deal damage. Underrated.
           </div>
         </div>
       </div>
@@ -372,7 +372,7 @@
               <td class="action">Work</td>
               <td class="cost free">free</td>
               <td class="target">—</td>
-              <td>Do actual work. +5 prestige and +$2 base salary from HR. Reliable but boring.</td>
+              <td>Do actual work. +5 prestige and +2 DLBR base salary from HR. Reliable but boring.</td>
             </tr>
             <tr>
               <td class="action">Join Meeting Silently</td>
@@ -382,41 +382,41 @@
             </tr>
             <tr>
               <td class="action">Coffee Chat</td>
-              <td class="cost">$5</td>
+              <td class="cost">5 DLBR</td>
               <td class="target yes">yes</td>
               <td>Casual coffee with a colleague — talked about something arbitrary. Both managers gain +3 prestige. No partnership proposed.</td>
             </tr>
             <tr>
               <td class="action">Get Consultant Report</td>
-              <td class="cost">$30</td>
+              <td class="cost">30 DLBR</td>
               <td class="target">—</td>
               <td>+35 prestige and you gain Has Deliverable (your next CEO meeting awards +40 instead of −20).</td>
             </tr>
             <tr>
               <td class="action">Throw an Office Party</td>
-              <td class="cost">$25</td>
+              <td class="cost">25 DLBR</td>
               <td class="target">—</td>
               <td>You gain +15 prestige. Every other manager gains +5. A generous play that visibly helps your rivals.</td>
             </tr>
             <tr>
               <td class="action">Book CEO Time</td>
-              <td class="cost expensive">$40</td>
+              <td class="cost expensive">40 DLBR</td>
               <td class="target">—</td>
               <td>Meet with the CEO. +40 with Has Deliverable, −20 without, −10 if Meeting Blocked. The biggest swing in the game.</td>
             </tr>
 
-            <tr class="group-header"><td colspan="4">💰 Earn cash</td></tr>
+            <tr class="group-header"><td colspan="4">💰 Earn DLBR</td></tr>
             <tr>
               <td class="action">Expense Report</td>
               <td class="cost free">free</td>
               <td class="target">—</td>
-              <td>File for reimbursement. <b>+$40 from HR</b>; 10% chance Finance flags it (−5 prestige). The safe budget-refill when cash is tight.</td>
+              <td>File for reimbursement. <b>+40 DLBR from HR</b>; 10% chance Finance flags it (−5 prestige). The safe budget-refill when DLBR is tight.</td>
             </tr>
             <tr>
               <td class="action">Find Budget</td>
               <td class="cost free">free</td>
               <td class="target">—</td>
-              <td>Snoop for unused budget in another department. <b>60%</b>: HR transfers <b>+$30</b> to you. <b>40%</b>: get caught — −10 prestige + Meeting Blocked for 1 cycle. Higher upside than Expense Report but real downside; the risky cash grab.</td>
+              <td>Snoop for unused budget in another department. <b>60%</b>: HR transfers <b>+30 DLBR</b> to you. <b>40%</b>: get caught — −10 prestige + Meeting Blocked for 1 cycle. Higher upside than Expense Report but real downside; the risky budget grab.</td>
             </tr>
 
             <tr class="group-header"><td colspan="4">😩 Recover from debuffs</td></tr>
@@ -428,7 +428,7 @@
             </tr>
             <tr>
               <td class="action">Buy Coffee</td>
-              <td class="cost">$5</td>
+              <td class="cost">5 DLBR</td>
               <td class="target">—</td>
               <td>Lifts Hit the Wall. The paid alternative to Shotgun a Red Bull — same effect minus the office applause potential.</td>
             </tr>
@@ -474,43 +474,43 @@
             </tr>
             <tr>
               <td class="action">Spread a Rumor</td>
-              <td class="cost">$10</td>
+              <td class="cost">10 DLBR</td>
               <td class="target yes">yes</td>
               <td>Plant a rumor about target via HR. Target loses 5 prestige and gains Questionable Judgment for 2 cycles. Cheap social warfare; sets up Take Credit at 65%.</td>
             </tr>
             <tr>
               <td class="action">Invoke the Employee Handbook</td>
-              <td class="cost">$30</td>
+              <td class="cost">30 DLBR</td>
               <td class="target yes">yes</td>
               <td>Cite a section of the handbook against target. You gain +5 "managerial accountability" prestige. Target loses 20 prestige and gains Problematic for 4 cycles. <em>Halved against well-allied targets.</em> Mechanically identical to Sensitivity Training — same cost, same effects, shared cooldown. The difference is flavor: handbook citations are precise and paper-trail; sensitivity training is public corrective. Pick whichever fits your character.</td>
             </tr>
             <tr>
               <td class="action">Drop a Slack Bomb</td>
-              <td class="cost">$15</td>
+              <td class="cost">15 DLBR</td>
               <td class="target yes">yes</td>
               <td>Post a passive-aggressive thread in #general aimed at one named target. Picked target: <b>−8 prestige + Questionable Judgment</b> for 2 cycles. A random bystander catches splash for <b>−4 prestige</b> (no tag) — sometimes a rival, sometimes an ally. You gain <b>+8 prestige</b>. 15% chance HR flags it → you also lose 5 and gain Problematic for 1 cycle.</td>
             </tr>
             <tr>
               <td class="action">File HR Complaint</td>
-              <td class="cost">$22</td>
+              <td class="cost">22 DLBR</td>
               <td class="target yes">yes</td>
               <td>You gain +5 "diligence" prestige — the <b>only hostile action that pays you instead of costing you</b>. Target gains Under Investigation for 1 cycle, locked from retaliating against you specifically. Best after you've punched someone hard and want them muzzled while you reposition.</td>
             </tr>
             <tr>
               <td class="action">Send to Sensitivity Training</td>
-              <td class="cost">$30</td>
+              <td class="cost">30 DLBR</td>
               <td class="target yes">yes</td>
               <td>You gain +5 "managerial accountability" prestige. Target loses 20 prestige and gains Problematic for 4 cycles (−3/cycle decay). <em>Halved against well-allied targets.</em> Setup play — Bad Glassdoor Review hits every Problematic manager for an extra −10.</td>
             </tr>
             <tr>
               <td class="action">Hostile Takeover</td>
-              <td class="cost">$35</td>
+              <td class="cost">35 DLBR</td>
               <td class="target yes">yes</td>
               <td>Mount a hostile takeover of target's cross-functional partnerships. Their existing partners become yours; their partner list goes to zero. Strips the Well-Allied tag — sets up cleaner attacks afterward.</td>
             </tr>
             <tr>
               <td class="action">Build a Sabotage Dossier</td>
-              <td class="cost expensive">$40</td>
+              <td class="cost expensive">40 DLBR</td>
               <td class="target yes">yes</td>
               <td>Commission a Consultant dossier. Target loses 10 prestige and gains Documented for 2 cycles (next Take Credit against them auto-succeeds for +30). Classic setup play. If <b>someone else</b> chains your dossier, you still earn a <b>+5 finder's fee</b> — so the dossier always pays off, even when you don't get to cash in. <em>Halved against well-allied targets.</em></td>
             </tr>
@@ -518,19 +518,19 @@
             <tr class="group-header"><td colspan="4">📅 Disrupt a rival's calendar</td></tr>
             <tr>
               <td class="action">Move Meeting Early</td>
-              <td class="cost">$10</td>
+              <td class="cost">10 DLBR</td>
               <td class="target yes">yes</td>
-              <td>Reschedule target's meeting to 7:30am. Target loses 5 prestige and gains Hit the Wall (−3/cycle for 3 cycles, plus they'll need to spend a turn recovering). One of the highest damage-per-dollar attacks in the game.</td>
+              <td>Reschedule target's meeting to 7:30am. Target loses 5 prestige and gains Hit the Wall (−3/cycle for 3 cycles, plus they'll need to spend a turn recovering). One of the highest damage-per-DLBR attacks in the game.</td>
             </tr>
             <tr>
               <td class="action">Schedule a Pre-Meeting</td>
-              <td class="cost">$20</td>
+              <td class="cost">20 DLBR</td>
               <td class="target yes">yes</td>
               <td>Book a pre-meeting on target's calendar. Target loses 15 prestige and gains Meeting Blocked for 2 cycles. <em>Loyal managers (loyalty &gt; 70) are immune — they think it's normal.</em></td>
             </tr>
             <tr>
               <td class="action">Schedule Conflict</td>
-              <td class="cost">$30</td>
+              <td class="cost">30 DLBR</td>
               <td class="target yes">yes</td>
               <td>Cancel target's CEO meeting. Clears their Has Deliverable; gives them Meeting Blocked for 2 cycles. Use against a Deliverable holder — kills their +40 swing.</td>
             </tr>
@@ -538,7 +538,7 @@
             <tr class="group-header"><td colspan="4">🆘 Comeback / kingmaker plays</td></tr>
             <tr>
               <td class="action">Anonymous Pulse Survey</td>
-              <td class="cost">$25</td>
+              <td class="cost">25 DLBR</td>
               <td class="target yes">yes</td>
               <td>Launch an "anonymous" morale survey somehow entirely about the leader. Target loses 50 prestige. <em>Available only when you're rank ≥ 4 and target is rank #1. One use per game.</em> The bottom-half kingmaker.</td>
             </tr>
@@ -704,13 +704,13 @@
         <ul style="margin-left: 24px; margin-bottom: 12px;">
           <li><span class="key">Tick 1 (0:00)</span> — <b>Q1 Kickoff</b>. CEO morning all-hands speech with per-agent reactions flavored by personality. 10 nested events fire instantly.</li>
           <li><span class="key">Tick 5 (~30 min in)</span> — <b>Cycle 1 closer</b>. Guaranteed random event from the high-impact pool. Always lands.</li>
-          <li><span class="key">Every cycle boundary (ticks 5, 10, 15, …)</span> — <b>Synergy Dividend</b>. HR deposits <b>+$10 to every manager</b> in DLBR. Settles on-chain. The standing "thank you for showing up" payment — keeps the economy solvent across the full 8-hour run.</li>
-          <li><span class="key">Tick 15 (~2 hours in)</span> — <b>Q1 Wrap Bonus</b>. <b>3 random managers</b> receive $40 / $25 / $15 from HR with comedic justifications. Settled on-chain.</li>
+          <li><span class="key">Every cycle boundary (ticks 5, 10, 15, …)</span> — <b>Synergy Dividend</b>. HR deposits <b>+10 DLBR to every manager</b>. Settles on-chain. The standing "thank you for showing up" payment — keeps the economy solvent across the full 8-hour run.</li>
+          <li><span class="key">Tick 15 (~2 hours in)</span> — <b>Q1 Wrap Bonus</b>. <b>3 random managers</b> receive 40 / 25 / 15 DLBR from HR with comedic justifications. Settled on-chain.</li>
           <li><span class="key">Tick 15 (~2 hours in)</span> — <b>Progress email #1</b> lands in coaches' inboxes.</li>
-          <li><span class="key">Tick 30 (~4 hours in)</span> — <b>Halftime Bonus</b>. <b>3 random managers</b> receive $40 / $25 / $15 with fresh flavor lines.</li>
+          <li><span class="key">Tick 30 (~4 hours in)</span> — <b>Halftime Bonus</b>. <b>3 random managers</b> receive 40 / 25 / 15 DLBR with fresh flavor lines.</li>
           <li><span class="key">Tick 30 (~4 hours in)</span> — <b>📋 Board Strategy Review opens</b>. The full board is in the building for the next 5 ticks. <b>Every prestige change is doubled</b> during the window. Bold plays double their reward; cheap plays double their disappointment. Don't coast through this window.</li>
           <li><span class="key">Tick 35 (~4.5 hours in)</span> — <b>Board Strategy Review closes</b>. Stakes back to normal.</li>
-          <li><span class="key">Tick 45 (~6 hours in)</span> — <b>Q3 Wrap Bonus</b>. <b>3 random managers</b> receive $40 / $25 / $15 — winners can still spend the money.</li>
+          <li><span class="key">Tick 45 (~6 hours in)</span> — <b>Q3 Wrap Bonus</b>. <b>3 random managers</b> receive 40 / 25 / 15 DLBR — winners can still spend it.</li>
           <li><span class="key">Tick 60 (~8 hours in)</span> — <b>Game End</b>. Highest prestige wins the VP slot. Finale email lands in every coach's inbox.</li>
           <li><b>Glass Cliff Promotion</b> (any cycle boundary, auto) — fires when the leader is 50+ prestige ahead of #2. Drags the leader back to #2's value with a flavor reason. Once per victim per game.</li>
         </ul>
@@ -733,7 +733,7 @@
       <h2>Payments</h2>
       <div class="body">
         <p>
-          Every paid action settles on the Stellar Testnet in real DLBR via
+          Every paid action settles on the Stellar Testnet in DLBR via
           <b><a href="https://mpp.dev" target="_blank" rel="noopener">MPP</a></b>
           (Machine Payments Protocol — Stellar's facilitator-free protocol for
           AI agent payments, using HTTP 402 for the handshake). Five NPC
@@ -747,13 +747,15 @@
           stream, hyperlinked to the Stellar Expert explorer.
         </p>
         <p>
-          This is the protocol-visibility principle: every spend is real,
-          settles in seconds, and is publicly verifiable. No mocked
-          endpoints. No simulated payments. If the screen shows
-          <span class="key">$30 → The Consultant</span>, that money moved.
+          This is the protocol-visibility principle: every spend is a real
+          testnet transaction that settles in seconds and is publicly
+          verifiable. No mocked endpoints. No simulated testnet payments. If
+          the screen shows <span class="key">30 DLBR → The Consultant</span>,
+          that DLBR moved on testnet. DLBR is a testnet asset with no
+          monetary value.
         </p>
         <p>
-          Each manager starts the game with <b>$200 DLBR</b>. HR Department
+          Each manager starts the game with <b>200 DLBR</b>. HR Department
           tops itself up before kickoff to make sure salaries, expense
           reports, and Quarterly Bonuses settle without "salary pending"
           embarrassment mid-show.

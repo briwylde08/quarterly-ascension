@@ -47,6 +47,7 @@ const SHELL_HEAD = `<!DOCTYPE html>
 const SHELL_FOOT = `</div>
 <div style="background:#ecf0f1;padding:12px 24px;border-top:1px solid #c8d6e5;font-size:11px;color:#7a8b99;">
   Sent by MegaCorp HR Systems. Do not reply directly.<br>
+  DLBR is a Stellar Testnet asset with no monetary value.<br>
   <a href="https://quarterly-ascension.pages.dev/" style="color:#2471a3;">View live operations dashboard</a>
 </div>
 </div>
@@ -56,7 +57,7 @@ function statusLine(agent: Agent, balance: number, rank: number, total: number):
   const status = agent.statusEffects.length > 0
     ? agent.statusEffects.map((s) => s.type.toUpperCase().replace(/_/g, " ")).join(" · ")
     : "NORMAL";
-  return `Status: ${status} | Budget: $${balance.toFixed(0)} | Prestige: ${agent.prestige} (#${rank} of ${total})`;
+  return `Status: ${status} | Budget: ${balance.toFixed(0)} DLBR | Prestige: ${agent.prestige} (#${rank} of ${total})`;
 }
 
 // --- Claim confirmation -----------------------------------------------------
@@ -108,7 +109,7 @@ export function claimConfirmationEmail(opts: {
   </div>
 
   <p style="font-size:13px;line-height:1.6;">
-    You'll receive performance summaries at ticks 15, 30, and 45 (≈2, 4, and 6 hours in), plus a final outcome report at game end. There is nothing to do — your manager will make their own decisions, on the corporate testnet, with real on-chain payments.
+    You'll receive performance summaries at ticks 15, 30, and 45 (≈2, 4, and 6 hours in), plus a final outcome report at game end. There is nothing to do — your manager will make their own decisions, on Stellar Testnet, with on-chain testnet payments.
   </p>
 
   <p style="margin-top:18px;">
@@ -149,7 +150,7 @@ const HR_COMMENTARY: Record<string, string[]> = {
   ],
   buy_fancy_coffee: [
     "Pour-over acquired. The cup itself is trying to network.",
-    "$15 espresso drink with self-reported productivity gain.",
+    "15 DLBR espresso drink with self-reported productivity gain.",
   ],
   file_complaint: [
     "Formal HR filing. Adjudication pending.",
@@ -204,7 +205,7 @@ const HR_COMMENTARY: Record<string, string[]> = {
     "Catering compromised. Their meeting concluded earlier than planned.",
   ],
   birthday_cake: [
-    "Cake brought. Reputation rehabilitation, ~$12 retail.",
+    "Cake brought. Reputation rehabilitation, ~12 DLBR retail.",
     "Sheet cake from Costco. No one suspects strategic intent.",
   ],
   book_motivation: [
@@ -315,8 +316,8 @@ export function progressSummaryEmail(opts: ProgressSummaryInput): SendEmailInput
   else if (prestigeDelta < 0) highlights.push(`${arrowDown} Prestige down ${Math.abs(prestigeDelta)} (now ${agent.prestige}, rank #${rank})`);
   else highlights.push(`Prestige flat at ${agent.prestige} (rank #${rank})`);
 
-  if (budgetDelta > 0) highlights.push(`${arrowUp} Budget up $${budgetDelta.toFixed(0)} — earning more than spending`);
-  else if (budgetDelta < -10) highlights.push(`${arrowDown} Budget down $${Math.abs(budgetDelta).toFixed(0)} — spending aggressively`);
+  if (budgetDelta > 0) highlights.push(`${arrowUp} Budget up ${budgetDelta.toFixed(0)} DLBR — earning more than spending`);
+  else if (budgetDelta < -10) highlights.push(`${arrowDown} Budget down ${Math.abs(budgetDelta).toFixed(0)} DLBR — spending aggressively`);
 
   if (inboundEvents.length > 0) {
     highlights.push(`${warning} ${inboundEvents.length} event(s) targeted you this period`);

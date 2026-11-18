@@ -7,7 +7,7 @@
 //   - Every paid action does something real (the 8 dud "intel" actions
 //     return useful data and apply tangible side-effects)
 //   - New earning paths: Whistleblower Bounty, Mentorship, Coffee Chat,
-//     Quarterly Bonus, Employee of the Month — real DLBR transfers from
+//     Quarterly Bonus, Employee of the Month — testnet DLBR transfers from
 //     HR / Motivational Speaker back to agents
 
 import { v4 as uuid } from "uuid";
@@ -131,12 +131,12 @@ const CEO_MEETING_TOPICS_BLOCKED = [
 // HostError: Error(Contract, #10)). The action no-ops; the audience
 // reads a comedic outcome instead of a raw error stack trace.
 const INSUFFICIENT_BALANCE_FLAVORS: Array<(cost: number, service: string) => string> = [
-  (cost, service) => `Tried to charge $${cost} to the company card for ${service}; came back declined. Finance is being awful.`,
+  (cost, service) => `Tried to charge ${cost} DLBR to the company card for ${service}; came back declined. Finance is being awful.`,
   (cost, service) => `The card said no at the ${service} kiosk. The card said no in front of HR.`,
-  (cost, service) => `Got a 'pending approval' bounce on the $${cost} ${service} request — never actually approved.`,
+  (cost, service) => `Got a 'pending approval' bounce on the ${cost} DLBR ${service} request — never actually approved.`,
   (cost, service) => `Approved by Finance, declined by reality. ${service} did not happen this cycle.`,
-  (cost, service) => `Tried to expense $${cost} to ${service}; the receipt scanner just laughed.`,
-  (cost) => `Submitted a $${cost} requisition. Got back a sticky note that said 'lol.'`,
+  (cost, service) => `Tried to expense ${cost} DLBR to ${service}; the receipt scanner just laughed.`,
+  (cost) => `Submitted a ${cost} DLBR requisition. Got back a sticky note that said 'lol.'`,
 ];
 function isInsufficientBalanceError(err?: string): boolean {
   if (!err) return false;
@@ -318,19 +318,19 @@ export async function processTick(deps: TickDeps, activeAgentIds?: string[]): Pr
   }
 
   // Phase 2b: Synergy Dividend — every cycle boundary (NOT kickoff), HR pays
-  // every manager $10 to keep paid actions affordable across an 8-hour game.
-  // Came out of game-1 data: 5/tick spending outpaced income by ~$185/agent
+  // every manager 10 DLBR to keep paid actions affordable across an 8-hour game.
+  // Came out of game-1 data: 5/tick spending outpaced income by ~185 DLBR/agent
   // over 34 ticks, leaving 5 of 10 managers near-bankrupt by the midpoint.
   // Cycle-tied salary preserves drama (attacks stay costly) while preventing
   // the back-half collapse into free-action-only play.
   if (isCycleBoundary && !isKickoff) {
     const dividendFlavors = [
-      "Q1 synergy dividend distributed: every manager +$10. HR notes this is not a raise.",
-      "Synergy Dividend (Cycle %CYCLE%): +$10/manager. Compensation Team reminds you that gratitude is the highest-yielding asset.",
-      "Synergy Dividend posted: +$10/manager. Finance categorized it as 'engagement preservation.'",
-      "Synergy Dividend: +$10/manager. Slack reaction tracker reports 0.8 average 🙏 per recipient.",
-      "Synergy Dividend cleared in HR's payroll batch: +$10/manager. Direct deposits arrived 13 minutes after the announcement, which is the company's stated SLA.",
-      "Synergy Dividend issued: +$10/manager. Comp & Benefits emphasizes this is 'discretionary, performance-aligned, and not contractual.'",
+      "Q1 synergy dividend distributed: every manager +10 DLBR. HR notes this is not a raise.",
+      "Synergy Dividend (Cycle %CYCLE%): +10 DLBR/manager. Compensation Team reminds you that gratitude is the highest-yielding asset.",
+      "Synergy Dividend posted: +10 DLBR/manager. Finance categorized it as 'engagement preservation.'",
+      "Synergy Dividend: +10 DLBR/manager. Slack reaction tracker reports 0.8 average 🙏 per recipient.",
+      "Synergy Dividend cleared in HR's payroll batch: +10 DLBR/manager. Direct deposits arrived 13 minutes after the announcement, which is the company's stated SLA.",
+      "Synergy Dividend issued: +10 DLBR/manager. Comp & Benefits emphasizes this is 'discretionary, performance-aligned, and not contractual.'",
     ];
     const cycle = Math.floor(tick / 5);
     const flavor = dividendFlavors[cycle % dividendFlavors.length].replace("%CYCLE%", String(cycle));
@@ -673,13 +673,13 @@ async function executeAction(
   try {
     switch (action.type) {
       case "work":
-        // Retreat: salary cut from $3 → $2 (and the long-form "+$5" copy
-        // never matched what was actually sent). Cutting the cash incentive
+        // Retreat: salary cut from 3 → 2 DLBR (and the long-form "+5 DLBR" copy
+        // never matched what was actually sent). Cutting the DLBR incentive
         // pushes the LLM away from work-spam toward paid actions for the
         // MPP visibility the show needs.
         prestigeChange = 5;
         await db.updateAgentPrestige(agent.id, prestigeChange);
-        outcome = "Did actual work (+5 prestige, +$2 base salary)";
+        outcome = "Did actual work (+5 prestige, +2 DLBR base salary)";
         try {
           await stellar.sendAsset(rewards.hrDeptSecret, agent.publicKey, 2);
         } catch (err) {
@@ -689,18 +689,18 @@ async function executeAction(
         break;
 
       case "expense_report": {
-        // Safe earning path. Pays $25 from HR; 10% audit chance hits prestige.
+        // Safe earning path. Pays 25 DLBR from HR; 10% audit chance hits prestige.
         const audited = Math.random() < 0.10;
         if (audited) {
           prestigeChange = -5;
           await db.updateAgentPrestige(agent.id, prestigeChange);
         }
         const expenseFlavors = [
-          "claimed a $24 lunch as 'team-building research'",
+          "claimed a 24 DLBR lunch as 'team-building research'",
           "categorized 'office supplies' (it was AirPods)",
           "submitted an Uber that was definitely personal",
           "expensed a co-working space in Lisbon they don't work at",
-          "filed a $30 'morale-supporting beverage' line item (it was wine)",
+          "filed a 30 DLBR 'morale-supporting beverage' line item (it was wine)",
           "expensed a 'professional development book' (Atomic Habits, again)",
           "submitted a coffee shop receipt for 'a productive working session'",
           "claimed 'cellular' for a phone they don't use for work",
@@ -708,17 +708,17 @@ async function executeAction(
           "submitted a haircut as 'client-facing prep'",
           "expensed three lunches on the same day from three different vendors",
           "categorized a Spotify subscription as 'focus tools'",
-          "filed a $42 dry cleaning receipt as 'investor-meeting prep'",
+          "filed a 42 DLBR dry cleaning receipt as 'investor-meeting prep'",
           "expensed a noise-canceling headphone they returned the next day",
-          "submitted 'team morale' for a $48 sushi platter they ate alone",
+          "submitted 'team morale' for a 48 DLBR sushi platter they ate alone",
         ];
         const flavor = expenseFlavors[Math.floor(Math.random() * expenseFlavors.length)];
         actionDetail = flavor;
         try {
           await stellar.sendAsset(rewards.hrDeptSecret, agent.publicKey, 40);
           outcome = audited
-            ? `Filed expense report — ${flavor}. +$40 reimbursed; Finance flagged it for review (-5 prestige).`
-            : `Filed expense report — ${flavor}. +$40 reimbursed.`;
+            ? `Filed expense report — ${flavor}. +40 DLBR reimbursed; Finance flagged it for review (-5 prestige).`
+            : `Filed expense report — ${flavor}. +40 DLBR reimbursed.`;
         } catch (err) {
           console.error(`[expense-report] HR payout to ${agent.name} failed:`, err);
           outcome = audited
@@ -765,24 +765,24 @@ async function executeAction(
       }
 
       case "find_budget": {
-        // Free risky cash grab. 60% → +$30 from HR. 40% → -10 prestige + Meeting
+        // Free risky budget grab. 60% → +30 DLBR from HR. 40% → -10 prestige + Meeting
         // Blocked 1 cycle (got caught snooping). Tilted toward useful post-game-8
-        // (was 50/50; agents were still cash-strapped even at the original odds).
+        // (was 50/50; agents were still budget-strapped even at the original odds).
         const success = Math.random() < 0.6;
         if (success) {
           const successFlavors = [
-            "Found unused Q3 budget the Marketing team forgot about. $30 quietly migrated to your cost center.",
-            "Surfaced a $30 line item in the IT budget labeled 'misc — DO NOT TOUCH.' You touched it.",
-            "Discovered a leftover offsite-cancellation refund. $30 flowed your way before anyone noticed.",
-            "Found a vendor invoice nobody owned. Re-coded it to your team. +$30.",
-            "Convinced Finance the $30 was always allocated to your project. They blinked.",
+            "Found unused Q3 budget the Marketing team forgot about. 30 DLBR quietly migrated to your cost center.",
+            "Surfaced a 30 DLBR line item in the IT budget labeled 'misc — DO NOT TOUCH.' You touched it.",
+            "Discovered a leftover offsite-cancellation refund. 30 DLBR flowed your way before anyone noticed.",
+            "Found a vendor invoice nobody owned. Re-coded it to your team. +30 DLBR.",
+            "Convinced Finance the 30 DLBR was always allocated to your project. They blinked.",
           ];
           outcome = successFlavors[Math.floor(Math.random() * successFlavors.length)];
           try {
             await stellar.sendAsset(rewards.hrDeptSecret, agent.publicKey, 30);
           } catch (err) {
             console.error(`[find_budget] HR payout to ${agent.name} failed:`, err);
-            outcome = outcome.replace("$30", "$30 (pending settlement)");
+            outcome = outcome.replace("30 DLBR", "30 DLBR (pending settlement)");
           }
         } else {
           const failFlavors = [
@@ -806,7 +806,7 @@ async function executeAction(
 
       case "hail_mary_idea": {
         // Comeback play. Eligibility was already checked in availableActions
-        // (prestige ≤ 10, balance < $5, not already used). Lottery roll.
+        // (prestige ≤ 10, balance < 5 DLBR, not already used). Lottery roll.
         const roll = Math.random();
         if (roll < 0.30) {
           prestigeChange = 50;
@@ -948,7 +948,7 @@ async function executeAction(
           // dossier is always worth investing in even if you don't get to
           // chain it yourself. (Game-9 data: 11 of 12 dossiers were chained
           // by an agent OTHER than the saboteur, leaving saboteurs paying
-          // $40 for someone else's win.)
+          // 40 DLBR for someone else's win.)
           if (targetIsMarked && target) {
             const markedEffect = target.statusEffects.find((e) => e.type === "marked");
             const saboteurId = markedEffect?.source;
@@ -1288,7 +1288,7 @@ async function executePaidAction(
           await recordTargetUse(deps, agent.id, "sensitivity_training", action.target, tick);
           // Attacker gains +5 "managerial accountability" prestige — same
           // pattern as file_complaint. Without this nobody picked the
-          // action because $30 with zero direct payoff didn't beat
+          // action because 30 DLBR with zero direct payoff didn't beat
           // alternatives. Adding this also makes Problematic actually
           // appear in games, which lets Bad Glassdoor Review and Cry in
           // the Stairwell do their thing.
@@ -1409,8 +1409,8 @@ async function executePaidAction(
       break;
 
     case "slack_bomb": {
-      // $25 targeted attack with splash. Post-game-4 redesign: was random-2-victims
-      // for $5/+5 self / -6 each + QJ; LLM picked it 0/40 ticks because random
+      // 25 DLBR targeted attack with splash. Post-game-4 redesign: was random-2-victims
+      // for 5 DLBR/+5 self / -6 each + QJ; LLM picked it 0/40 ticks because random
       // targeting prevented strategic chaining. Now: pick a primary, splash a
       // bystander. Primary takes -8 + QJ 2 cycles; bystander -4 (no tag).
       // Self +8. 15% backfire: -5 + Problematic 1 cycle.

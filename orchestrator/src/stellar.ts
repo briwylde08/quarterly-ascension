@@ -27,9 +27,9 @@ export class Stellar {
     // ROOT-CAUSE FIX (retreat post-mortem): we used to call
     // `this.horizon.loadAccount(publicKey)`, which goes through stellar-sdk's
     // internal fetch. Under Cloudflare Workers, that fetch can be served
-    // from the edge cache, returning a stale snapshot. Once a stale $0 read
+    // from the edge cache, returning a stale snapshot. Once a stale 0 DLBR read
     // got cached during the reset's burn/mint window, every subsequent tick
-    // saw $0, the LLM's available-actions filter dropped every paid action,
+    // saw 0 DLBR, the LLM's available-actions filter dropped every paid action,
     // and 41 of 60 ticks went silent on-chain.
     //
     // The fix: direct fetch with `cache: 'no-store'` so each balance read

@@ -5,8 +5,8 @@ import { createCharge, WorkerEnv } from "../../shared/mpp-worker.js";
  *
  * Routes:
  *   GET  /health                — uptime/identity ping (no payment)
- *   POST /buy         ($5 DLBR) — generic coffee, removes Hit the Wall
- *   POST /coffee-chat ($5 DLBR) — coffee chat with another manager, both +3 prestige
+ *   POST /buy         (5 DLBR) — generic coffee, removes Hit the Wall
+ *   POST /coffee-chat (5 DLBR) — coffee chat with another manager, both +3 prestige
  *
  * MPP charge mode: client agent gets a 402 with payment params on first hit,
  * signs a Stellar Soroban transfer to RECIPIENT_ADDRESS, retries with the
