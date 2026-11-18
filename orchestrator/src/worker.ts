@@ -14,8 +14,10 @@ export interface Env {
   STELLAR_NETWORK: string;
   HORIZON_URL: string;
   OPENAI_BASE_URL: string;
-  OPENAI_API_KEY: string;
+  // Unused under Unified Billing (AIG_UNIFIED_BILLING = "true").
+  OPENAI_API_KEY?: string;
   CF_AIG_TOKEN?: string;
+  AIG_UNIFIED_BILLING?: string;
   ADMIN_SECRET: string;
   NPC_BASE_URL: string;
   TICK_INTERVAL_MS: string;

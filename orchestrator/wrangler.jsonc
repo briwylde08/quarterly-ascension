@@ -1,6 +1,6 @@
 {
   "$schema": "node_modules/wrangler/config-schema.json",
-  "name": "orchestrator",
+  "name": "quarterly-ascension",
   "main": "src/worker.ts",
   "compatibility_date": "2026-04-28",
   "compatibility_flags": ["nodejs_compat"],
@@ -11,13 +11,15 @@
     "ASSET_SAC": "CDJA3FKDCWFVWJ544X2AZRFO54IZ6RALRAVDDCA5IIWY4EERZQD23XZD",
     "STELLAR_NETWORK": "testnet",
     "HORIZON_URL": "https://horizon-testnet.stellar.org",
-    // The two URLs below embed the Cloudflare account ID + AI Gateway slug +
-    // Workers subdomain. None of those are credentials — Cloudflare requires
-    // an API token for any account-level action, and the gateway rejects
-    // requests without CF_AIG_TOKEN. They're committed for convenience; rotate
-    // (new gateway slug / new subdomain) if you ever want to scrub them.
-    "OPENAI_BASE_URL": "https://gateway.ai.cloudflare.com/v1/761663b4f4fb18d989e23e5dd4a7e165/quarterly-ascension/compat",
-    "NPC_BASE_URL": "https://__npc__.briana-761.workers.dev",
+    // Hosted on SDF's Ecosystem Cloudflare account. The two URLs below embed
+    // that account's ID + AI Gateway slug + Workers subdomain. None of those
+    // are credentials — the gateway rejects requests without CF_AIG_TOKEN.
+    "OPENAI_BASE_URL": "https://gateway.ai.cloudflare.com/v1/ba55b7ae9acfb3ed152103e3497c0752/quarterly-ascension/compat",
+    // The gateway pays OpenAI from the account's credits (Unified Billing):
+    // no OpenAI key exists anywhere. Secrets: CF_AIG_TOKEN (gateway auth).
+    "AIG_UNIFIED_BILLING": "true",
+    // The Ecosystem account is shared, so every NPC worker is prefixed.
+    "NPC_BASE_URL": "https://quarterly-ascension-__npc__.sdf-ecosystem.workers.dev",
     "TICK_INTERVAL_MS": "480000",
     "MAX_TICKS": "60",
     "LOBBY_DURATION_MS": "1800000",
@@ -32,7 +34,7 @@
     {
       "binding": "DB",
       "database_name": "quarterly-ascension",
-      "database_id": "33bf069f-8265-42a7-ad37-4a1fe6798d85",
+      "database_id": "87eec2f7-3ad5-4e9b-816e-030a60e99067",
       "migrations_dir": "../db/migrations"
     }
   ],
