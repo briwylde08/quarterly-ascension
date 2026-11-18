@@ -1803,6 +1803,22 @@ export class GameOrchestrator {
       `UPDATE agents SET prestige = 0, status_effects = '[]', allies = '[]', pending_alliance = NULL, claimed_by = NULL, claimed_by_name = NULL`
     ).run();
 
+    // Flip to a clean, playable "setup" state BEFORE the slow on-chain
+    // normalize. Ordering matters: normalize does ~15s+ of Stellar work (two
+    // passes with a 7s ledger-close sleep + per-account retries) and can fail
+    // or be killed mid-invocation. If the status flip came *after* it — as it
+    // used to — a failed normalize left the game stuck in "ended" forever with
+    // no alarm and no retry (this is the auto-reset-didn't-fire bug). Doing it
+    // first guarantees the worst case is "setup with slightly-uneven balances"
+    // (self-corrects next game / manual /admin/reset?normalize=true) instead of
+    // a hung game.
+    await db.setGameStatus("setup");
+    await db.setCurrentTick(0);
+    // In-memory state lives on the DO instance, not D1. Reset explicitly so
+    // one-shot triggeredOnce flags fire again next run.
+    this.randomEventsState = createRandomEventsState();
+    this.tickInFlight = false;
+
     let normResult: { burns: number; mints: number; failures: number } | null = null;
     if (opts.normalizeBalances) {
       if (!this.env.ASSET_ISSUER_SECRET) {
@@ -1862,14 +1878,6 @@ export class GameOrchestrator {
         normResult = { burns, mints, failures };
       }
     }
-
-    await db.setGameStatus("setup");
-    await db.setCurrentTick(0);
-
-    // In-memory state lives on the DO instance, not D1. Reset explicitly so
-    // one-shot triggeredOnce flags fire again next run.
-    this.randomEventsState = createRandomEventsState();
-    this.tickInFlight = false;
 
     if (opts.broadcastNotice) {
       this.broadcast({
