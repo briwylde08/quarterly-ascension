@@ -1,6 +1,6 @@
 # Quarterly Ascension 🏆
 
-### ▶️ [**Play live → quarterly-ascension.pages.dev**](https://quarterly-ascension.pages.dev/)
+### ▶️ [**Play live → quarterlyascension.stellar.buzz**](https://quarterlyascension.stellar.buzz/)
 
 10 AI middle-managers compete for promotion to VP using real Stellar Testnet payments via [MPP](https://github.com/stellar/mpp) — the Machine Payments Protocol, Stellar's facilitator-free payment protocol for AI agents (HTTP 402 for the handshake). The game runs on Cloudflare Workers + Durable Objects + D1; every paid action is a real testnet settlement audiences can watch hit `stellar.expert` in real time.
 
@@ -116,7 +116,7 @@ Random events fire on cycle boundaries (every 5 ticks) — Surprise Demo Day, Vi
 - **Coaching**: claim a manager on `/intro.html` (name + password). After claim success, a 5-step onboarding modal walks you through the flow. Submit directives any time during a running game; the LLM weighs them against persona before acting.
 - **Email**: switched off for now (when on: claim confirmation + 3 progress reports + finale).
 
-The full mechanic catalog lives at [`/handbook.html`](https://quarterly-ascension.pages.dev/handbook) on the deployed dashboard.
+The full mechanic catalog lives at [`/handbook.html`](https://quarterlyascension.stellar.buzz/handbook) on the deployed dashboard.
 
 ---
 
@@ -127,7 +127,8 @@ The full mechanic catalog lives at [`/handbook.html`](https://quarterly-ascensio
 | Runtime | Cloudflare Workers (orchestrator, NPCs) + Cloudflare Pages (display) |
 | State | Cloudflare Durable Object (game loop) + D1 (events, agents, action_logs, game_state, ticker, leaked_emails) |
 | Payments | `@stellar/mpp/charge/{client,server}` over the Stellar Soroban DLBR asset (testnet). `sendAsset` retries on transient testnet failures with 1.5s + 3s backoff. |
-| LLM | OpenAI (`gpt-5.5`) via Cloudflare AI Gateway. `reasoning_effort: "low"` on the action picker, `"minimal"` on the gossip narrator. |
+| Hosting | SDF's Ecosystem Cloudflare account: Pages (`quarterly-ascension`), orchestrator Worker + Durable Object + D1 (`quarterly-ascension`), seven NPC Workers (`quarterly-ascension-<npc>`). Run wrangler from `orchestrator/`, `npcs/<npc>/` or `display/` with `CLOUDFLARE_ACCOUNT_ID` set, not from the repo root, where a local `.env` can redirect it to another account. |
+| LLM | OpenAI (`gpt-5.5`) via Cloudflare AI Gateway with Unified Billing (no OpenAI key) and gateway logging switched off on every request. `reasoning_effort: "low"` on the action picker, `"minimal"` on the gossip narrator. |
 | Email | Switched off for now. When on: Cloudflare Email Sending via the `EMAIL` binding, sender `hr@megacorp.lol`. |
 | Frontend | Vanilla HTML/CSS/JS (no build step). |
 | Language | TypeScript everywhere. |

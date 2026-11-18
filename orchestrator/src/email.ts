@@ -48,7 +48,7 @@ const SHELL_FOOT = `</div>
 <div style="background:#ecf0f1;padding:12px 24px;border-top:1px solid #c8d6e5;font-size:11px;color:#7a8b99;">
   Sent by MegaCorp HR Systems. Do not reply directly.<br>
   DLBR is a Stellar Testnet asset with no monetary value.<br>
-  <a href="https://quarterly-ascension.pages.dev/" style="color:#2471a3;">View live operations dashboard</a>
+  <a href="https://quarterlyascension.stellar.buzz/" style="color:#2471a3;">View live operations dashboard</a>
 </div>
 </div>
 </body></html>`;
@@ -86,8 +86,8 @@ export function claimConfirmationEmail(opts: {
     persona?.quirk ? `Quirk: ${persona.quirk}` : "",
     ``,
     `You'll receive performance summaries each quarter, then a final outcome at end-of-cycle.`,
-    `Live dashboard: https://quarterly-ascension.pages.dev/`,
-    `Your manager's profile: https://quarterly-ascension.pages.dev/agent.html?id=${agent.id}`,
+    `Live dashboard: https://quarterlyascension.stellar.buzz/`,
+    `Your manager's profile: https://quarterlyascension.stellar.buzz/agent.html?id=${agent.id}`,
     ``,
     `— MegaCorp HR Systems`,
   ].filter(Boolean).join("\n");
@@ -113,9 +113,9 @@ export function claimConfirmationEmail(opts: {
   </p>
 
   <p style="margin-top:18px;">
-    <a href="https://quarterly-ascension.pages.dev/agent.html?id=${agent.id}" style="background:#1c3a64;color:#ffffff;padding:10px 18px;text-decoration:none;font-size:13px;letter-spacing:0.5px;">View ${escapeHtml(agent.name.split(" ")[0])}'s profile</a>
+    <a href="https://quarterlyascension.stellar.buzz/agent.html?id=${agent.id}" style="background:#1c3a64;color:#ffffff;padding:10px 18px;text-decoration:none;font-size:13px;letter-spacing:0.5px;">View ${escapeHtml(agent.name.split(" ")[0])}'s profile</a>
     &nbsp;
-    <a href="https://quarterly-ascension.pages.dev/" style="color:#2471a3;font-size:13px;">Or watch live →</a>
+    <a href="https://quarterlyascension.stellar.buzz/" style="color:#2471a3;font-size:13px;">Or watch live →</a>
   </p>
 ${SHELL_FOOT}`;
 
@@ -350,7 +350,7 @@ export function progressSummaryEmail(opts: ProgressSummaryInput): SendEmailInput
 
   const outlook = generateOutlook(agent, prestigeDelta, budgetDelta, balance, rank, total);
 
-  const coachUrl = `https://quarterly-ascension.pages.dev/agent.html?id=${agent.id}#coach`;
+  const coachUrl = `https://quarterlyascension.stellar.buzz/agent.html?id=${agent.id}#coach`;
   const text = [
     `${cycleLabel} Performance Summary — ${agent.name}`,
     `${"━".repeat(60)}`,
@@ -372,8 +372,8 @@ export function progressSummaryEmail(opts: ProgressSummaryInput): SendEmailInput
     `⏱ COACHING — submit a directive any time; it stays in effect until you overwrite it:`,
     `   ${coachUrl}`,
     ``,
-    `Live dashboard: https://quarterly-ascension.pages.dev/`,
-    `Profile: https://quarterly-ascension.pages.dev/agent.html?id=${agent.id}`,
+    `Live dashboard: https://quarterlyascension.stellar.buzz/`,
+    `Profile: https://quarterlyascension.stellar.buzz/agent.html?id=${agent.id}`,
   ].join("\n");
 
   const html = `${SHELL_HEAD}
@@ -409,13 +409,13 @@ export function progressSummaryEmail(opts: ProgressSummaryInput): SendEmailInput
     <b style="color:#1c3a64;">⏱ Want to course-correct?</b>
     Submit a directive any time — it stays in effect until you overwrite it. ${escapeHtml(agent.name.split(" ")[0])} reads it the next time they act.
     <br><br>
-    <a href="https://quarterly-ascension.pages.dev/agent.html?id=${agent.id}#coach" style="background:#1c3a64;color:#ffffff;padding:10px 18px;text-decoration:none;font-size:13px;letter-spacing:0.5px;">Coach ${escapeHtml(agent.name.split(" ")[0])} →</a>
+    <a href="https://quarterlyascension.stellar.buzz/agent.html?id=${agent.id}#coach" style="background:#1c3a64;color:#ffffff;padding:10px 18px;text-decoration:none;font-size:13px;letter-spacing:0.5px;">Coach ${escapeHtml(agent.name.split(" ")[0])} →</a>
   </div>
 
   <p style="margin-top:22px;">
-    <a href="https://quarterly-ascension.pages.dev/agent.html?id=${agent.id}" style="background:#7a8b99;color:#ffffff;padding:8px 16px;text-decoration:none;font-size:12px;letter-spacing:0.5px;">View profile</a>
+    <a href="https://quarterlyascension.stellar.buzz/agent.html?id=${agent.id}" style="background:#7a8b99;color:#ffffff;padding:8px 16px;text-decoration:none;font-size:12px;letter-spacing:0.5px;">View profile</a>
     &nbsp;
-    <a href="https://quarterly-ascension.pages.dev/" style="color:#2471a3;font-size:13px;">Watch live →</a>
+    <a href="https://quarterlyascension.stellar.buzz/" style="color:#2471a3;font-size:13px;">Watch live →</a>
   </p>
 ${SHELL_FOOT}`;
 
@@ -462,7 +462,7 @@ export function finaleEmail(opts: FinaleInput): SendEmailInput {
     `Memorable quotes from ${agent.name} this quarter:`,
     ...notableQuotes.slice(0, 5).map((q) => `  "${q}"`),
     ``,
-    `Live dashboard (now closed): https://quarterly-ascension.pages.dev/`,
+    `Live dashboard (now closed): https://quarterlyascension.stellar.buzz/`,
   ].join("\n");
 
   const html = `${SHELL_HEAD}

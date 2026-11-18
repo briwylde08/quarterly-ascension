@@ -1,6 +1,6 @@
 {
   "$schema": "node_modules/wrangler/config-schema.json",
-  "name": "exec-assistant",
+  "name": "quarterly-ascension-exec-assistant",
   "main": "index.ts",
   "compatibility_date": "2026-04-28",
   "compatibility_flags": ["nodejs_compat"],

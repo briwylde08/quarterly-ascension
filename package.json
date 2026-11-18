@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "typecheck": "tsc --noEmit",
-    "deploy:display": "[ \"$(git branch --show-current)\" = \"main\" ] || { echo 'Refusing: deploy:display must run on main (the Pages project is Direct Upload, so this script uploads whatever is on disk).'; exit 1; } && npx wrangler pages deploy display/public --project-name=quarterly-ascension --branch=main",
+    "deploy:display": "[ \"$(git branch --show-current)\" = \"main\" ] || { echo 'Refusing: deploy:display must run on main (the Pages project is Direct Upload, so this script uploads whatever is on disk).'; exit 1; } && cd display && CLOUDFLARE_ACCOUNT_ID=ba55b7ae9acfb3ed152103e3497c0752 npx wrangler pages deploy public --project-name=quarterly-ascension --branch=main",
     "smoke:llm": "tsx scripts/smoke-test-llm.ts"
   },
   "dependencies": {

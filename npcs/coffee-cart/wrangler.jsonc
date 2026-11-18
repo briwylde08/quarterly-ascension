@@ -1,6 +1,6 @@
 {
   "$schema": "node_modules/wrangler/config-schema.json",
-  "name": "coffee-cart",
+  "name": "quarterly-ascension-coffee-cart",
   "main": "index.ts",
   "compatibility_date": "2026-04-28",
   "compatibility_flags": ["nodejs_compat"],
@@ -12,7 +12,7 @@
     "RECIPIENT_ADDRESS": "GBHN7CQQ5Q77RQQUDVM3T2FUBT6NAD5KGUOUISO2WGPYJLWCR73MR64K"
   },
 
-  // MPP_SECRET is set via:  wrangler secret put MPP_SECRET --name coffee-cart
+  // MPP_SECRET is set via:  wrangler secret put MPP_SECRET --name quarterly-ascension-coffee-cart
   // (Same value across all 7 NPCs so they share challenge HMAC validation
   // — though each Worker only validates its own challenges.)
 

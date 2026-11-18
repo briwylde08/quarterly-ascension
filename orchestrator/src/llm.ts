@@ -12,8 +12,38 @@ export interface LlmDeps {
   db: Db;
   stellar: Stellar;
   openaiBaseUrl: string;
-  openaiApiKey: string;
+  openaiApiKey?: string;
   cfAigToken?: string;
+  /** True = AI Gateway Unified Billing: the gateway pays the provider from
+   *  the Cloudflare account's credits and no OpenAI key exists anywhere. */
+  unifiedBilling?: boolean;
+}
+
+/**
+ * The one place an OpenAI client is built. Every call goes through the
+ * Cloudflare AI Gateway with logging switched off per request, so prompts
+ * (which carry coach names and directives) are not kept in gateway logs
+ * whatever the gateway's dashboard default is.
+ *
+ * Two ways to pay:
+ *  - unifiedBilling: CF_AIG_TOKEN authenticates to the gateway, and the SDK's
+ *    Authorization header is dropped (the gateway would otherwise forward the
+ *    placeholder as a provider key).
+ *  - otherwise OPENAI_API_KEY is a real OpenAI key forwarded by the gateway.
+ */
+export function makeOpenAI(
+  deps: Pick<LlmDeps, "openaiBaseUrl" | "openaiApiKey" | "cfAigToken" | "unifiedBilling">,
+): OpenAI {
+  return new OpenAI({
+    apiKey: deps.unifiedBilling ? "unified-billing" : deps.openaiApiKey,
+    baseURL: deps.openaiBaseUrl,
+    defaultHeaders: {
+      "cf-aig-collect-log": "false",
+      "cf-aig-collect-log-payload": "false",
+      ...(deps.cfAigToken ? { "cf-aig-authorization": `Bearer ${deps.cfAigToken}` } : {}),
+      ...(deps.unifiedBilling ? { Authorization: null } : {}),
+    },
+  });
 }
 
 export interface GossipMoment {
@@ -34,11 +64,7 @@ export async function generateGossip(
   currentTick: number,
 ): Promise<string> {
   if (moments.length === 0) return "Honestly? Dead cycle. Nothing to report. Get me coffee and I'll dig.";
-  const openai = new OpenAI({
-    apiKey: deps.openaiApiKey,
-    baseURL: deps.openaiBaseUrl,
-    defaultHeaders: deps.cfAigToken ? { "cf-aig-authorization": `Bearer ${deps.cfAigToken}` } : undefined,
-  });
+  const openai = makeOpenAI(deps);
   const lines = moments
     .map((m) => `- Cycle ${m.tick}: ${m.description}${m.prestigeChange ? ` (${m.prestigeChange > 0 ? "+" : ""}${m.prestigeChange} prestige)` : ""}`)
     .join("\n");
@@ -673,13 +699,7 @@ export async function getAgentDecision(
 
   const context: DecisionContext = { agent, balance, currentTick, allAgents, recentActions, leakedEmails, directive, hailMaryUsed, boomerangUsed, pulseSurveyUsed, joinMeetingCount, takeCreditCount, tickTakeCreditCount: tickCtx.tickTakeCreditCount, recentAttackers, mysteriousInfluenceClaimed };
 
-  const openai = new OpenAI({
-    apiKey: deps.openaiApiKey,
-    baseURL: deps.openaiBaseUrl,
-    defaultHeaders: deps.cfAigToken
-      ? { "cf-aig-authorization": `Bearer ${deps.cfAigToken}` }
-      : undefined,
-  });
+  const openai = makeOpenAI(deps);
 
   const systemPrompt = buildPersonaPrompt(persona);
   const userPrompt = buildContextPrompt(context);

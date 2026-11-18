@@ -13,7 +13,7 @@ import { processTick, type TickDeps } from "./tick.js";
 import { createRandomEventsState, type RandomEventsState } from "./random-events.js";
 import type { Agent, GameEvent, TickerEntry } from "./types.js";
 import type { LlmDeps, GossipMoment } from "./llm.js";
-import { generateGossip } from "./llm.js";
+import { generateGossip, makeOpenAI } from "./llm.js";
 import { getPersona } from "./personas.js";
 import { sendEmail, claimConfirmationEmail, progressSummaryEmail, finaleEmail } from "./email.js";
 
@@ -434,13 +434,11 @@ export class GameOrchestrator {
       const judgePrompt = buildJudgePrompt(
         coaches.map((c) => ({ ...c, coachName: labelFor.get(c.coachName)! }))
       );
-      const { OpenAI } = await import("openai");
-      const openai = new OpenAI({
-        apiKey: this.env.OPENAI_API_KEY,
-        baseURL: this.env.OPENAI_BASE_URL,
-        defaultHeaders: this.env.CF_AIG_TOKEN
-          ? { "cf-aig-authorization": `Bearer ${this.env.CF_AIG_TOKEN}` }
-          : undefined,
+      const openai = makeOpenAI({
+        openaiBaseUrl: this.env.OPENAI_BASE_URL,
+        openaiApiKey: this.env.OPENAI_API_KEY,
+        cfAigToken: this.env.CF_AIG_TOKEN,
+        unifiedBilling: this.env.AIG_UNIFIED_BILLING === "true",
       });
 
       try {
@@ -1588,6 +1586,7 @@ export class GameOrchestrator {
         openaiBaseUrl: this.env.OPENAI_BASE_URL,
         openaiApiKey: this.env.OPENAI_API_KEY,
         cfAigToken: this.env.CF_AIG_TOKEN,
+        unifiedBilling: this.env.AIG_UNIFIED_BILLING === "true",
       };
 
       const deps: TickDeps = {
@@ -1729,6 +1728,7 @@ export class GameOrchestrator {
       openaiBaseUrl: this.env.OPENAI_BASE_URL,
       openaiApiKey: this.env.OPENAI_API_KEY,
       cfAigToken: this.env.CF_AIG_TOKEN,
+      unifiedBilling: this.env.AIG_UNIFIED_BILLING === "true",
     };
 
     const gossip = await generateGossip(llm, moments, currentTick);
